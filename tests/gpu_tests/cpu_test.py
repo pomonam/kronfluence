@@ -16,7 +16,7 @@ from tests.gpu_tests.pipeline import (
     construct_mnist_mlp,
     get_mnist_dataset,
 )
-from tests.gpu_tests.prepare_tests import TRAIN_INDICES, QUERY_INDICES
+from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
 from tests.utils import check_tensor_dict_equivalence
 
 logging.basicConfig(level=logging.DEBUG)

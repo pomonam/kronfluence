@@ -38,12 +38,12 @@ def get_regression_dataset(
     data_name: str,
     split: str,
     indices: List[int] = None,
-    data_path: str = "data/",
+    dataset_dir: str = "data/",
 ) -> Dataset:
     assert split in ["train", "eval_train", "valid"]
 
     # Load the dataset from the `.data` file.
-    data = np.loadtxt(os.path.join(data_path, data_name + ".data"), delimiter=None)
+    data = np.loadtxt(os.path.join(dataset_dir, data_name + ".data"), delimiter=None)
     data = data.astype(np.float32)
 
     # Shuffle the dataset.

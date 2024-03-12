@@ -2,13 +2,12 @@ import argparse
 import logging
 import math
 import os
-from typing import Dict, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn.functional as F
 from analyzer import Analyzer, prepare_model
 from arguments import FactorArguments, ScoreArguments
-from module.utils import wrap_tracked_modules
 from task import Task
 from torch import nn
 from torch.profiler import ProfilerActivity, profile, record_function
@@ -96,14 +95,12 @@ class RegressionTask(Task):
 
 def main():
     args = parse_args()
-
     logging.basicConfig(level=logging.INFO)
 
-    train_dataset = get_regression_dataset(data_name=args.dataset_name, split="train", data_path=args.dataset_dir)
-    eval_dataset = get_regression_dataset(data_name=args.dataset_name, split="valid", data_path=args.dataset_dir)
+    train_dataset = get_regression_dataset(data_name=args.dataset_name, split="train", dataset_dir=args.dataset_dir)
+    eval_dataset = get_regression_dataset(data_name=args.dataset_name, split="valid", dataset_dir=args.dataset_dir)
 
     model = construct_regression_mlp()
-
     checkpoint_path = os.path.join(args.checkpoint_dir, "model.pth")
     if not os.path.isfile(checkpoint_path):
         raise ValueError(f"No checkpoint found at {checkpoint_path}.")
@@ -120,91 +117,25 @@ def main():
     )
     factor_args = FactorArguments(
         strategy=args.factor_strategy,
-        covariance_data_partition_size=5,
-        covariance_module_partition_size=4,
     )
-    # with profile(activities=[ProfilerActivity.CPU], profile_memory=True, record_shapes=True) as prof:
-    #     with record_function("covariance"):
-    #         analyzer.fit_covariance_matrices(
-    #             factors_name=args.factor_strategy,
-    #             dataset=train_dataset,
-    #             factor_args=factor_args,
-    #             per_device_batch_size=args.batch_size,
-    #             overwrite_output_dir=True,
-    # )
-    #
-    # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
-    # cov_factors = analyzer.fit_covariance_matrices(
-    #     factors_name=args.factor_strategy,
-    #     dataset=train_dataset,
-    #     factor_args=factor_args,
-    #     per_device_batch_size=args.batch_size,
-    #     overwrite_output_dir=True,
-    # )
-    # print(cov_factors)
-
-    with profile(activities=[ProfilerActivity.CPU], profile_memory=True, record_shapes=True) as prof:
-        with record_function("eigen"):
-            res = analyzer.perform_eigendecomposition(
-                factors_name=args.factor_strategy,
-                factor_args=factor_args,
-                overwrite_output_dir=True,
-            )
-    # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
-    # print(res)
-    res = analyzer.fit_lambda_matrices(
+    analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
-        # factor_args=factor_args,
         per_device_batch_size=None,
+        factor_args=factor_args,
         overwrite_output_dir=True,
     )
-    # print(res)
-    #
-    score_args = ScoreArguments(data_partition_size=2, module_partition_size=2)
-    analyzer.compute_pairwise_scores(
-        scores_name="hello",
+
+    scores = analyzer.compute_pairwise_scores(
+        scores_name="pairwise",
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
         train_dataset=train_dataset,
         per_device_query_batch_size=16,
         per_device_train_batch_size=8,
-        score_args=score_args,
         overwrite_output_dir=True,
     )
-    # scores = analyzer.load_pairwise_scores(scores_name="hello")
-    # print(scores)
-    #
-    # analyzer.compute_self_scores(
-    #     scores_name="hello",
-    #     factors_name=args.factor_strategy,
-    #     # query_dataset=eval_dataset,
-    #     train_dataset=train_dataset,
-    #     # per_device_query_batch_size=16,
-    #     per_device_train_batch_size=8,
-    #     overwrite_output_dir=True,
-    # )
-    # # scores = analyzer.load_self_scores(scores_name="hello")
-    # # print(scores)
-
-    # analyzer.fit_all_factors(
-    #     factor_name=args.factor_strategy,
-    #     dataset=train_dataset,
-    #     factor_args=factor_args,
-    #     per_device_batch_size=None,
-    #     overwrite_output_dir=True,
-    # )
-    #
-    # score_name = "full_pairwise"
-    # analyzer.compute_pairwise_scores(
-    #     score_name=score_name,
-    #     query_dataset=eval_dataset,
-    #     per_device_query_batch_size=len(eval_dataset),
-    #     train_dataset=train_dataset,
-    #     per_device_train_batch_size=len(train_dataset),
-    # )
-    # scores = analyzer.load_pairwise_scores(score_name=score_name)
-    # print(scores.shape)
+    logging.info(f"Scores: {scores}")
 
 
 if __name__ == "__main__":
