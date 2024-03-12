@@ -1,11 +1,11 @@
 import argparse
 import logging
 import os
-
+from torch.utils import data
 import torch
 import torch.nn.functional as F
+from torch import nn
 from accelerate.utils import set_seed
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from examples.uci.pipeline import construct_regression_mlp, get_regression_dataset
@@ -82,6 +82,35 @@ def parse_args():
     return args
 
 
+def train(dataset: data.Dataset, batch_size: int, num_train_epochs: int, learning_rate: float, weight_decay: float) -> nn.Module:
+    train_dataloader = data.DataLoader(
+        dataset=dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True,
+    )
+
+    model = construct_regression_mlp()
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+
+    model.train()
+    for epoch in range(num_train_epochs):
+        total_loss = 0
+        with tqdm(train_dataloader, unit="batch") as tepoch:
+            for batch in tepoch:
+                tepoch.set_description(f"Epoch {epoch}")
+                inputs, targets = batch
+                outputs = model(inputs)
+                loss = F.mse_loss(outputs, targets)
+                total_loss += loss.detach().float()
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+                tepoch.set_postfix(loss=total_loss.item() / len(train_dataloader))
+    return model
+
+
+
 def main():
     args = parse_args()
 
@@ -92,7 +121,7 @@ def main():
         set_seed(args.seed)
 
     train_dataset = get_regression_dataset(data_name=args.dataset_name, split="train", data_path=args.dataset_dir)
-    train_dataloader = DataLoader(
+    train_dataloader = data.DataLoader(
         dataset=train_dataset,
         batch_size=args.train_batch_size,
         shuffle=True,

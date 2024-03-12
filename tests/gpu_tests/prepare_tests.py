@@ -91,7 +91,6 @@ def run_analysis() -> None:
         analysis_name="gpu_test",
         model=model,
         task=task,
-        disable_model_save=True,
     )
 
     factor_args = FactorArguments(
@@ -99,7 +98,8 @@ def run_analysis() -> None:
         activation_covariance_dtype=torch.float64,
         gradient_covariance_dtype=torch.float64,
         lambda_dtype=torch.float64,
-        lambda_iterative_aggregate=True,
+        lambda_iterative_aggregate=False,
+        lambda_max_examples=1_000
     )
     analyzer.fit_all_factors(
         factors_name="single_gpu",
