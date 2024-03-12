@@ -2,15 +2,15 @@ import logging
 import unittest
 
 import torch
-from analyzer import Analyzer, prepare_model
-from arguments import FactorArguments, ScoreArguments
-from module.constants import (
+from torch.utils import data
+
+from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.module.constants import (
     ALL_MODULE_NAME,
     COVARIANCE_FACTOR_NAMES,
     LAMBDA_FACTOR_NAMES,
 )
-from torch.utils import data
-
 from tests.gpu_tests.pipeline import (
     ClassificationTask,
     construct_mnist_mlp,

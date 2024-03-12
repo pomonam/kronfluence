@@ -6,13 +6,12 @@ from typing import Tuple
 
 import torch
 import torch.nn.functional as F
-from analyzer import Analyzer, prepare_model
-from arguments import FactorArguments, ScoreArguments
-from task import Task
 from torch import nn
-from torch.profiler import ProfilerActivity, profile, record_function
 
 from examples.uci.pipeline import construct_regression_mlp, get_regression_dataset
+from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.arguments import FactorArguments
+from kronfluence.task import Task
 
 BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
 
@@ -32,31 +31,18 @@ def parse_args():
         default="./data",
         help="A folder containing the UCI regression dataset.",
     )
+    parser.add_argument(
+        "--checkpoint_dir",
+        type=str,
+        default="./checkpoints",
+        help="A path to store the final checkpoint.",
+    )
 
     parser.add_argument(
         "--factor_strategy",
         type=str,
         default="ekfac",
         help="Strategy to compute preconditioning factors.",
-    )
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=256,
-        help="Batch size for compute factors and scores.",
-    )
-    parser.add_argument(
-        "--analysis_name",
-        type=str,
-        default="uci",
-        help="Name of the influence analysis.",
-    )
-
-    parser.add_argument(
-        "--checkpoint_dir",
-        type=str,
-        default="./checkpoints",
-        help="A path to store the final checkpoint.",
     )
 
     args = parser.parse_args()
@@ -110,7 +96,7 @@ def main():
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
-        analysis_name=args.analysis_name,
+        analysis_name=args.dataset_name,
         model=model,
         task=task,
         cpu=True,
@@ -131,8 +117,7 @@ def main():
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
         train_dataset=train_dataset,
-        per_device_query_batch_size=16,
-        per_device_train_batch_size=8,
+        per_device_query_batch_size=len(eval_dataset),
         overwrite_output_dir=True,
     )
     logging.info(f"Scores: {scores}")

@@ -1,8 +1,6 @@
 from typing import Optional
 
 from accelerate.utils import extract_model_from_parallel
-from kronfluence.module.constants import FACTOR_TYPE
-
 from factor.config import FactorConfig
 from safetensors.torch import save_file
 from torch import nn
@@ -13,6 +11,7 @@ from kronfluence.computer.covariance_computer import CovarianceComputer
 from kronfluence.computer.eigen_computer import EigenComputer
 from kronfluence.computer.pairwise_score_computer import PairwiseScoreComputer
 from kronfluence.computer.self_score_computer import SelfScoreComputer
+from kronfluence.module.constants import FACTOR_TYPE
 from kronfluence.module.utils import wrap_tracked_modules
 from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs

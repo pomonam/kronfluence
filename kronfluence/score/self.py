@@ -93,7 +93,7 @@ def compute_self_scores_with_loaders(
     """Computes self-influence scores for a given model and task.
 
     Args:
-        loaded_factors (FACTOR_TYPE, optional):
+        loaded_factors (FACTOR_TYPE):
             The factor results to load from, before computing the self-influence scores.
         model (nn.Module):
             The model that self-influence scores will be computed.
