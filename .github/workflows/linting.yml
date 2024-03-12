@@ -46,9 +46,8 @@ jobs:
       run: |
         isort --profile black kronfluence
 
-  jobs:
-    actionlint:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - uses: reviewdog/action-actionlint@v1
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reviewdog/action-actionlint@v1
