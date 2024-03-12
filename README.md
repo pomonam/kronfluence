@@ -25,9 +25,6 @@ For a detailed description of the methodology, see the [**paper**](https://arxiv
 
 ---
 
-> [!NOTE]  
-> This library is an unofficial community implementation.
-
 > [!WARNING]
 > This library is under active development and has not reached its first stable release.
 
@@ -55,7 +52,7 @@ pip install -e .
 ## Getting Started
 
 
-```diff
+```python
   import torch
   import torch.nn.functional as F
   from datasets import load_dataset
