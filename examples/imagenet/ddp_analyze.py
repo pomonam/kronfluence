@@ -6,9 +6,9 @@ from typing import Tuple
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-from analyzer import Analyzer, prepare_model
-from arguments import FactorArguments
-from task import Task
+from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.arguments import FactorArguments
+from kronfluence.task import Task
 from torch import nn
 from torch.nn.parallel.distributed import DistributedDataParallel
 
@@ -21,7 +21,7 @@ WORLD_SIZE = int(os.environ["WORLD_SIZE"])
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on ImageNet datasets.")
+    parser = argparse.ArgumentParser(description="Influence analysis on ImageNet dataset.")
 
     parser.add_argument(
         "--dataset_dir",
@@ -37,23 +37,22 @@ def parse_args():
         help="Strategy to compute preconditioning factors.",
     )
     parser.add_argument(
-        "--batch_size",
+        "--factor_batch_size",
         type=int,
         default=1024,
-        help="Batch size for compute factors and scores.",
+        help="Batch size for computing factors.",
     )
     parser.add_argument(
-        "--analysis_name",
-        type=str,
-        default="imagenet",
-        help="Name of the influence analysis.",
+        "--query_batch_size",
+        type=int,
+        default=256,
+        help="Batch size for computing query gradient.",
     )
-
     parser.add_argument(
-        "--checkpoint_dir",
-        type=str,
-        default="./checkpoints",
-        help="A path to store the final checkpoint.",
+        "--train_batch_size",
+        type=int,
+        default=1024,
+        help="Batch size for computing training gradient.",
     )
 
     args = parser.parse_args()
@@ -102,62 +101,48 @@ class ClassificationTask(Task):
 
 def main():
     args = parse_args()
-
     logging.basicConfig(level=logging.INFO)
 
-    train_dataset = get_imagenet_dataset(split="eval_train", data_path=args.dataset_dir)
-    # eval_dataset = get_imagenet_dataset(split="valid", data_path=args.dataset_dir)
+    train_dataset = get_imagenet_dataset(split="eval_train", dataset_dir=args.dataset_dir)
+    eval_dataset = get_imagenet_dataset(split="valid", dataset_dir=args.dataset_dir)
 
     dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
     device = torch.device("cuda:{}".format(LOCAL_RANK))
     torch.cuda.set_device(LOCAL_RANK)
-    print("device")
-    print(LOCAL_RANK)
 
     model = construct_resnet50()
-
     task = ClassificationTask()
     model = prepare_model(model, task)
-
     model = model.to(device=device)
     model = DistributedDataParallel(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
 
     analyzer = Analyzer(
-        analysis_name=args.analysis_name,
+        analysis_name="ddp",
         model=model,
         task=task,
         disable_model_save=True,
     )
-
     factor_args = FactorArguments(
         strategy=args.factor_strategy,
-        covariance_data_partition_size=1,
-        covariance_module_partition_size=1,
     )
-    analyzer.fit_covariance_matrices(
+    analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=None,
         overwrite_output_dir=True,
     )
-    # analyzer.perform_eigendecomposition(
-    #     factor_name=args.factor_strategy,
-    #     factor_args=factor_args,
-    #     overwrite_output_dir=True,
-    # )
-    # analyzer.fit_lambda(train_dataset, per_device_batch_size=None)
-    #
-    # score_name = "full_pairwise"
-    # analyzer.compute_pairwise_scores(
-    #     score_name=score_name,
-    #     query_dataset=eval_dataset,
-    #     per_device_query_batch_size=len(eval_dataset),
-    #     train_dataset=train_dataset,
-    #     per_device_train_batch_size=len(train_dataset),
-    # )
-    # scores = analyzer.load_pairwise_scores(score_name=score_name)
-    # print(scores.shape)
+    scores = analyzer.compute_pairwise_scores(
+        scores_name="pairwise",
+        factors_name=args.factor_strategy,
+        query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=args.train_batch_size,
+        per_device_query_batch_size=args.query_batch_size,
+        query_indices=list(range(1000)),
+        overwrite_output_dir=True,
+    )
+    logging.info(f"Scores: {scores}")
 
 
 if __name__ == "__main__":
