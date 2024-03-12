@@ -31,4 +31,5 @@ disable = """
     too-many-ancestors,
     not-callable,
     use-implicit-booleaness-not-comparison,
+    implicit-str-concat,
 """

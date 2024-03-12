@@ -1,10 +1,11 @@
 import copy
 import math
 from typing import Dict, List, Optional, Tuple
-from torch import nn
+
 import numpy as np
 import torch
 import torchvision
+from torch import nn
 
 
 class Mul(nn.Module):
