@@ -64,7 +64,19 @@ import torch.nn.functional as F
 
 ## Contributing
 
-Your contributions are welcome! See the [CONTRIBUTING](https://github.com/pomonam/kronfluence/blob/main/CONTRIBUTING.md) file to get started. For bug fixes, please submit a pull request without prior discussion. For proposing new features, examples, or extensions, kindly initiate a discussion through an issue before proceeding.
+Your contributions are welcome! For bug fixes, please submit a pull request without prior discussion. For proposing 
+new features, examples, or extensions, kindly start a discussion through an issue before proceeding.
+
+### Setting Up Development Environment
+
+To contribute, you will need to set up a development environment on your machine. 
+This setup includes installing all the dependencies required for linting and testing.
+
+```bash
+git clone https://github.com/pomonam/kronfluence.git
+cd kronfluence
+pip install -e ."[dev]"
+```
 
 ## License
 
