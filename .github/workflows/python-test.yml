@@ -1,0 +1,35 @@
+name: Python Tests
+
+on: [push, pull_request]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+
+    - name: Install Dependencies
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        python setup.py install
+
+    - name: Run All Tests
+      run: |
+        pip install -e ."[dev]"
+        pytest -vx tests/test_testable_tasks.py
+        pytest -vx tests/test_analyzer.py
+        pytest -vx tests/test_modules.py
+        pytest -vx tests/test_samplers.py
+        pytest -vx tests/test_per_sample_gradients.py
+        pytest -vx tests/factors/test_covariances.py
+        pytest -vx tests/factors/test_eigens.py
+        pytest -vx tests/scores/test_pairwise_scores.py
+        pytest -vx tests/scores/test_self_scores.py

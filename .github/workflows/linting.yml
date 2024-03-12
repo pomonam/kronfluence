@@ -1,0 +1,68 @@
+name: Linting
+
+on: [push, pull_request]
+
+jobs:
+  pylint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+
+    - name: Install pylint
+      run: |
+        pip install --upgrade pip
+        pip install pylint==3.0.3
+        pip install -r requirements.txt
+
+    - name: Run pylint
+      run: |
+        pylint kronfluence
+
+  isort:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+
+    - name: Install isort
+      run: |
+        pip install --upgrade pip
+        pip install isort==5.13.2
+
+    - name: Run isort
+      run: |
+        isort --profile black kronfluence
+
+  black:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+
+    - name: Install black
+      run: |
+        pip install --upgrade pip
+        pip install black==24.1.1
+
+    - name: Run black
+      run: |
+        black --check kronfluence
