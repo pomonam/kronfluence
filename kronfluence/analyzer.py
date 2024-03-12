@@ -1,7 +1,6 @@
 from typing import Optional
 
 from accelerate.utils import extract_model_from_parallel
-from factor.config import FactorConfig
 from safetensors.torch import save_file
 from torch import nn
 from torch.utils import data
@@ -11,7 +10,6 @@ from kronfluence.computer.covariance_computer import CovarianceComputer
 from kronfluence.computer.eigen_computer import EigenComputer
 from kronfluence.computer.pairwise_score_computer import PairwiseScoreComputer
 from kronfluence.computer.self_score_computer import SelfScoreComputer
-from kronfluence.module.constants import FACTOR_TYPE
 from kronfluence.module.utils import wrap_tracked_modules
 from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
@@ -121,7 +119,7 @@ class Analyzer(CovarianceComputer, EigenComputer, PairwiseScoreComputer, SelfSco
         dataloader_kwargs: Optional[DataLoaderKwargs] = None,
         factor_args: Optional[FactorArguments] = None,
         overwrite_output_dir: bool = False,
-    ) -> Optional[FACTOR_TYPE]:
+    ) -> None:
         """Computes all necessary factors for the given factor strategy. As an example, EK-FAC
         requires (1) computing covariance matrices, (2) performing Eigendecomposition, and
         (3) computing Lambda (corrected-eigenvalues) matrices.
@@ -162,12 +160,4 @@ class Analyzer(CovarianceComputer, EigenComputer, PairwiseScoreComputer, SelfSco
             dataloader_kwargs=dataloader_kwargs,
             factor_args=factor_args,
             overwrite_output_dir=overwrite_output_dir,
-        )
-
-        if factor_args is None:
-            factor_args = FactorArguments()
-        strategy = factor_args.strategy
-        factor_config = FactorConfig.CONFIGS[strategy]
-        return self._load_all_required_factors(
-            factors_name=factors_name, strategy=strategy, factor_config=factor_config
         )
