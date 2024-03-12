@@ -48,8 +48,3 @@ def get_imagenet_dataset(
         dataset = torch.utils.data.Subset(dataset, indices)
 
     return dataset
-
-
-if __name__ == "__main__":
-    model = construct_resnet50()
-    print(model)

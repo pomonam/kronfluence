@@ -98,10 +98,9 @@ def main():
     args = parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger()
 
     train_dataset = get_imagenet_dataset(split="eval_train", data_path=args.dataset_dir)
-    eval_dataset = get_imagenet_dataset(split="valid", data_path=args.dataset_dir)
+    # eval_dataset = get_imagenet_dataset(split="valid", data_path=args.dataset_dir)
 
     model = construct_resnet50()
 
@@ -125,26 +124,7 @@ def main():
         factor_args=factor_args,
         per_device_batch_size=1024,
         overwrite_output_dir=True,
-        dataloader_num_workers=2,
-        dataloader_pin_memory=True,
     )
-    # analyzer.perform_eigendecomposition(
-    #     factor_name=args.factor_strategy,
-    #     factor_args=factor_args,
-    #     overwrite_output_dir=True,
-    # )
-    # analyzer.fit_lambda(train_dataset, per_device_batch_size=None)
-    #
-    # score_name = "full_pairwise"
-    # analyzer.compute_pairwise_scores(
-    #     score_name=score_name,
-    #     query_dataset=eval_dataset,
-    #     per_device_query_batch_size=len(eval_dataset),
-    #     train_dataset=train_dataset,
-    #     per_device_train_batch_size=len(train_dataset),
-    # )
-    # scores = analyzer.load_pairwise_scores(score_name=score_name)
-    # print(scores.shape)
 
 
 if __name__ == "__main__":

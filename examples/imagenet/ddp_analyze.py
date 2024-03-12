@@ -1,21 +1,18 @@
 import argparse
 import logging
-import math
 import os
-from typing import Dict, Tuple
+from typing import Tuple
 
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from analyzer import Analyzer, prepare_model
 from arguments import FactorArguments
-from module.utils import wrap_tracked_modules
 from task import Task
 from torch import nn
 from torch.nn.parallel.distributed import DistributedDataParallel
 
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
-from examples.mnist.pipeline import construct_mnist_mlp, get_mnist_dataset
 
 BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
@@ -107,10 +104,9 @@ def main():
     args = parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger()
 
     train_dataset = get_imagenet_dataset(split="eval_train", data_path=args.dataset_dir)
-    eval_dataset = get_imagenet_dataset(split="valid", data_path=args.dataset_dir)
+    # eval_dataset = get_imagenet_dataset(split="valid", data_path=args.dataset_dir)
 
     dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
     device = torch.device("cuda:{}".format(LOCAL_RANK))
@@ -144,8 +140,6 @@ def main():
         factor_args=factor_args,
         per_device_batch_size=None,
         overwrite_output_dir=True,
-        dataloader_num_workers=2,
-        dataloader_pin_memory=True,
     )
     # analyzer.perform_eigendecomposition(
     #     factor_name=args.factor_strategy,

@@ -98,7 +98,6 @@ def main():
     args = parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger()
 
     train_dataset = get_regression_dataset(data_name=args.dataset_name, split="train", data_path=args.dataset_dir)
     eval_dataset = get_regression_dataset(data_name=args.dataset_name, split="valid", data_path=args.dataset_dir)

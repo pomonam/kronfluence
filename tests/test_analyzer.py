@@ -80,8 +80,8 @@ def test_default_factor_arguments() -> None:
     factor_args = FactorArguments()
 
     assert factor_args.strategy == "ekfac"
-    assert factor_args.use_empirical_fisher == False
-    assert factor_args.immediate_gradient_removal == False
+    assert factor_args.use_empirical_fisher is False
+    assert factor_args.immediate_gradient_removal is False
 
     assert factor_args.covariance_max_examples == 100_000
     assert factor_args.covariance_data_partition_size == 1
@@ -94,8 +94,8 @@ def test_default_factor_arguments() -> None:
     assert factor_args.lambda_max_examples == 100_000
     assert factor_args.lambda_data_partition_size == 1
     assert factor_args.lambda_module_partition_size == 1
-    assert factor_args.lambda_iterative_aggregate == False
-    assert factor_args.cached_activation_cpu_offload == False
+    assert factor_args.lambda_iterative_aggregate is False
+    assert factor_args.cached_activation_cpu_offload is False
     assert factor_args.lambda_dtype == torch.float32
 
 
@@ -103,16 +103,16 @@ def test_default_score_arguments() -> None:
     factor_args = ScoreArguments()
 
     assert factor_args.damping is None
-    assert factor_args.immediate_gradient_removal == False
+    assert factor_args.immediate_gradient_removal is False
 
     assert factor_args.data_partition_size == 1
     assert factor_args.module_partition_size == 1
-    assert factor_args.per_module_score == False
+    assert factor_args.per_module_score is False
 
     assert factor_args.query_gradient_rank is None
     assert factor_args.query_gradient_svd_dtype == torch.float64
 
     assert factor_args.score_dtype == torch.float32
-    assert factor_args.cached_activation_cpu_offload == False
+    assert factor_args.cached_activation_cpu_offload is False
     assert factor_args.per_sample_gradient_dtype == torch.float32
     assert factor_args.precondition_dtype == torch.float32
