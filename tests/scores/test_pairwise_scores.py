@@ -2,12 +2,12 @@ from typing import Optional, Tuple
 
 import pytest
 import torch
-from task import Task
 from torch import nn
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.module.constants import ALL_MODULE_NAME
+from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
 
@@ -99,7 +99,7 @@ def test_compute_pairwise_scores(
         "gpt",
     ],
 )
-@pytest.mark.parametrize("strategy", ["identity", "diag", "kfac", "ekfac"])
+@pytest.mark.parametrize("strategy", ["identity", "diagonal", "kfac", "ekfac"])
 @pytest.mark.parametrize("query_size", [20])
 @pytest.mark.parametrize("train_size", [50])
 @pytest.mark.parametrize("seed", [1])

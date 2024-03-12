@@ -74,7 +74,7 @@ class Computer(ABC):
         disable_log = log_main_process_only and self.state.process_index != 0
         self.logger = get_logger(name=__name__, log_level=log_level, disable_log=disable_log)
         self.logger.info(f"Initializing Computer with parameters: {locals()}")
-        self.logger.info(f"Process state configuration:\n{repr(self.state)}")
+        self.logger.debug(f"Process state configuration:\n{repr(self.state)}")
 
         self.model = model
         self.model.eval()
@@ -92,6 +92,11 @@ class Computer(ABC):
         self.logger.info(f"Tracking modules with names: {tracked_module_names}.")
 
         if self.state.use_distributed and not isinstance(model, (DDP, FSDP)):
+            warning_msg = (
+                "Creating a DDP module. If specific configuration needs to be used "
+                "for DDP, please pass in the model after the manually DDP wrapping."
+            )
+            self.logger.warning(warning_msg)
             self.model.to(self.state.device)
             self.model = DDP(
                 self.model,
@@ -100,7 +105,7 @@ class Computer(ABC):
             )
 
         if cpu and isinstance(model, (DataParallel, DDP, FSDP)):
-            error_msg = "To enforce CPU, the model must not be wrapped with DP, DDP, or FSDP."
+            error_msg = "To enforce CPU, the model should not be wrapped with DP, DDP, or FSDP."
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -109,7 +114,7 @@ class Computer(ABC):
 
         # Create and configure profiler.
         self.profiler = Profiler() if profile else PassThroughProfiler()
-        self.profiler.set_local_rank(self.state.local_process_index)
+        self.profiler.set_local_rank(local_rank=self.state.local_process_index)
 
         # Create and configure output directory.
         self.output_dir = Path(output_dir).joinpath(name).resolve()
@@ -240,7 +245,7 @@ class Computer(ABC):
             error_msg = (
                 f"Data partition size ({data_partition_size}) cannot be greater than the "
                 f"total data points ({total_data_examples}). Please reduce the data partition "
-                f"size in the arguments."
+                f"size in the argument."
             )
             self.logger.error(error_msg)
             raise ValueError(error_msg)
@@ -259,7 +264,7 @@ class Computer(ABC):
             if data_partition < 0 or data_partition > data_partition_size:
                 error_msg = (
                     f"Invalid data partition {data_partition} encountered. "
-                    f"The module partition needs to be in between (0, {data_partition_size})."
+                    f"The module partition needs to be in between [0, {data_partition_size})."
                 )
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
@@ -278,7 +283,7 @@ class Computer(ABC):
             error_msg = (
                 f"Module partition size ({module_partition_size}) cannot be greater than the "
                 f"total tracked modules ({len(tracked_module_names)}). Please reduce the module partition "
-                f"size in the arguments."
+                f"size in the argument."
             )
             self.logger.error(error_msg)
             raise ValueError(error_msg)
@@ -298,7 +303,7 @@ class Computer(ABC):
             if module_partition < 0 or module_partition > module_partition_size:
                 error_msg = (
                     f"Invalid module partition {module_partition} encountered. "
-                    f"The module partition needs to be in between (0, {module_partition_size})."
+                    f"The module partition needs to be in between [0, {module_partition_size})."
                 )
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
@@ -457,7 +462,7 @@ class Computer(ABC):
         load_fnc: Callable,
         save_fnc: Callable,
         dim: int,
-    ) -> None:
+    ) -> Optional[SCORE_TYPE]:
         """Aggregates influence scores computed for all data and module partitions."""
         scores_output_dir = self.scores_output_dir(scores_name=scores_name)
         if not scores_output_dir.exists():
@@ -483,9 +488,9 @@ class Computer(ABC):
             return
 
         start_time = get_time(state=self.state)
+        aggregated_scores: SCORE_TYPE = {}
         with self.profiler.profile("Aggregate Score"):
             if self.state.is_main_process:
-                aggregated_scores: SCORE_TYPE = {}
                 for data_partition in range(data_partition_size):
                     aggregated_module_scores = {}
 
@@ -518,3 +523,4 @@ class Computer(ABC):
         end_time = get_time(state=self.state)
         elapsed_time = end_time - start_time
         self.logger.info(f"Aggregated all partitioned scores in {elapsed_time:.2f} seconds.")
+        return aggregated_scores

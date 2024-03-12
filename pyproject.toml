@@ -32,4 +32,5 @@ disable = """
     not-callable,
     use-implicit-booleaness-not-comparison,
     implicit-str-concat,
+    inconsistent-return-statements,
 """

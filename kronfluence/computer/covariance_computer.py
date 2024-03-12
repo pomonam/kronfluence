@@ -105,7 +105,7 @@ class CovarianceComputer(Computer):
         target_data_partitions: Optional[Sequence[int]] = None,
         target_module_partitions: Optional[Sequence[int]] = None,
         overwrite_output_dir: bool = False,
-    ) -> None:
+    ) -> Optional[FACTOR_TYPE]:
         """Computes covariance matrices for all available modules. See `fit_all_factors` for
         the complete docstring with detailed description of each parameter."""
         self.logger.debug(f"Fitting covariance matrices with parameters: {locals()}")
@@ -114,7 +114,7 @@ class CovarianceComputer(Computer):
         os.makedirs(factors_output_dir, exist_ok=True)
         if covariance_matrices_exist(output_dir=factors_output_dir) and not overwrite_output_dir:
             self.logger.info(f"Found existing covariance matrices at {factors_output_dir}. Skipping.")
-            return
+            return self.load_covariance_matrices(factors_name=factors_name)
 
         if factor_args is None:
             factor_args = FactorArguments()
@@ -196,89 +196,95 @@ class CovarianceComputer(Computer):
                         covariance_factors=covariance_factors,
                     )
                 self.state.wait_for_everyone()
-            del covariance_factors
             self.logger.info(f"Saved covariance matrices at {factors_output_dir}.")
 
-        else:
-            data_partition_indices, target_data_partitions = self._get_data_partition(
-                total_data_examples=total_data_examples,
-                data_partition_size=factor_args.covariance_data_partition_size,
-                target_data_partitions=target_data_partitions,
-            )
-            module_partition_names, target_module_partitions = self._get_module_partition(
-                module_partition_size=factor_args.covariance_module_partition_size,
-                target_module_partitions=target_module_partitions,
-            )
+            profile_summary = self.profiler.summary()
+            if profile_summary != "":
+                self.logger.info(self.profiler.summary())
+            return covariance_factors
 
-            all_start_time = get_time(state=self.state)
-            for data_partition in target_data_partitions:
-                for module_partition in target_module_partitions:
-                    if (
-                        covariance_matrices_exist(
+        data_partition_indices, target_data_partitions = self._get_data_partition(
+            total_data_examples=total_data_examples,
+            data_partition_size=factor_args.covariance_data_partition_size,
+            target_data_partitions=target_data_partitions,
+        )
+        module_partition_names, target_module_partitions = self._get_module_partition(
+            module_partition_size=factor_args.covariance_module_partition_size,
+            target_module_partitions=target_module_partitions,
+        )
+
+        all_start_time = get_time(state=self.state)
+        for data_partition in target_data_partitions:
+            for module_partition in target_module_partitions:
+                if (
+                    covariance_matrices_exist(
+                        output_dir=factors_output_dir,
+                        partition=(data_partition, module_partition),
+                    )
+                    and not overwrite_output_dir
+                ):
+                    self.logger.info(
+                        f"Found existing covariance matrices for data partition {data_partition} "
+                        f"and module partition {module_partition} at {factors_output_dir}. Skipping."
+                    )
+                    continue
+
+                start_index, end_index = data_partition_indices[data_partition]
+                self.logger.info(
+                    f"Fitting covariance matrices for data partition with data indices ({start_index}, "
+                    f"{end_index}) and modules {module_partition_names[module_partition]}."
+                )
+
+                max_total_examples = total_data_examples // factor_args.covariance_data_partition_size
+                if max_total_examples < self.state.num_processes:
+                    error_msg = "There are more data examples than the number of processes."
+                    self.logger.error(error_msg)
+                    raise ValueError(error_msg)
+                if per_device_batch_size is None:
+                    per_device_batch_size = self._find_executable_covariance_factors_batch_size(
+                        dataloader_params=dataloader_params,
+                        dataset=dataset,
+                        factor_args=factor_args,
+                        total_data_examples=max_total_examples,
+                        tracked_module_names=module_partition_names[0],
+                    )
+                covariance_factors = self._fit_partitioned_covariance_matrices(
+                    dataset=dataset,
+                    per_device_batch_size=per_device_batch_size,
+                    dataloader_params=dataloader_params,
+                    factor_args=factor_args,
+                    indices=list(range(start_index, end_index)),
+                    tracked_module_names=module_partition_names[module_partition],
+                )
+                with self.profiler.profile("Save Covariance"):
+                    if self.state.is_main_process:
+                        save_covariance_matrices(
                             output_dir=factors_output_dir,
+                            covariance_factors=covariance_factors,
                             partition=(data_partition, module_partition),
                         )
-                        and not overwrite_output_dir
-                    ):
-                        self.logger.info(
-                            f"Found existing covariance matrices for data partition {data_partition} "
-                            f"and module partition {module_partition} at {factors_output_dir}. Skipping."
-                        )
-                        continue
+                    self.state.wait_for_everyone()
+                del covariance_factors
+                self.logger.info(f"Saved partitioned covariance matrices at {factors_output_dir}.")
 
-                    start_index, end_index = data_partition_indices[data_partition]
-                    self.logger.info(
-                        f"Fitting covariance matrices for data partition with data indices ({start_index}, "
-                        f"{end_index}) and modules {module_partition_names[module_partition]}."
-                    )
-
-                    max_total_examples = total_data_examples // factor_args.covariance_data_partition_size
-                    if max_total_examples < self.state.num_processes:
-                        error_msg = "There are more data examples than the number of processes."
-                        self.logger.error(error_msg)
-                        raise ValueError(error_msg)
-                    if per_device_batch_size is None:
-                        per_device_batch_size = self._find_executable_covariance_factors_batch_size(
-                            dataloader_params=dataloader_params,
-                            dataset=dataset,
-                            factor_args=factor_args,
-                            total_data_examples=max_total_examples,
-                            tracked_module_names=module_partition_names[0],
-                        )
-                    covariance_factors = self._fit_partitioned_covariance_matrices(
-                        dataset=dataset,
-                        per_device_batch_size=per_device_batch_size,
-                        dataloader_params=dataloader_params,
-                        factor_args=factor_args,
-                        indices=list(range(start_index, end_index)),
-                        tracked_module_names=module_partition_names[module_partition],
-                    )
-                    with self.profiler.profile("Save Covariance"):
-                        if self.state.is_main_process:
-                            save_covariance_matrices(
-                                output_dir=factors_output_dir,
-                                covariance_factors=covariance_factors,
-                                partition=(data_partition, module_partition),
-                            )
-                        self.state.wait_for_everyone()
-                    del covariance_factors
-                    self.logger.info(f"Saved partitioned covariance matrices at {factors_output_dir}.")
-
-            all_end_time = get_time(state=self.state)
-            elapsed_time = all_end_time - all_start_time
-            self.logger.info(f"Fitted all partitioned covariance matrices in {elapsed_time:.2f} seconds.")
-            self.aggregate_covariance_matrices(factors_name=factors_name, factor_args=factor_args)
+        all_end_time = get_time(state=self.state)
+        elapsed_time = all_end_time - all_start_time
+        self.logger.info(f"Fitted all partitioned covariance matrices in {elapsed_time:.2f} seconds.")
+        aggregated_covariance_factors = self.aggregate_covariance_matrices(
+            factors_name=factors_name, factor_args=factor_args
+        )
 
         profile_summary = self.profiler.summary()
         if profile_summary != "":
             self.logger.info(self.profiler.summary())
+        return aggregated_covariance_factors
 
     @torch.no_grad()
     def aggregate_covariance_matrices(
         self,
         factors_name: str,
         factor_args: FactorArguments,
-    ) -> None:
+    ) -> Optional[FACTOR_TYPE]:
         """Aggregates covariance matrices computed for all data and module partitions."""
         factors_output_dir = self.factors_output_dir(factors_name=factors_name)
         if not factors_output_dir.exists():
@@ -327,3 +333,4 @@ class CovarianceComputer(Computer):
         end_time = get_time(state=self.state)
         elapsed_time = end_time - start_time
         self.logger.info(f"Aggregated all partitioned covariance matrices in {elapsed_time:.2f} seconds.")
+        return aggregated_covariance_factors

@@ -21,7 +21,7 @@ from tests.utils import prepare_test
     "strategy",
     [
         "identity",
-        "diag",
+        "diagonal",
         "kfac",
         "ekfac",
     ],

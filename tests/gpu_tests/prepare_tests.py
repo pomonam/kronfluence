@@ -12,7 +12,7 @@ from tests.gpu_tests.pipeline import (
 )
 
 
-def train():
+def train() -> None:
     assert torch.cuda.is_available()
     device = torch.device("cuda")
     train_dataset = get_mnist_dataset(split="train", data_path="data")
@@ -69,7 +69,7 @@ def train():
     torch.save(model.state_dict(), "model.pth")
 
 
-def run_analysis():
+def run_analysis() -> None:
     assert torch.cuda.is_available()
     device = torch.device("cuda")
     model = construct_mnist_mlp().to(device=device)
@@ -114,10 +114,10 @@ def run_analysis():
         factors_name="single_gpu",
         query_dataset=eval_dataset,
         train_dataset=train_dataset,
-        train_indices=list(range(42)),
-        query_indices=list(range(23)),
-        per_device_query_batch_size=2,
-        per_device_train_batch_size=4,
+        train_indices=list(range(59_999)),
+        query_indices=list(range(50)),
+        per_device_query_batch_size=12,
+        per_device_train_batch_size=512,
         score_args=score_args,
         overwrite_output_dir=True,
     )
@@ -125,8 +125,8 @@ def run_analysis():
         scores_name="single_gpu",
         factors_name="single_gpu",
         train_dataset=train_dataset,
-        train_indices=list(range(42)),
-        per_device_train_batch_size=4,
+        train_indices=list(range(59_999)),
+        per_device_train_batch_size=512,
         score_args=score_args,
         overwrite_output_dir=True,
     )

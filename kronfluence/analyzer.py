@@ -42,9 +42,9 @@ class Analyzer(CovarianceComputer, EigenComputer, PairwiseScoreComputer, SelfSco
         cpu: bool = False,
         log_level: Optional[int] = None,
         log_main_process_only: bool = True,
-        profile: bool = True,
+        profile: bool = False,
         output_dir: str = "./analyses",
-        disable_model_save: bool = True,
+        disable_model_save: bool = False,
     ) -> None:
         """Initializes an instance of the Analyzer class.
 
@@ -69,7 +69,7 @@ class Analyzer(CovarianceComputer, EigenComputer, PairwiseScoreComputer, SelfSco
                 The file path to the directory, where analysis results will be stored. If the directory
                 does not exist, it will be created. Defaults to './analyses'.
             disable_model_save (bool, optional):
-                If set to True, prevents the saving of the model state. Defaults to True.
+                If set to True, prevents the saving of the model state. Defaults to False.
         """
         super().__init__(
             name=analysis_name,

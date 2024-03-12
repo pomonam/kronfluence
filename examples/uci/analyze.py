@@ -120,8 +120,8 @@ def main():
     )
     factor_args = FactorArguments(
         strategy=args.factor_strategy,
-        covariance_data_partition_size=1,
-        covariance_module_partition_size=1,
+        covariance_data_partition_size=5,
+        covariance_module_partition_size=4,
     )
     # with profile(activities=[ProfilerActivity.CPU], profile_memory=True, record_shapes=True) as prof:
     #     with record_function("covariance"):
@@ -134,31 +134,33 @@ def main():
     # )
     #
     # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
-    analyzer.fit_covariance_matrices(
-        factors_name=args.factor_strategy,
-        dataset=train_dataset,
-        factor_args=factor_args,
-        per_device_batch_size=args.batch_size,
-        overwrite_output_dir=True,
-    )
+    # cov_factors = analyzer.fit_covariance_matrices(
+    #     factors_name=args.factor_strategy,
+    #     dataset=train_dataset,
+    #     factor_args=factor_args,
+    #     per_device_batch_size=args.batch_size,
+    #     overwrite_output_dir=True,
+    # )
+    # print(cov_factors)
 
     with profile(activities=[ProfilerActivity.CPU], profile_memory=True, record_shapes=True) as prof:
         with record_function("eigen"):
-            analyzer.perform_eigendecomposition(
+            res = analyzer.perform_eigendecomposition(
                 factors_name=args.factor_strategy,
                 factor_args=factor_args,
                 overwrite_output_dir=True,
             )
-    print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
-
-    analyzer.fit_lambda_matrices(
+    # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
+    # print(res)
+    res = analyzer.fit_lambda_matrices(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
         # factor_args=factor_args,
         per_device_batch_size=None,
         overwrite_output_dir=True,
     )
-
+    # print(res)
+    #
     score_args = ScoreArguments(data_partition_size=2, module_partition_size=2)
     analyzer.compute_pairwise_scores(
         scores_name="hello",
@@ -172,18 +174,18 @@ def main():
     )
     # scores = analyzer.load_pairwise_scores(scores_name="hello")
     # print(scores)
-
-    analyzer.compute_self_scores(
-        scores_name="hello",
-        factors_name=args.factor_strategy,
-        # query_dataset=eval_dataset,
-        train_dataset=train_dataset,
-        # per_device_query_batch_size=16,
-        per_device_train_batch_size=8,
-        overwrite_output_dir=True,
-    )
-    # scores = analyzer.load_self_scores(scores_name="hello")
-    # print(scores)
+    #
+    # analyzer.compute_self_scores(
+    #     scores_name="hello",
+    #     factors_name=args.factor_strategy,
+    #     # query_dataset=eval_dataset,
+    #     train_dataset=train_dataset,
+    #     # per_device_query_batch_size=16,
+    #     per_device_train_batch_size=8,
+    #     overwrite_output_dir=True,
+    # )
+    # # scores = analyzer.load_self_scores(scores_name="hello")
+    # # print(scores)
 
     # analyzer.fit_all_factors(
     #     factor_name=args.factor_strategy,

@@ -54,9 +54,11 @@ Kronfluence currently supports influence computations on `nn.Linear` and `nn.Con
 It also supports several other Hessian approximation techniques: `identity`, `diagonal`, `KFAC`, and `EKFAC`.
 The implementation is compatible with [Distributed Data Parallel (DDP)](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html), 
 [Fully Sharded Data Parallel (FSDP)](https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html), and [`torch.compile`](https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html).
-See [DOCUMENTATION.md](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) for detailed description how to configure.
+See [DOCUMENTATION.md](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) for detailed description on how to configure the experiment.
 
-### Example
+### Examples
+
+The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples on how to use Kronfluence.
 
 **TL;DR:** You need to prepare the trained model and datasets, and pass them into the `Analyzer`.
 
@@ -114,16 +116,6 @@ analyzer.compute_pairwise_scores(
 # Load the scores with dimension `len(eval_dataset) x len(train_dataset)`.
 scores = analyzer.load_pairwise_scores(scores_name="pairwise_scoeres")
 ```
-
-## More Examples
-
-The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples on how to use Kronfluence.
-
-1. MLP & UCI regression datasets
-2. ResNet-9 & CIFAR-10 dataset
-3. ResNet-50 & ImageNet dataset (with DDP).
-4. BERT & GLUE dataset
-5. GPT-2 & WikiText-2 dataset
 
 ## Contributing
 

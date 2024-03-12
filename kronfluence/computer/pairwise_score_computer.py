@@ -159,7 +159,7 @@ class PairwiseScoreComputer(Computer):
         target_data_partitions: Optional[Sequence[int]] = None,
         target_module_partitions: Optional[Sequence[int]] = None,
         overwrite_output_dir: bool = False,
-    ) -> None:
+    ) -> Optional[SCORE_TYPE]:
         """Computes pairwise influence scores for the given score configuration. As an example,
         for Q query dataset and T training dataset, the pairwise influence scores are
         2-dimensional matrix with dimension `Q x T`.
@@ -204,7 +204,7 @@ class PairwiseScoreComputer(Computer):
         os.makedirs(scores_output_dir, exist_ok=True)
         if pairwise_scores_exist(output_dir=scores_output_dir) and not overwrite_output_dir:
             self.logger.info(f"Found existing pairwise scores at {scores_output_dir}. Skipping.")
-            return
+            return self.load_pairwise_scores(scores_name=scores_name)
 
         if score_args is None:
             score_args = ScoreArguments()
@@ -315,87 +315,92 @@ class PairwiseScoreComputer(Computer):
                 self.state.wait_for_everyone()
             self.logger.info(f"Saved pairwise scores at {scores_output_dir}.")
 
-        else:
-            data_partition_indices, target_data_partitions = self._get_data_partition(
-                total_data_examples=len(train_dataset),
-                data_partition_size=score_args.data_partition_size,
-                target_data_partitions=target_data_partitions,
-            )
-            module_partition_names, target_module_partitions = self._get_module_partition(
-                module_partition_size=score_args.module_partition_size,
-                target_module_partitions=target_module_partitions,
-            )
+            profile_summary = self.profiler.summary()
+            if profile_summary != "":
+                self.logger.info(self.profiler.summary())
+            return scores
 
-            all_start_time = get_time(state=self.state)
-            for data_partition in target_data_partitions:
-                for module_partition in target_module_partitions:
-                    if (
-                        pairwise_scores_exist(
-                            output_dir=scores_output_dir,
-                            partition=(data_partition, module_partition),
-                        )
-                        and not overwrite_output_dir
-                    ):
-                        self.logger.info(
-                            f"Found existing pairwise scores for data partition {data_partition} "
-                            f"and module partition {module_partition} at {scores_output_dir}. Skipping."
-                        )
-                        continue
+        data_partition_indices, target_data_partitions = self._get_data_partition(
+            total_data_examples=len(train_dataset),
+            data_partition_size=score_args.data_partition_size,
+            target_data_partitions=target_data_partitions,
+        )
+        module_partition_names, target_module_partitions = self._get_module_partition(
+            module_partition_size=score_args.module_partition_size,
+            target_module_partitions=target_module_partitions,
+        )
 
-                    start_index, end_index = data_partition_indices[data_partition]
-                    self.logger.info(
-                        f"Computing pairwise scores for data partition with data indices ({start_index}, "
-                        f"{end_index}) and modules {module_partition_names[module_partition]}..."
+        all_start_time = get_time(state=self.state)
+        for data_partition in target_data_partitions:
+            for module_partition in target_module_partitions:
+                if (
+                    pairwise_scores_exist(
+                        output_dir=scores_output_dir,
+                        partition=(data_partition, module_partition),
                     )
+                    and not overwrite_output_dir
+                ):
+                    self.logger.info(
+                        f"Found existing pairwise scores for data partition {data_partition} "
+                        f"and module partition {module_partition} at {scores_output_dir}. Skipping."
+                    )
+                    continue
 
-                    if per_device_train_batch_size is None:
-                        per_device_train_batch_size = self._find_executable_pairwise_scores_batch_size(
-                            query_dataset=query_dataset,
-                            per_device_query_batch_size=per_device_query_batch_size,
-                            train_dataset=train_dataset,
-                            loaded_factors=loaded_factors,
-                            dataloader_params=dataloader_params,
-                            total_data_examples=len(train_dataset) // score_args.data_partition_size,
-                            score_args=score_args,
-                            factor_args=factor_args,
-                            tracked_modules_name=module_partition_names[0],
-                        )
-                    scores = self._fit_partitioned_pairwise_scores(
-                        loaded_factors=loaded_factors,
+                start_index, end_index = data_partition_indices[data_partition]
+                self.logger.info(
+                    f"Computing pairwise scores for data partition with data indices ({start_index}, "
+                    f"{end_index}) and modules {module_partition_names[module_partition]}..."
+                )
+
+                if per_device_train_batch_size is None:
+                    per_device_train_batch_size = self._find_executable_pairwise_scores_batch_size(
                         query_dataset=query_dataset,
                         per_device_query_batch_size=per_device_query_batch_size,
                         train_dataset=train_dataset,
-                        per_device_train_batch_size=per_device_train_batch_size,
+                        loaded_factors=loaded_factors,
                         dataloader_params=dataloader_params,
+                        total_data_examples=len(train_dataset) // score_args.data_partition_size,
                         score_args=score_args,
                         factor_args=factor_args,
-                        indices=list(range(start_index, end_index)),
-                        tracked_module_names=module_partition_names[module_partition],
+                        tracked_modules_name=module_partition_names[0],
                     )
-                    with self.profiler.profile("Save Pairwise Score"):
-                        if self.state.is_main_process:
-                            save_pairwise_scores(
-                                output_dir=scores_output_dir,
-                                scores=scores,
-                                partition=(data_partition, module_partition),
-                            )
-                        self.state.wait_for_everyone()
-                    del scores
-                    self.logger.info(f"Saved partitioned pairwise scores at {scores_output_dir}.")
+                scores = self._fit_partitioned_pairwise_scores(
+                    loaded_factors=loaded_factors,
+                    query_dataset=query_dataset,
+                    per_device_query_batch_size=per_device_query_batch_size,
+                    train_dataset=train_dataset,
+                    per_device_train_batch_size=per_device_train_batch_size,
+                    dataloader_params=dataloader_params,
+                    score_args=score_args,
+                    factor_args=factor_args,
+                    indices=list(range(start_index, end_index)),
+                    tracked_module_names=module_partition_names[module_partition],
+                )
+                with self.profiler.profile("Save Pairwise Score"):
+                    if self.state.is_main_process:
+                        save_pairwise_scores(
+                            output_dir=scores_output_dir,
+                            scores=scores,
+                            partition=(data_partition, module_partition),
+                        )
+                    self.state.wait_for_everyone()
+                del scores
+                self.logger.info(f"Saved partitioned pairwise scores at {scores_output_dir}.")
 
-            all_end_time = get_time(state=self.state)
-            elapsed_time = all_end_time - all_start_time
-            self.logger.info(f"Fitted all partitioned pairwise scores in {elapsed_time:.2f} seconds.")
-            self.aggregate_pairwise_scores(scores_name=scores_name, score_args=score_args)
+        all_end_time = get_time(state=self.state)
+        elapsed_time = all_end_time - all_start_time
+        self.logger.info(f"Fitted all partitioned pairwise scores in {elapsed_time:.2f} seconds.")
+        aggregated_scores = self.aggregate_pairwise_scores(scores_name=scores_name, score_args=score_args)
 
         profile_summary = self.profiler.summary()
         if profile_summary != "":
             self.logger.info(self.profiler.summary())
+        return aggregated_scores
 
     @torch.no_grad()
-    def aggregate_pairwise_scores(self, scores_name: str, score_args: ScoreArguments) -> None:
+    def aggregate_pairwise_scores(self, scores_name: str, score_args: ScoreArguments) -> Optional[SCORE_TYPE]:
         """Aggregates pairwise scores computed for all data and module partitions."""
-        self._aggregate_scores(
+        return self._aggregate_scores(
             scores_name=scores_name,
             score_args=score_args,
             exists_fnc=pairwise_scores_exist,

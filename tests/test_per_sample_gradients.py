@@ -1,9 +1,10 @@
 import copy
+import time
 from typing import Any, Dict, List
 
 import pytest
 import torch
-from accelerate.utils import find_batch_size
+from accelerate.utils import find_batch_size, set_seed
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -232,7 +233,7 @@ def test_lambda_equivalence(
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     factor_args = FactorArguments(
-        strategy="diag",
+        strategy="diagonal",
         use_empirical_fisher=True,
     )
     analyzer.fit_lambda_matrices(
@@ -268,3 +269,58 @@ def test_lambda_equivalence(
         atol=ATOL,
         rtol=RTOL,
     )
+
+
+@pytest.mark.parametrize("seed", [0])
+def test_precondition_gradient(
+    seed: int,
+) -> None:
+    input_dim = 128
+    output_dim = 256
+    batch_dim = 8
+    lambda_scale = 1000
+    damping = 1e-08
+
+    set_seed(seed)
+    A = torch.rand(size=(input_dim, input_dim), dtype=torch.float64)
+    B = torch.rand(size=(output_dim, output_dim), dtype=torch.float64)
+    Lambda = torch.rand(size=(output_dim, input_dim), dtype=torch.float64)
+
+    gradient = torch.rand(size=(batch_dim, output_dim, input_dim), dtype=torch.float64)
+
+    start_time = time.time()
+    rotated_gradient = torch.einsum(
+        "ij,bjl,lk->bik",
+        (
+            B.t(),
+            gradient,
+            A,
+        ),
+    )
+    rotated_gradient.div_(Lambda + damping)
+    results = lambda_scale * torch.einsum(
+        "ij,bjl,lk->bik",
+        (B, rotated_gradient, A.t()),
+    )
+    print(f"Took {time.time() - start_time} seconds.")
+
+    start_time = time.time()
+    grads_rot = torch.matmul(
+        B.t(),
+        torch.matmul(
+            gradient,
+            A,
+        ),
+    )
+    scaled_lambda = Lambda / lambda_scale
+    grads_rot.div_(scaled_lambda)
+    raw_results = torch.matmul(
+        B,
+        torch.matmul(
+            grads_rot,
+            A.t(),
+        ),
+    )
+    print(f"Took {time.time() - start_time} seconds.")
+
+    assert torch.allclose(raw_results, results, atol=1e-5, rtol=1e-3)

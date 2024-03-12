@@ -143,7 +143,7 @@ def test_fit_lambda_matrices(
         "gpt",
     ],
 )
-@pytest.mark.parametrize("strategy", ["diag", "ekfac"])
+@pytest.mark.parametrize("strategy", ["diagonal", "ekfac"])
 @pytest.mark.parametrize("train_size", [50])
 @pytest.mark.parametrize("seed", [1])
 def test_lambda_matrices_batch_size_equivalence(
@@ -203,7 +203,7 @@ def test_lambda_matrices_batch_size_equivalence(
         "gpt",
     ],
 )
-@pytest.mark.parametrize("strategy", ["diag", "ekfac"])
+@pytest.mark.parametrize("strategy", ["diagonal", "ekfac"])
 @pytest.mark.parametrize("data_partition_size", [1, 4])
 @pytest.mark.parametrize("module_partition_size", [1, 3])
 @pytest.mark.parametrize("train_size", [81])
