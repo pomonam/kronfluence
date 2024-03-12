@@ -13,6 +13,7 @@ from torch import nn
 from torch.nn.parallel.distributed import DistributedDataParallel
 
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
+from utils.dataset import DataLoaderKwargs
 
 BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
@@ -39,7 +40,7 @@ def parse_args():
     parser.add_argument(
         "--factor_batch_size",
         type=int,
-        default=1024,
+        default=512,
         help="Batch size for computing factors.",
     )
     parser.add_argument(
@@ -125,6 +126,12 @@ def main():
         task=task,
         disable_model_save=True,
     )
+    dataloader_kwargs = DataLoaderKwargs(
+        num_workers=4,
+        pin_memory=True,
+        prefetch_factor=2,
+    )
+
     factor_args = FactorArguments(
         strategy=args.factor_strategy,
     )
@@ -133,7 +140,8 @@ def main():
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=args.factor_batch_size,
-        overwrite_output_dir=True,
+        dataloader_kwargs=dataloader_kwargs,
+        overwrite_output_dir=False,
     )
     scores = analyzer.compute_pairwise_scores(
         scores_name="pairwise",
@@ -143,7 +151,7 @@ def main():
         per_device_train_batch_size=args.train_batch_size,
         per_device_query_batch_size=args.query_batch_size,
         query_indices=list(range(1000)),
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
     logging.info(f"Scores: {scores}")
 
