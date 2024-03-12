@@ -34,7 +34,9 @@ class CPUTest(unittest.TestCase):
         cls.model = cls.model.double()
 
         cls.train_dataset = get_mnist_dataset(split="train", data_path="data")
+        cls.train_dataset = data.Subset(cls.train_dataset, indices=list(range(TRAIN_INDICES)))
         cls.eval_dataset = get_mnist_dataset(split="valid", data_path="data")
+        cls.eval_dataset = data.Subset(cls.eval_dataset, indices=list(range(QUERY_INDICES)))
 
         cls.task = ClassificationTask()
         cls.model = prepare_model(cls.model, cls.task)
@@ -122,7 +124,6 @@ class CPUTest(unittest.TestCase):
         )
         new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
 
-        torch.set_printoptions(threshold=30_000)
         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][10]}")
         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][10]}")

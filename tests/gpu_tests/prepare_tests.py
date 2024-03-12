@@ -99,7 +99,6 @@ def run_analysis() -> None:
         activation_covariance_dtype=torch.float64,
         gradient_covariance_dtype=torch.float64,
         lambda_dtype=torch.float64,
-        lambda_iterative_aggregate=False,
     )
     analyzer.fit_all_factors(
         factors_name="single_gpu",
