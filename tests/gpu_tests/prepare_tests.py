@@ -12,6 +12,11 @@ from tests.gpu_tests.pipeline import (
 )
 
 
+# Pick difficult cases where the dataset is not perfectly divisible by batch size.
+TRAIN_INDICES = 59_999
+QUERY_INDICES = 50
+
+
 def train() -> None:
     assert torch.cuda.is_available()
     device = torch.device("cuda")
@@ -76,9 +81,7 @@ def run_analysis() -> None:
     model.load_state_dict(torch.load("model.pth"))
 
     train_dataset = get_mnist_dataset(split="train", data_path="data")
-    train_dataset = Subset(train_dataset, indices=list(range(200)))
     eval_dataset = get_mnist_dataset(split="valid", data_path="data")
-    eval_dataset = Subset(eval_dataset, indices=list(range(100)))
 
     task = ClassificationTask()
     model = model.double()
@@ -100,7 +103,7 @@ def run_analysis() -> None:
         factors_name="single_gpu",
         dataset=train_dataset,
         factor_args=factor_args,
-        per_device_batch_size=32,
+        per_device_batch_size=512,
         overwrite_output_dir=True,
     )
 
@@ -114,8 +117,8 @@ def run_analysis() -> None:
         factors_name="single_gpu",
         query_dataset=eval_dataset,
         train_dataset=train_dataset,
-        train_indices=list(range(59_999)),
-        query_indices=list(range(50)),
+        train_indices=list(range(TRAIN_INDICES)),
+        query_indices=list(range(QUERY_INDICES)),
         per_device_query_batch_size=12,
         per_device_train_batch_size=512,
         score_args=score_args,
@@ -125,7 +128,7 @@ def run_analysis() -> None:
         scores_name="single_gpu",
         factors_name="single_gpu",
         train_dataset=train_dataset,
-        train_indices=list(range(59_999)),
+        train_indices=list(range(TRAIN_INDICES)),
         per_device_train_batch_size=512,
         score_args=score_args,
         overwrite_output_dir=True,
