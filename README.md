@@ -1,7 +1,6 @@
 <p align="center">
-<a href="#"><img width="425" img src=".assets/kronfluence.png" alt="Kronfluence Logo"/></a>
+<a href="#"><img width="380" img src=".assets/kronfluence.png" alt="Kronfluence Logo"/></a>
 </p>
-
 
 <p align="center">
     <a href="https://github.com/pomonam/kronfluence/LICENSE.md">
@@ -53,38 +52,8 @@ pip install -e .
 
 
 ```python
-  import torch
-  import torch.nn.functional as F
-  from datasets import load_dataset
-+ from accelerate import Accelerator
-
-+ accelerator = Accelerator()
-- device = 'cpu'
-+ device = accelerator.device
-
-  model = torch.nn.Transformer().to(device)
-  optimizer = torch.optim.Adam(model.parameters())
-
-  dataset = load_dataset('my_dataset')
-  data = torch.utils.data.DataLoader(dataset, shuffle=True)
-
-+ model, optimizer, data = accelerator.prepare(model, optimizer, data)
-
-  model.train()
-  for epoch in range(10):
-      for source, targets in data:
-          source = source.to(device)
-          targets = targets.to(device)
-
-          optimizer.zero_grad()
-
-          output = model(source)
-          loss = F.cross_entropy(output, targets)
-
--         loss.backward()
-+         accelerator.backward(loss)
-
-          optimizer.step()
+import torch
+import torch.nn.functional as F
 ```
 
 (Placeholder for getting started content)
