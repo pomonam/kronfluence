@@ -170,7 +170,7 @@ class CovarianceComputer(Computer):
 
         if no_partition:
             if total_data_examples < self.state.num_processes:
-                error_msg = "There are more data examples than the number of processes."
+                error_msg = "The number of processes are more than the data examples."
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
             if per_device_batch_size is None:
