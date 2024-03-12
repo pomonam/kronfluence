@@ -4,7 +4,7 @@ This directory contains scripts designed for training a regression model and con
 
 ## Training
 
-To initiate the training of a regression model using the Concrete dataset, execute the following command:
+To train a regression model on the Concrete dataset, run the following command:
 ```bash
 python train.py --dataset_name concrete \ 
     --dataset_dir ./data \
@@ -16,7 +16,6 @@ python train.py --dataset_name concrete \
     --num_train_epochs 20 \
     --seed 1004
 ```
-Alternatively, you can download the model checkpoint.
 
 # Influence Analysis
 

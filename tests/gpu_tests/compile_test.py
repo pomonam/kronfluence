@@ -2,20 +2,21 @@ import logging
 import unittest
 
 import torch
-from analyzer import Analyzer, prepare_model
-from arguments import FactorArguments, ScoreArguments
-from module.constants import (
+from torch.utils import data
+
+from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.module.constants import (
     ALL_MODULE_NAME,
     COVARIANCE_FACTOR_NAMES,
     LAMBDA_FACTOR_NAMES,
 )
-from torch.utils import data
-
 from tests.gpu_tests.pipeline import (
     ClassificationTask,
     construct_mnist_mlp,
     get_mnist_dataset,
 )
+from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
 from tests.utils import check_tensor_dict_equivalence
 
 logging.basicConfig(level=logging.DEBUG)
@@ -33,9 +34,9 @@ class CompileTest(unittest.TestCase):
         cls.model = cls.model.double()
 
         cls.train_dataset = get_mnist_dataset(split="train", data_path="data")
-        cls.train_dataset = data.Subset(cls.train_dataset, indices=list(range(200)))
+        cls.train_dataset = data.Subset(cls.train_dataset, indices=list(range(TRAIN_INDICES)))
         cls.eval_dataset = get_mnist_dataset(split="valid", data_path="data")
-        cls.eval_dataset = data.Subset(cls.eval_dataset, indices=list(range(100)))
+        cls.eval_dataset = data.Subset(cls.eval_dataset, indices=list(range(QUERY_INDICES)))
 
         cls.task = ClassificationTask()
         cls.model = prepare_model(cls.model, cls.task)
@@ -60,7 +61,7 @@ class CompileTest(unittest.TestCase):
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
             factor_args=factor_args,
-            per_device_batch_size=16,
+            per_device_batch_size=512,
             overwrite_output_dir=True,
         )
         new_covariance_factors = self.analyzer.load_covariance_matrices(factors_name=NEW_FACTOR_NAME)
@@ -83,7 +84,7 @@ class CompileTest(unittest.TestCase):
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
             factor_args=factor_args,
-            per_device_batch_size=16,
+            per_device_batch_size=512,
             overwrite_output_dir=True,
             load_from_factors_name=OLD_FACTOR_NAME,
         )
@@ -114,10 +115,10 @@ class CompileTest(unittest.TestCase):
             factors_name=OLD_FACTOR_NAME,
             query_dataset=self.eval_dataset,
             train_dataset=self.train_dataset,
-            train_indices=list(range(42)),
-            query_indices=list(range(23)),
-            per_device_query_batch_size=2,
-            per_device_train_batch_size=4,
+            train_indices=list(range(TRAIN_INDICES)),
+            query_indices=list(range(QUERY_INDICES)),
+            per_device_query_batch_size=12,
+            per_device_train_batch_size=512,
             score_args=score_args,
             overwrite_output_dir=True,
         )
@@ -145,8 +146,8 @@ class CompileTest(unittest.TestCase):
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,
             train_dataset=self.train_dataset,
-            train_indices=list(range(42)),
-            per_device_train_batch_size=4,
+            train_indices=list(range(TRAIN_INDICES)),
+            per_device_train_batch_size=512,
             score_args=score_args,
             overwrite_output_dir=True,
         )

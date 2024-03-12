@@ -206,7 +206,7 @@ def compute_pairwise_scores_with_loaders(
     """Computes pairwise influence scores for a given model and task.
 
     Args:
-        loaded_factors (FACTOR_TYPE, optional):
+        loaded_factors (FACTOR_TYPE):
             The factor results to load from, before computing the pairwise scores.
         model (nn.Module):
             The model that pairwise influence scores will be computed.
