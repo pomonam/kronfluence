@@ -146,8 +146,8 @@ class CompileTest(unittest.TestCase):
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,
             train_dataset=self.train_dataset,
-            train_indices=list(range(42)),
-            per_device_train_batch_size=4,
+            train_indices=list(range(TRAIN_INDICES)),
+            per_device_train_batch_size=512,
             score_args=score_args,
             overwrite_output_dir=True,
         )
