@@ -51,9 +51,7 @@ class DDPTest(unittest.TestCase):
         torch.cuda.set_device(LOCAL_RANK)
 
         cls.model = cls.model.to(device=device)
-        cls.model = DistributedDataParallel(
-            cls.model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK
-        )
+        cls.model = DistributedDataParallel(cls.model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
         cls.analyzer = Analyzer(
             analysis_name="gpu_test",
             model=cls.model,
@@ -61,9 +59,7 @@ class DDPTest(unittest.TestCase):
         )
 
     def test_covariance_matrices(self) -> None:
-        covariance_factors = self.analyzer.load_covariance_matrices(
-            factors_name=OLD_FACTOR_NAME
-        )
+        covariance_factors = self.analyzer.load_covariance_matrices(factors_name=OLD_FACTOR_NAME)
         factor_args = FactorArguments(
             use_empirical_fisher=True,
             activation_covariance_dtype=torch.float64,
@@ -77,9 +73,7 @@ class DDPTest(unittest.TestCase):
             per_device_batch_size=16,
             overwrite_output_dir=True,
         )
-        new_covariance_factors = self.analyzer.load_covariance_matrices(
-            factors_name=NEW_FACTOR_NAME
-        )
+        new_covariance_factors = self.analyzer.load_covariance_matrices(factors_name=NEW_FACTOR_NAME)
 
         for name in COVARIANCE_FACTOR_NAMES:
             if LOCAL_RANK == 0:
@@ -96,9 +90,7 @@ class DDPTest(unittest.TestCase):
                 )
 
     def test_lambda_matrices(self):
-        lambda_factors = self.analyzer.load_lambda_matrices(
-            factors_name=OLD_FACTOR_NAME
-        )
+        lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
         factor_args = FactorArguments(
             use_empirical_fisher=True,
             activation_covariance_dtype=torch.float64,
@@ -113,9 +105,7 @@ class DDPTest(unittest.TestCase):
             overwrite_output_dir=True,
             load_from_factors_name=OLD_FACTOR_NAME,
         )
-        new_lambda_factors = self.analyzer.load_lambda_matrices(
-            factors_name=NEW_FACTOR_NAME
-        )
+        new_lambda_factors = self.analyzer.load_lambda_matrices(factors_name=NEW_FACTOR_NAME)
 
         for name in LAMBDA_FACTOR_NAMES:
             if LOCAL_RANK == 0:
@@ -151,9 +141,7 @@ class DDPTest(unittest.TestCase):
             score_args=score_args,
             overwrite_output_dir=True,
         )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(
-            scores_name=NEW_SCORE_NAME
-        )
+        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
 
         if LOCAL_RANK == 0:
             print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")

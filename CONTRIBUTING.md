@@ -4,7 +4,8 @@ We welcome contributions to the `kronfluence` project. Whether it's bug fixes, f
 
 ## Setting Up Development Environment
 
-To contribute to `kronfluence`, you will need to set up a development environment on your machine. This setup includes all the dependencies required for linting, testing, and documentation.
+To contribute to `kronfluence`, you will need to set up a development environment on your machine. 
+This setup includes all the dependencies required for linting and testing.
 
 ```bash
 git clone https://github.com/pomonam/kronfluence.git

@@ -17,9 +17,7 @@ from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
 
 
-def prepare_model_and_analyzer(
-    model: nn.Module, task: Task
-) -> Tuple[nn.Module, Analyzer]:
+def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
     model = prepare_model(model=model, task=task)
     analyzer = Analyzer(
         analysis_name=f"pytest_{__name__}",
@@ -83,14 +81,8 @@ def test_fit_covariance_matrices(
     assert set(covariance_factors.keys()) == set(COVARIANCE_FACTOR_NAMES)
     assert len(covariance_factors[ACTIVATION_COVARIANCE_MATRIX_NAME]) > 0
     for module_name in covariance_factors[ACTIVATION_COVARIANCE_MATRIX_NAME]:
-        assert (
-            covariance_factors[ACTIVATION_COVARIANCE_MATRIX_NAME][module_name].dtype
-            == activation_covariance_dtype
-        )
-        assert (
-            covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME][module_name].dtype
-            == gradient_covariance_dtype
-        )
+        assert covariance_factors[ACTIVATION_COVARIANCE_MATRIX_NAME][module_name].dtype == activation_covariance_dtype
+        assert covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME][module_name].dtype == gradient_covariance_dtype
 
 
 @pytest.mark.parametrize(
@@ -130,9 +122,7 @@ def test_covariance_matrices_batch_size_equivalence(
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
     )
-    bs1_covariance_factors = analyzer.load_covariance_matrices(
-        factors_name=f"pytest_{test_name}_bs1"
-    )
+    bs1_covariance_factors = analyzer.load_covariance_matrices(factors_name=f"pytest_{test_name}_bs1")
 
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_name}_bs8",
@@ -142,9 +132,7 @@ def test_covariance_matrices_batch_size_equivalence(
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
     )
-    bs8_covariance_factors = analyzer.load_covariance_matrices(
-        factors_name=f"pytest_{test_name}_bs8"
-    )
+    bs8_covariance_factors = analyzer.load_covariance_matrices(factors_name=f"pytest_{test_name}_bs8")
 
     for name in COVARIANCE_FACTOR_NAMES:
         assert check_tensor_dict_equivalence(
@@ -188,9 +176,7 @@ def test_covariance_matrices_partition_equivalence(
     factor_args = FactorArguments(
         use_empirical_fisher=True,
     )
-    factors_name = (
-        f"pytest_{test_name}_{test_covariance_matrices_partition_equivalence.__name__}"
-    )
+    factors_name = f"pytest_{test_name}_{test_covariance_matrices_partition_equivalence.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -261,9 +247,7 @@ def test_covariance_matrices_attention_mask(
     factor_args = FactorArguments(
         use_empirical_fisher=True,
     )
-    factors_name = (
-        f"pytest_{test_name}_{test_covariance_matrices_attention_mask.__name__}"
-    )
+    factors_name = f"pytest_{test_name}_{test_covariance_matrices_attention_mask.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -329,9 +313,7 @@ def test_covariance_matrices_automatic_batch_size(
         use_empirical_fisher=True,
         immediate_gradient_removal=immediate_gradient_removal,
     )
-    factors_name = (
-        f"pytest_{test_name}_{test_covariance_matrices_automatic_batch_size.__name__}"
-    )
+    factors_name = f"pytest_{test_name}_{test_covariance_matrices_automatic_batch_size.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -395,9 +377,7 @@ def test_covariance_matrices_max_examples(
         covariance_max_examples=MAX_EXAMPLES,
         covariance_data_partition_size=data_partition_size,
     )
-    factors_name = (
-        f"pytest_{test_name}_{test_covariance_matrices_max_examples.__name__}"
-    )
+    factors_name = f"pytest_{test_name}_{test_covariance_matrices_max_examples.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
         dataset=train_dataset,

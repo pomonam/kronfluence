@@ -91,9 +91,7 @@ def get_cifar10_dataset(
 ):
     assert split in ["train", "eval_train", "valid"]
 
-    normalize = torchvision.transforms.Normalize(
-        mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.261)
-    )
+    normalize = torchvision.transforms.Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.261))
 
     if split in ["train", "eval_train"]:
         transforms = torchvision.transforms.Compose(
@@ -114,9 +112,7 @@ def get_cifar10_dataset(
 
     if split == "train":
         transform_config = [
-            torchvision.transforms.RandomResizedCrop(
-                size=224, scale=(0.08, 1.0), ratio=(0.75, 4.0 / 3.0)
-            ),
+            torchvision.transforms.RandomResizedCrop(size=224, scale=(0.08, 1.0), ratio=(0.75, 4.0 / 3.0)),
             torchvision.transforms.RandomHorizontalFlip(),
         ]
         transform_config.extend([torchvision.transforms.ToTensor(), normalize])
@@ -180,9 +176,7 @@ def get_cifar10_dataloader(
 
     if do_corrupt:
         if split == "valid":
-            raise NotImplementedError(
-                "Performing corruption on the validation dataset is not supported."
-            )
+            raise NotImplementedError("Performing corruption on the validation dataset is not supported.")
         num_corrupt = math.ceil(len(dataset) * 0.1)
         original_targets = np.array(copy.deepcopy(dataset.targets[:num_corrupt]))
         new_targets = torch.randint(
@@ -197,9 +191,7 @@ def get_cifar10_dataloader(
             size=new_targets[new_targets == original_targets].shape,
             generator=torch.Generator().manual_seed(0),
         ).numpy()
-        new_targets[new_targets == original_targets] = (
-            new_targets[new_targets == original_targets] + offsets
-        ) % 10
+        new_targets[new_targets == original_targets] = (new_targets[new_targets == original_targets] + offsets) % 10
         assert (new_targets == original_targets).sum() == 0
         dataset.targets[:num_corrupt] = list(new_targets)
 

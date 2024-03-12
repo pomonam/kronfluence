@@ -1,5 +1,5 @@
 <p align="center">
-<a href="#"><img width="380" img src=".assets/kronfluence.png" alt="Kronfluence Logo"/></a>
+<a href="#"><img width="380" img src=".assets/kronfluence.svg" alt="Kronfluence Logo"/></a>
 </p>
 
 <p align="center">

@@ -35,9 +35,7 @@ class Task(ABC):
             torch.Tensor:
                 The computed loss as a tensor.
         """
-        raise NotImplementedError(
-            "Subclasses must implement the `compute_train_loss` method."
-        )
+        raise NotImplementedError("Subclasses must implement the `compute_train_loss` method.")
 
     @abstractmethod
     def compute_measurement(
@@ -58,9 +56,7 @@ class Task(ABC):
             torch.Tensor:
                 The measurable quantity as a tensor.
         """
-        raise NotImplementedError(
-            "Subclasses must implement the `compute_measurement` method."
-        )
+        raise NotImplementedError("Subclasses must implement the `compute_measurement` method.")
 
     def influence_modules(self) -> Optional[List[str]]:
         """Specifies modules for preconditioning factors and influence scores computation.
@@ -75,9 +71,7 @@ class Task(ABC):
                 influence functions should be computed for all applicable modules.
         """
 
-    def get_attention_mask(
-        self, batch: Any
-    ) -> Optional[Union[Dict[str, torch.Tensor], torch.Tensor]]:
+    def get_attention_mask(self, batch: Any) -> Optional[Union[Dict[str, torch.Tensor], torch.Tensor]]:
         """Returns masks for data points within a batch that have been padded extra sequences to ensure
         consistent length across the batch. Typically, it returns None for models or datasets not requiring
         masking.

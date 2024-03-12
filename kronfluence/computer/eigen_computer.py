@@ -46,20 +46,13 @@ class EigenComputer(Computer):
 
         factors_output_dir = self.factors_output_dir(factors_name=factors_name)
         os.makedirs(factors_output_dir, exist_ok=True)
-        if (
-            eigendecomposition_exist(output_dir=factors_output_dir)
-            and not overwrite_output_dir
-        ):
-            self.logger.info(
-                f"Found existing Eigendecomposition results at {factors_output_dir}. Skipping."
-            )
+        if eigendecomposition_exist(output_dir=factors_output_dir) and not overwrite_output_dir:
+            self.logger.info(f"Found existing Eigendecomposition results at {factors_output_dir}. Skipping.")
             return
 
         if factor_args is None:
             factor_args = FactorArguments()
-            self.logger.info(
-                f"Factor arguments not provided. Using the default configuration: {factor_args}."
-            )
+            self.logger.info(f"Factor arguments not provided. Using the default configuration: {factor_args}.")
         else:
             self.logger.info(f"Using the provided configuration: {factor_args}.")
 
@@ -73,18 +66,13 @@ class EigenComputer(Computer):
 
         if not FactorConfig.CONFIGS[factor_args.strategy].requires_eigendecomposition:
             self.logger.info(
-                f"Strategy `{factor_args.strategy}` does not require performing Eigendecomposition. "
-                f"Skipping."
+                f"Strategy `{factor_args.strategy}` does not require performing Eigendecomposition. " f"Skipping."
             )
             return
 
         if load_from_factors_name is not None:
-            self.logger.info(
-                f"Loading covariance matrices from factors with name `{load_from_factors_name}`."
-            )
-            load_factors_output_dir = self.factors_output_dir(
-                factors_name=load_from_factors_name
-            )
+            self.logger.info(f"Loading covariance matrices from factors with name `{load_from_factors_name}`.")
+            load_factors_output_dir = self.factors_output_dir(factors_name=load_from_factors_name)
         else:
             load_factors_output_dir = factors_output_dir
 
@@ -97,9 +85,7 @@ class EigenComputer(Computer):
             raise FactorsNotFoundError(error_msg)
 
         with self.profiler.profile("Load Covariance"):
-            covariance_factors = load_covariance_matrices(
-                output_dir=load_factors_output_dir
-            )
+            covariance_factors = load_covariance_matrices(output_dir=load_factors_output_dir)
 
         if self.state.is_main_process:
             release_memory()
@@ -113,17 +99,13 @@ class EigenComputer(Computer):
                 )
             end_time = time.time()
             elapsed_time = end_time - start_time
-            self.logger.info(
-                f"Performed Eigendecomposition in {elapsed_time:.2f} seconds."
-            )
+            self.logger.info(f"Performed Eigendecomposition in {elapsed_time:.2f} seconds.")
             with self.profiler.profile("Save Eigendecomposition"):
                 save_eigendecomposition(
                     output_dir=factors_output_dir,
                     eigen_factors=eigen_factors,
                 )
-            self.logger.info(
-                f"Saved Eigendecomposition results at {factors_output_dir}."
-            )
+            self.logger.info(f"Saved Eigendecomposition results at {factors_output_dir}.")
         self.state.wait_for_everyone()
 
         profile_summary = self.profiler.summary()
@@ -202,8 +184,7 @@ class EigenComputer(Computer):
         end_time = get_time(state=self.state)
         elapsed_time = end_time - start_time
         self.logger.info(
-            f"Fitted Lambda matrices on {num_data_processed.item()} data points in "
-            f"{elapsed_time:.2f} seconds."
+            f"Fitted Lambda matrices on {num_data_processed.item()} data points in " f"{elapsed_time:.2f} seconds."
         )
         return lambda_factors
 
@@ -225,20 +206,13 @@ class EigenComputer(Computer):
 
         factors_output_dir = self.factors_output_dir(factors_name=factors_name)
         os.makedirs(factors_output_dir, exist_ok=True)
-        if (
-            lambda_matrices_exist(output_dir=factors_output_dir)
-            and not overwrite_output_dir
-        ):
-            self.logger.info(
-                f"Found existing Lambda matrices at {factors_output_dir}. Skipping."
-            )
+        if lambda_matrices_exist(output_dir=factors_output_dir) and not overwrite_output_dir:
+            self.logger.info(f"Found existing Lambda matrices at {factors_output_dir}. Skipping.")
             return
 
         if factor_args is None:
             factor_args = FactorArguments()
-            self.logger.info(
-                f"Factor arguments not provided. Using the default configuration: {factor_args}."
-            )
+            self.logger.info(f"Factor arguments not provided. Using the default configuration: {factor_args}.")
         else:
             self.logger.info(f"Using the provided configuration: {factor_args}.")
 
@@ -252,8 +226,7 @@ class EigenComputer(Computer):
 
         if not FactorConfig.CONFIGS[factor_args.strategy].requires_lambda_matrices:
             self.logger.info(
-                f"Strategy `{factor_args.strategy}` does not require fitting Lambda matrices. "
-                f"Skipping."
+                f"Strategy `{factor_args.strategy}` does not require fitting Lambda matrices. " f"Skipping."
             )
             return
 
@@ -269,17 +242,13 @@ class EigenComputer(Computer):
             self.logger.info(
                 f"Will be loading Eigendecomposition results from factors with name `{load_from_factors_name}`."
             )
-            load_factors_output_dir = self.factors_output_dir(
-                factors_name=load_from_factors_name
-            )
+            load_factors_output_dir = self.factors_output_dir(factors_name=load_from_factors_name)
         else:
             load_factors_output_dir = factors_output_dir
 
         if (
             not eigendecomposition_exist(output_dir=load_factors_output_dir)
-            and FactorConfig.CONFIGS[
-                factor_args.strategy
-            ].requires_eigendecomposition_for_lambda
+            and FactorConfig.CONFIGS[factor_args.strategy].requires_eigendecomposition_for_lambda
         ):
             error_msg = (
                 f"Eigendecomposition results not found at {load_factors_output_dir}. "
@@ -295,32 +264,19 @@ class EigenComputer(Computer):
                 f"DataLoader arguments not provided. Using the default configuration: {dataloader_kwargs}."
             )
         else:
-            self.logger.info(
-                f"Using the DataLoader parameters: {dataloader_kwargs.to_dict()}."
-            )
+            self.logger.info(f"Using the DataLoader parameters: {dataloader_kwargs.to_dict()}.")
         dataloader_params = dataloader_kwargs.to_dict()
 
         eigen_factors = None
-        if FactorConfig.CONFIGS[
-            factor_args.strategy
-        ].requires_eigendecomposition_for_lambda:
+        if FactorConfig.CONFIGS[factor_args.strategy].requires_eigendecomposition_for_lambda:
             with self.profiler.profile("Load Eigendecomposition"):
-                eigen_factors = load_eigendecomposition(
-                    output_dir=load_factors_output_dir
-                )
+                eigen_factors = load_eigendecomposition(output_dir=load_factors_output_dir)
 
         total_data_examples = min([factor_args.lambda_max_examples, len(dataset)])
-        self.logger.info(
-            f"Total data examples to fit Lambda matrices: {total_data_examples}."
-        )
+        self.logger.info(f"Total data examples to fit Lambda matrices: {total_data_examples}.")
 
-        no_partition = (
-            factor_args.lambda_data_partition_size == 1
-            and factor_args.lambda_module_partition_size == 1
-        )
-        partition_provided = (
-            target_data_partitions is not None or target_module_partitions is not None
-        )
+        no_partition = factor_args.lambda_data_partition_size == 1 and factor_args.lambda_module_partition_size == 1
+        partition_provided = target_data_partitions is not None or target_module_partitions is not None
         if no_partition and partition_provided:
             error_msg = (
                 "`target_data_partitions` or `target_module_partitions` were specified, while"
@@ -354,9 +310,7 @@ class EigenComputer(Computer):
             )
             with self.profiler.profile("Save Lambda"):
                 if self.state.is_main_process:
-                    save_lambda_matrices(
-                        output_dir=factors_output_dir, lambda_factors=lambda_factors
-                    )
+                    save_lambda_matrices(output_dir=factors_output_dir, lambda_factors=lambda_factors)
                 self.state.wait_for_everyone()
             self.logger.info(f"Saved Lambda matrices at {factors_output_dir}.")
 
@@ -366,11 +320,9 @@ class EigenComputer(Computer):
                 data_partition_size=factor_args.lambda_data_partition_size,
                 target_data_partitions=target_data_partitions,
             )
-            module_partition_names, target_module_partitions = (
-                self._get_module_partition(
-                    module_partition_size=factor_args.lambda_module_partition_size,
-                    target_module_partitions=target_module_partitions,
-                )
+            module_partition_names, target_module_partitions = self._get_module_partition(
+                module_partition_size=factor_args.lambda_module_partition_size,
+                target_module_partitions=target_module_partitions,
             )
 
             all_start_time = get_time(state=self.state)
@@ -395,25 +347,19 @@ class EigenComputer(Computer):
                         f"{end_index}) and modules {module_partition_names[module_partition]}."
                     )
 
-                    max_total_examples = (
-                        total_data_examples // factor_args.lambda_data_partition_size
-                    )
+                    max_total_examples = total_data_examples // factor_args.lambda_data_partition_size
                     if max_total_examples < self.state.num_processes:
-                        error_msg = (
-                            "There are more data examples than the number of processes."
-                        )
+                        error_msg = "There are more data examples than the number of processes."
                         self.logger.error(error_msg)
                         raise ValueError(error_msg)
                     if per_device_batch_size is None:
-                        per_device_batch_size = (
-                            self._find_executable_lambda_factors_batch_size(
-                                eigen_factors=eigen_factors,
-                                dataloader_params=dataloader_params,
-                                dataset=dataset,
-                                factor_args=factor_args,
-                                total_data_examples=max_total_examples,
-                                tracked_module_names=module_partition_names[0],
-                            )
+                        per_device_batch_size = self._find_executable_lambda_factors_batch_size(
+                            eigen_factors=eigen_factors,
+                            dataloader_params=dataloader_params,
+                            dataset=dataset,
+                            factor_args=factor_args,
+                            total_data_examples=max_total_examples,
+                            tracked_module_names=module_partition_names[0],
                         )
                     lambda_factors = self._fit_partitioned_lambda_matrices(
                         eigen_factors=eigen_factors,
@@ -433,18 +379,12 @@ class EigenComputer(Computer):
                             )
                         self.state.wait_for_everyone()
                     del lambda_factors
-                    self.logger.info(
-                        f"Saved partitioned Lambda matrices at {factors_output_dir}."
-                    )
+                    self.logger.info(f"Saved partitioned Lambda matrices at {factors_output_dir}.")
 
             all_end_time = get_time(state=self.state)
             elapsed_time = all_end_time - all_start_time
-            self.logger.info(
-                f"Fitted all partitioned Lambda matrices in {elapsed_time:.2f} seconds."
-            )
-            self.aggregate_lambda_matrices(
-                factors_name=factors_name, factor_args=factor_args
-            )
+            self.logger.info(f"Fitted all partitioned Lambda matrices in {elapsed_time:.2f} seconds.")
+            self.aggregate_lambda_matrices(factors_name=factors_name, factor_args=factor_args)
 
         profile_summary = self.profiler.summary()
         if profile_summary != "":
@@ -469,19 +409,14 @@ class EigenComputer(Computer):
 
         data_partition_size = factor_args.lambda_data_partition_size
         module_partition_size = factor_args.lambda_module_partition_size
-        all_required_partitions = [
-            (i, j)
-            for i in range(data_partition_size)
-            for j in range(module_partition_size)
-        ]
+        all_required_partitions = [(i, j) for i in range(data_partition_size) for j in range(module_partition_size)]
         all_partition_exists = [
             lambda_matrices_exist(output_dir=factors_output_dir, partition=partition)
             for partition in all_required_partitions
         ]
         if not all_partition_exists:
             self.logger.info(
-                "Lambda matrices are not aggregated as Lambda matrices for some partitions "
-                "are not yet computed."
+                "Lambda matrices are not aggregated as Lambda matrices for some partitions " "are not yet computed."
             )
             return
 
@@ -508,6 +443,4 @@ class EigenComputer(Computer):
             self.state.wait_for_everyone()
         end_time = get_time(state=self.state)
         elapsed_time = end_time - start_time
-        self.logger.info(
-            f"Aggregated all partitioned Lambda matrices in {elapsed_time:.2f} seconds."
-        )
+        self.logger.info(f"Aggregated all partitioned Lambda matrices in {elapsed_time:.2f} seconds.")

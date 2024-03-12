@@ -28,9 +28,7 @@ def prepare_model(
     return model
 
 
-class Analyzer(
-    CovarianceComputer, EigenComputer, PairwiseScoreComputer, SelfScoreComputer
-):
+class Analyzer(CovarianceComputer, EigenComputer, PairwiseScoreComputer, SelfScoreComputer):
     """
     Handles the computation of all preconditioning factors (e.g., covariance and Lambda matrices for EKFAC)
     and influence scores for a given PyTorch model.
@@ -98,9 +96,7 @@ class Analyzer(
             self.logger.info(f"Found existing saved model at {model_save_path}.")
             # Load the existing model's state_dict for comparison.
             loaded_state_dict = load_file(model_save_path)
-            if not verify_models_equivalence(
-                loaded_state_dict, extracted_model.state_dict()
-            ):
+            if not verify_models_equivalence(loaded_state_dict, extracted_model.state_dict()):
                 error_msg = (
                     "Detected a difference between the current model and the one saved at "
                     f"{model_save_path}. Consider using a different `analysis_name` to "

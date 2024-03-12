@@ -29,25 +29,15 @@ from tests.utils import (
 def _extract_single_example(batch: Any, index: int) -> Any:
     if isinstance(batch, list):
         return [
-            (
-                element[index].unsqueeze(0)
-                if isinstance(element[index], torch.Tensor)
-                else element[index]
-            )
+            (element[index].unsqueeze(0) if isinstance(element[index], torch.Tensor) else element[index])
             for element in batch
         ]
     if isinstance(batch, dict):
         return {
-            key: (
-                value[index].unsqueeze(0)
-                if isinstance(value[index], torch.Tensor)
-                else value[index]
-            )
+            key: (value[index].unsqueeze(0) if isinstance(value[index], torch.Tensor) else value[index])
             for key, value in batch.items()
         }
-    error_msg = (
-        f"Unsupported batch type: {type(batch)}. Only list or dict are supported."
-    )
+    error_msg = f"Unsupported batch type: {type(batch)}. Only list or dict are supported."
     raise NotImplementedError(error_msg)
 
 
@@ -57,10 +47,7 @@ def for_loop_per_sample_gradient(
     total_per_sample_gradients = []
     for batch in batches:
         parameter_gradient_dict = {}
-        single_batch_list = [
-            _extract_single_example(batch=batch, index=i)
-            for i in range(find_batch_size(batch))
-        ]
+        single_batch_list = [_extract_single_example(batch=batch, index=i) for i in range(find_batch_size(batch))]
         for single_batch in single_batch_list:
             model.zero_grad(set_to_none=True)
             if use_measurement:
@@ -88,13 +75,11 @@ def for_loop_per_sample_gradient(
         module_gradient_dict = {}
         for module_name, module in model.named_modules():
             if isinstance(module, (nn.Linear, nn.Conv2d)):
-                module_gradient_dict[module_name] = (
-                    reshape_parameter_gradient_to_module_matrix(
-                        module=module,
-                        module_name=module_name,
-                        gradient_dict=parameter_gradient_dict,
-                        remove_gradient=True,
-                    )
+                module_gradient_dict[module_name] = reshape_parameter_gradient_to_module_matrix(
+                    module=module,
+                    module_name=module_name,
+                    gradient_dict=parameter_gradient_dict,
+                    remove_gradient=True,
                 )
         del parameter_gradient_dict
         total_per_sample_gradients.append(module_gradient_dict)
@@ -175,17 +160,13 @@ def test_for_loop_per_sample_gradient_equivalence(
                 model=model,
             )
         else:
-            loss = task.compute_train_loss(
-                batch=batch_lst[i], model=model, sample=False
-            )
+            loss = task.compute_train_loss(batch=batch_lst[i], model=model, sample=False)
         loss.backward()
 
         module_gradients = {}
         for module in model.modules():
             if isinstance(module, TrackedModule):
-                module_gradients[module.name] = module.get_factor(
-                    factor_name=PRECONDITIONED_GRADIENT_NAME
-                )
+                module_gradients[module.name] = module.get_factor(factor_name=PRECONDITIONED_GRADIENT_NAME)
 
         per_sample_gradients.append(module_gradients)
 
@@ -262,9 +243,7 @@ def test_lambda_equivalence(
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
     )
-    lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_name}_lambda_diag"
-    )
+    lambda_factors = analyzer.load_lambda_matrices(factors_name=f"pytest_{test_name}_lambda_diag")
     lambda_matrices = lambda_factors[LAMBDA_MATRIX_NAME]
 
     for_loop_per_sample_gradients = for_loop_per_sample_gradient(
@@ -278,14 +257,10 @@ def test_lambda_equivalence(
     for gradient_batch in for_loop_per_sample_gradients:
         for module_name in gradient_batch:
             if module_name not in aggregated_matrices:
-                aggregated_matrices[module_name] = (
-                    gradient_batch[module_name] ** 2.0
-                ).sum(dim=0)
+                aggregated_matrices[module_name] = (gradient_batch[module_name] ** 2.0).sum(dim=0)
                 total_added[module_name] = gradient_batch[module_name].shape[0]
             else:
-                aggregated_matrices[module_name] += (
-                    gradient_batch[module_name] ** 2.0
-                ).sum(dim=0)
+                aggregated_matrices[module_name] += (gradient_batch[module_name] ** 2.0).sum(dim=0)
                 total_added[module_name] += gradient_batch[module_name].shape[0]
     assert check_tensor_dict_equivalence(
         lambda_matrices,

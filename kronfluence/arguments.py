@@ -36,15 +36,11 @@ class FactorArguments(Arguments):
     )
     initial_per_device_batch_size_attempt: int = field(
         default=4096,
-        metadata={
-            "help": "The initial attempted per-device batch size when the batch size is not provided."
-        },
+        metadata={"help": "The initial attempted per-device batch size when the batch size is not provided."},
     )
     immediate_gradient_removal: bool = field(
         default=False,
-        metadata={
-            "help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."
-        },
+        metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
     )
 
     # Configuration for fitting covariance matrices. #
@@ -82,18 +78,14 @@ class FactorArguments(Arguments):
     gradient_covariance_dtype: torch.dtype = field(
         default=torch.float32,
         metadata={
-            "help": "Dtype for computing pseudo-gradient covariance matrices. "
-            "Recommended to use `torch.float32`."
+            "help": "Dtype for computing pseudo-gradient covariance matrices. " "Recommended to use `torch.float32`."
         },
     )
 
     # Configuration for performing eigendecomposition. #
     eigendecomposition_dtype: torch.dtype = field(
         default=torch.float64,
-        metadata={
-            "help": "Dtype for performing eigendecomposition. "
-            "Recommended to use `torch.float64."
-        },
+        metadata={"help": "Dtype for performing eigendecomposition. " "Recommended to use `torch.float64."},
     )
 
     # Configuration for fitting Lambda matrices. #
@@ -140,9 +132,7 @@ class FactorArguments(Arguments):
     )
     lambda_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={
-            "help": "Dtype for computing Lambda matrices. Recommended to use `torch.float32`."
-        },
+        metadata={"help": "Dtype for computing Lambda matrices. Recommended to use `torch.float32`."},
     )
 
 
@@ -152,9 +142,7 @@ class ScoreArguments(Arguments):
 
     initial_per_device_batch_size_attempt: int = field(
         default=4096,
-        metadata={
-            "help": "The initial attempted per-device batch size when the batch size is not provided."
-        },
+        metadata={"help": "The initial attempted per-device batch size when the batch size is not provided."},
     )
     damping: Optional[float] = field(
         default=None,
@@ -165,9 +153,7 @@ class ScoreArguments(Arguments):
     )
     immediate_gradient_removal: bool = field(
         default=False,
-        metadata={
-            "help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."
-        },
+        metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
     )
 
     data_partition_size: int = field(
@@ -197,15 +183,11 @@ class ScoreArguments(Arguments):
 
     query_gradient_rank: Optional[int] = field(
         default=None,
-        metadata={
-            "help": "Rank for the query gradient. Applies no low-rank approximation if None."
-        },
+        metadata={"help": "Rank for the query gradient. Applies no low-rank approximation if None."},
     )
     query_gradient_svd_dtype: torch.dtype = field(
         default=torch.float64,
-        metadata={
-            "help": "Dtype for performing singular value decomposition (SVD) on the query gradient."
-        },
+        metadata={"help": "Dtype for performing singular value decomposition (SVD) on the query gradient."},
     )
 
     score_dtype: torch.dtype = field(
@@ -225,8 +207,5 @@ class ScoreArguments(Arguments):
     )
     precondition_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={
-            "help": "Dtype for computing the preconditioned gradient. "
-            "Recommended to use `torch.float32`."
-        },
+        metadata={"help": "Dtype for computing the preconditioned gradient. " "Recommended to use `torch.float32`."},
     )

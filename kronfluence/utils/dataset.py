@@ -29,9 +29,7 @@ class DataLoaderKwargs(KwargsHandler):
     pin_memory_device: str = ""
 
 
-def make_indices_partition(
-    total_data_examples: int, partition_size: int
-) -> List[Tuple[int, int]]:
+def make_indices_partition(total_data_examples: int, partition_size: int) -> List[Tuple[int, int]]:
     """Returns partitioned indices from the total data examples."""
     bins = list(map(len, np.array_split(range(total_data_examples), partition_size)))
     indices_bin = []
@@ -87,9 +85,7 @@ class DistributedEvalSampler(Sampler):
                 raise RuntimeError("Requires distributed package to be available.")
             rank = dist.get_rank()
         if rank >= num_replicas or rank < 0:
-            raise ValueError(
-                f"Invalid rank {rank}, rank should be in the interval [0, {num_replicas - 1}]."
-            )
+            raise ValueError(f"Invalid rank {rank}, rank should be in the interval [0, {num_replicas - 1}].")
 
         self.dataset = dataset
         self.num_replicas = num_replicas
@@ -130,9 +126,7 @@ class DistributedSamplerWithStack(Sampler):
                 raise RuntimeError("Requires distributed package to be available.")
             rank = dist.get_rank()
         if rank >= num_replicas or rank < 0:
-            raise ValueError(
-                f"Invalid rank {rank}, rank should be in the interval [0, {num_replicas - 1}]."
-            )
+            raise ValueError(f"Invalid rank {rank}, rank should be in the interval [0, {num_replicas - 1}].")
 
         self.dataset = dataset
         self.num_replicas = num_replicas

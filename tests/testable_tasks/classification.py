@@ -44,9 +44,7 @@ def make_classification_dataset(num_data: int, seed: int = 0) -> data.Dataset:
             torchvision.transforms.ToTensor(),
         ]
     )
-    return torchvision.datasets.FakeData(
-        size=num_data, image_size=(3, 16, 16), num_classes=5, transform=transform
-    )
+    return torchvision.datasets.FakeData(size=num_data, image_size=(3, 16, 16), num_classes=5, transform=transform)
 
 
 class ClassificationTask(Task):
@@ -76,15 +74,11 @@ class ClassificationTask(Task):
         inputs, labels = batch
         logits = model(inputs)
 
-        bindex = torch.arange(logits.shape[0]).to(
-            device=logits.device, non_blocking=False
-        )
+        bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
         logits_correct = logits[bindex, labels]
 
         cloned_logits = logits.clone()
-        cloned_logits[bindex, labels] = torch.tensor(
-            -torch.inf, device=logits.device, dtype=logits.dtype
-        )
+        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()

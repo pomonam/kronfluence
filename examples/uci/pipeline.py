@@ -74,9 +74,7 @@ def get_regression_dataset(
             y_train_scaled.astype(np.float32),
         )
     else:
-        dataset = RegressionDataset(
-            x_val_scaled.astype(np.float32), y_val_scaled.astype(np.float32)
-        )
+        dataset = RegressionDataset(x_val_scaled.astype(np.float32), y_val_scaled.astype(np.float32))
 
     if indices is not None:
         dataset = torch.utils.data.Subset(dataset, indices)

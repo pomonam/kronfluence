@@ -12,9 +12,7 @@ from examples.uci.pipeline import construct_regression_mlp, get_regression_datas
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Train regression models on UCI datasets."
-    )
+    parser = argparse.ArgumentParser(description="Train regression models on UCI datasets.")
 
     parser.add_argument(
         "--dataset_name",
@@ -93,9 +91,7 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
-    train_dataset = get_regression_dataset(
-        data_name=args.dataset_name, split="train", data_path=args.dataset_dir
-    )
+    train_dataset = get_regression_dataset(data_name=args.dataset_name, split="train", data_path=args.dataset_dir)
     train_dataloader = DataLoader(
         dataset=train_dataset,
         batch_size=args.train_batch_size,
@@ -103,9 +99,7 @@ def main():
         drop_last=True,
     )
     model = construct_regression_mlp()
-    optimizer = torch.optim.SGD(
-        model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay
-    )
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
 
     logger.info("Start training the model.")
     model.train()
@@ -134,9 +128,7 @@ def main():
         shuffle=False,
         drop_last=False,
     )
-    eval_dataset = get_regression_dataset(
-        data_name=args.dataset_name, split="valid", data_path=args.dataset_dir
-    )
+    eval_dataset = get_regression_dataset(data_name=args.dataset_name, split="valid", data_path=args.dataset_dir)
     eval_dataloader = DataLoader(
         dataset=eval_dataset,
         batch_size=args.eval_batch_size,

@@ -18,9 +18,7 @@ def _replace_conv1d_modules(model: nn.Module) -> None:
             _replace_conv1d_modules(module)
 
         if isinstance(module, Conv1D):
-            new_module = nn.Linear(
-                in_features=module.weight.shape[0], out_features=module.weight.shape[1]
-            )
+            new_module = nn.Linear(in_features=module.weight.shape[0], out_features=module.weight.shape[1])
             new_module.weight.data.copy_(module.weight.data.t())
             new_module.bias.data.copy_(module.bias.data)
             setattr(model, name, new_module)
@@ -108,9 +106,7 @@ class LanguageModelingTask(Task):
             labels = batch["labels"]
             shift_labels = labels[..., 1:].contiguous()
             reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
-            summed_loss = F.cross_entropy(
-                reshaped_shift_logits, shift_labels.view(-1), reduction="sum"
-            )
+            summed_loss = F.cross_entropy(reshaped_shift_logits, shift_labels.view(-1), reduction="sum")
         else:
             reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             with torch.no_grad():
@@ -119,9 +115,7 @@ class LanguageModelingTask(Task):
                     probs,
                     num_samples=1,
                 ).flatten()
-            summed_loss = F.cross_entropy(
-                reshaped_shift_logits, sampled_labels.detach(), reduction="sum"
-            )
+            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels.detach(), reduction="sum")
         return summed_loss
 
     def compute_measurement(

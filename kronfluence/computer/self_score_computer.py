@@ -54,9 +54,7 @@ class SelfScoreComputer(Computer):
         )
 
         def executable_batch_size_func(batch_size: int) -> None:
-            self.logger.info(
-                f"Attempting to set per-device batch size to {batch_size}."
-            )
+            self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
             set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
             release_memory()
             total_batch_size = batch_size * self.state.num_processes
@@ -121,9 +119,7 @@ class SelfScoreComputer(Computer):
             )
         end_time = get_time(state=self.state)
         elapsed_time = end_time - start_time
-        self.logger.info(
-            f"Computed self-influence scores in {elapsed_time:.2f} seconds."
-        )
+        self.logger.info(f"Computed self-influence scores in {elapsed_time:.2f} seconds.")
         return scores
 
     def compute_self_scores(
@@ -169,23 +165,17 @@ class SelfScoreComputer(Computer):
             overwrite_output_dir (bool, optional):
                 If True, the existing factors with the same name will be overwritten.
         """
-        self.logger.debug(
-            f"Computing self-influence scores with parameters: {locals()}"
-        )
+        self.logger.debug(f"Computing self-influence scores with parameters: {locals()}")
 
         scores_output_dir = self.scores_output_dir(scores_name=scores_name)
         os.makedirs(scores_output_dir, exist_ok=True)
         if self_scores_exist(output_dir=scores_output_dir) and not overwrite_output_dir:
-            self.logger.info(
-                f"Found existing self-influence scores at {scores_output_dir}. Skipping."
-            )
+            self.logger.info(f"Found existing self-influence scores at {scores_output_dir}. Skipping.")
             return
 
         if score_args is None:
             score_args = ScoreArguments()
-            self.logger.info(
-                f"Score arguments not provided. Using the default configuration: {score_args}."
-            )
+            self.logger.info(f"Score arguments not provided. Using the default configuration: {score_args}.")
         else:
             self.logger.info(f"Using the provided configuration: {score_args}.")
 
@@ -227,9 +217,7 @@ class SelfScoreComputer(Computer):
                 f"DataLoader arguments not provided. Using the default configuration: {dataloader_kwargs}."
             )
         else:
-            self.logger.info(
-                f"Using the DataLoader parameters: {dataloader_kwargs.to_dict()}."
-            )
+            self.logger.info(f"Using the DataLoader parameters: {dataloader_kwargs.to_dict()}.")
         dataloader_params = dataloader_kwargs.to_dict()
         if train_indices is not None:
             train_dataset = data.Subset(dataset=train_dataset, indices=train_indices)
@@ -241,13 +229,8 @@ class SelfScoreComputer(Computer):
                 factor_config=factor_config,
             )
 
-        no_partition = (
-            score_args.data_partition_size == 1
-            and score_args.module_partition_size == 1
-        )
-        partition_provided = (
-            target_data_partitions is not None or target_module_partitions is not None
-        )
+        no_partition = score_args.data_partition_size == 1 and score_args.module_partition_size == 1
+        partition_provided = target_data_partitions is not None or target_module_partitions is not None
 
         if no_partition and partition_provided:
             error_msg = (
@@ -259,16 +242,14 @@ class SelfScoreComputer(Computer):
 
         if no_partition:
             if per_device_train_batch_size is None:
-                per_device_train_batch_size = (
-                    self._find_executable_self_scores_batch_size(
-                        train_dataset=train_dataset,
-                        loaded_factors=loaded_factors,
-                        dataloader_params=dataloader_params,
-                        total_data_examples=len(train_dataset),
-                        score_args=score_args,
-                        factor_args=factor_args,
-                        tracked_modules_name=None,
-                    )
+                per_device_train_batch_size = self._find_executable_self_scores_batch_size(
+                    train_dataset=train_dataset,
+                    loaded_factors=loaded_factors,
+                    dataloader_params=dataloader_params,
+                    total_data_examples=len(train_dataset),
+                    score_args=score_args,
+                    factor_args=factor_args,
+                    tracked_modules_name=None,
                 )
             scores = self._fit_partitioned_self_scores(
                 loaded_factors=loaded_factors,
@@ -295,11 +276,9 @@ class SelfScoreComputer(Computer):
                 data_partition_size=score_args.data_partition_size,
                 target_data_partitions=target_data_partitions,
             )
-            module_partition_names, target_module_partitions = (
-                self._get_module_partition(
-                    module_partition_size=score_args.module_partition_size,
-                    target_module_partitions=target_module_partitions,
-                )
+            module_partition_names, target_module_partitions = self._get_module_partition(
+                module_partition_size=score_args.module_partition_size,
+                target_module_partitions=target_module_partitions,
             )
 
             all_start_time = get_time(state=self.state)
@@ -325,17 +304,14 @@ class SelfScoreComputer(Computer):
                     )
 
                     if per_device_train_batch_size is None:
-                        per_device_train_batch_size = (
-                            self._find_executable_self_scores_batch_size(
-                                train_dataset=train_dataset,
-                                loaded_factors=loaded_factors,
-                                dataloader_params=dataloader_params,
-                                total_data_examples=len(train_dataset)
-                                // score_args.data_partition_size,
-                                score_args=score_args,
-                                factor_args=factor_args,
-                                tracked_modules_name=module_partition_names[0],
-                            )
+                        per_device_train_batch_size = self._find_executable_self_scores_batch_size(
+                            train_dataset=train_dataset,
+                            loaded_factors=loaded_factors,
+                            dataloader_params=dataloader_params,
+                            total_data_examples=len(train_dataset) // score_args.data_partition_size,
+                            score_args=score_args,
+                            factor_args=factor_args,
+                            tracked_modules_name=module_partition_names[0],
                         )
                     scores = self._fit_partitioned_self_scores(
                         loaded_factors=loaded_factors,
@@ -356,15 +332,11 @@ class SelfScoreComputer(Computer):
                             )
                         self.state.wait_for_everyone()
                     del scores
-                    self.logger.info(
-                        f"Saved partitioned self-influence scores at {scores_output_dir}."
-                    )
+                    self.logger.info(f"Saved partitioned self-influence scores at {scores_output_dir}.")
 
             all_end_time = get_time(state=self.state)
             elapsed_time = all_end_time - all_start_time
-            self.logger.info(
-                f"Fitted all partitioned self-influence scores in {elapsed_time:.2f} seconds."
-            )
+            self.logger.info(f"Fitted all partitioned self-influence scores in {elapsed_time:.2f} seconds.")
             self.aggregate_self_scores(scores_name=scores_name, score_args=score_args)
 
         profile_summary = self.profiler.summary()
@@ -372,9 +344,7 @@ class SelfScoreComputer(Computer):
             self.logger.info(self.profiler.summary())
 
     @torch.no_grad()
-    def aggregate_self_scores(
-        self, scores_name: str, score_args: ScoreArguments
-    ) -> None:
+    def aggregate_self_scores(self, scores_name: str, score_args: ScoreArguments) -> None:
         """Aggregates self-influence scores computed for all data and module partitions."""
         self._aggregate_scores(
             scores_name=scores_name,

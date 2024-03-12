@@ -80,21 +80,18 @@ class CovarianceComputer(Computer):
                 dataloader_params=dataloader_params,
                 indices=indices,
             )
-            num_data_processed, covariance_factors = (
-                fit_covariance_matrices_with_loader(
-                    model=self.model,
-                    state=self.state,
-                    task=self.task,
-                    loader=loader,
-                    factor_args=factor_args,
-                    tracked_module_names=tracked_module_names,
-                )
+            num_data_processed, covariance_factors = fit_covariance_matrices_with_loader(
+                model=self.model,
+                state=self.state,
+                task=self.task,
+                loader=loader,
+                factor_args=factor_args,
+                tracked_module_names=tracked_module_names,
             )
         end_time = get_time(state=self.state)
         elapsed_time = end_time - start_time
         self.logger.info(
-            f"Fitted covariance matrices on {num_data_processed.item()} data points in "
-            f"{elapsed_time:.2f} seconds."
+            f"Fitted covariance matrices on {num_data_processed.item()} data points in " f"{elapsed_time:.2f} seconds."
         )
         return covariance_factors
 
@@ -115,20 +112,13 @@ class CovarianceComputer(Computer):
 
         factors_output_dir = self.factors_output_dir(factors_name=factors_name)
         os.makedirs(factors_output_dir, exist_ok=True)
-        if (
-            covariance_matrices_exist(output_dir=factors_output_dir)
-            and not overwrite_output_dir
-        ):
-            self.logger.info(
-                f"Found existing covariance matrices at {factors_output_dir}. Skipping."
-            )
+        if covariance_matrices_exist(output_dir=factors_output_dir) and not overwrite_output_dir:
+            self.logger.info(f"Found existing covariance matrices at {factors_output_dir}. Skipping.")
             return
 
         if factor_args is None:
             factor_args = FactorArguments()
-            self.logger.info(
-                f"Factor arguments not provided. Using the default configuration: {factor_args}."
-            )
+            self.logger.info(f"Factor arguments not provided. Using the default configuration: {factor_args}.")
         else:
             self.logger.info(f"Using the provided configuration: {factor_args}.")
 
@@ -142,8 +132,7 @@ class CovarianceComputer(Computer):
 
         if not FactorConfig.CONFIGS[factor_args.strategy].requires_covariance_matrices:
             self.logger.info(
-                f"Strategy `{factor_args.strategy}` does not require fitting covariance matrices. "
-                f"Skipping."
+                f"Strategy `{factor_args.strategy}` does not require fitting covariance matrices. " f"Skipping."
             )
             return
 
@@ -161,23 +150,16 @@ class CovarianceComputer(Computer):
                 f"DataLoader arguments not provided. Using the default configuration: {dataloader_kwargs}."
             )
         else:
-            self.logger.info(
-                f"Using the DataLoader parameters: {dataloader_kwargs.to_dict()}."
-            )
+            self.logger.info(f"Using the DataLoader parameters: {dataloader_kwargs.to_dict()}.")
         dataloader_params = dataloader_kwargs.to_dict()
 
         total_data_examples = min([factor_args.covariance_max_examples, len(dataset)])
-        self.logger.info(
-            f"Total data examples to fit covariance matrices: {total_data_examples}."
-        )
+        self.logger.info(f"Total data examples to fit covariance matrices: {total_data_examples}.")
 
         no_partition = (
-            factor_args.covariance_data_partition_size == 1
-            and factor_args.covariance_module_partition_size == 1
+            factor_args.covariance_data_partition_size == 1 and factor_args.covariance_module_partition_size == 1
         )
-        partition_provided = (
-            target_data_partitions is not None or target_module_partitions is not None
-        )
+        partition_provided = target_data_partitions is not None or target_module_partitions is not None
         if no_partition and partition_provided:
             error_msg = (
                 "`target_data_partitions` or `target_module_partitions` were specified, while"
@@ -192,14 +174,12 @@ class CovarianceComputer(Computer):
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
             if per_device_batch_size is None:
-                per_device_batch_size = (
-                    self._find_executable_covariance_factors_batch_size(
-                        dataloader_params=dataloader_params,
-                        dataset=dataset,
-                        total_data_examples=total_data_examples,
-                        factor_args=factor_args,
-                        tracked_module_names=None,
-                    )
+                per_device_batch_size = self._find_executable_covariance_factors_batch_size(
+                    dataloader_params=dataloader_params,
+                    dataset=dataset,
+                    total_data_examples=total_data_examples,
+                    factor_args=factor_args,
+                    tracked_module_names=None,
                 )
             covariance_factors = self._fit_partitioned_covariance_matrices(
                 dataset=dataset,
@@ -225,11 +205,9 @@ class CovarianceComputer(Computer):
                 data_partition_size=factor_args.covariance_data_partition_size,
                 target_data_partitions=target_data_partitions,
             )
-            module_partition_names, target_module_partitions = (
-                self._get_module_partition(
-                    module_partition_size=factor_args.covariance_module_partition_size,
-                    target_module_partitions=target_module_partitions,
-                )
+            module_partition_names, target_module_partitions = self._get_module_partition(
+                module_partition_size=factor_args.covariance_module_partition_size,
+                target_module_partitions=target_module_partitions,
             )
 
             all_start_time = get_time(state=self.state)
@@ -254,25 +232,18 @@ class CovarianceComputer(Computer):
                         f"{end_index}) and modules {module_partition_names[module_partition]}."
                     )
 
-                    max_total_examples = (
-                        total_data_examples
-                        // factor_args.covariance_data_partition_size
-                    )
+                    max_total_examples = total_data_examples // factor_args.covariance_data_partition_size
                     if max_total_examples < self.state.num_processes:
-                        error_msg = (
-                            "There are more data examples than the number of processes."
-                        )
+                        error_msg = "There are more data examples than the number of processes."
                         self.logger.error(error_msg)
                         raise ValueError(error_msg)
                     if per_device_batch_size is None:
-                        per_device_batch_size = (
-                            self._find_executable_covariance_factors_batch_size(
-                                dataloader_params=dataloader_params,
-                                dataset=dataset,
-                                factor_args=factor_args,
-                                total_data_examples=max_total_examples,
-                                tracked_module_names=module_partition_names[0],
-                            )
+                        per_device_batch_size = self._find_executable_covariance_factors_batch_size(
+                            dataloader_params=dataloader_params,
+                            dataset=dataset,
+                            factor_args=factor_args,
+                            total_data_examples=max_total_examples,
+                            tracked_module_names=module_partition_names[0],
                         )
                     covariance_factors = self._fit_partitioned_covariance_matrices(
                         dataset=dataset,
@@ -291,18 +262,12 @@ class CovarianceComputer(Computer):
                             )
                         self.state.wait_for_everyone()
                     del covariance_factors
-                    self.logger.info(
-                        f"Saved partitioned covariance matrices at {factors_output_dir}."
-                    )
+                    self.logger.info(f"Saved partitioned covariance matrices at {factors_output_dir}.")
 
             all_end_time = get_time(state=self.state)
             elapsed_time = all_end_time - all_start_time
-            self.logger.info(
-                f"Fitted all partitioned covariance matrices in {elapsed_time:.2f} seconds."
-            )
-            self.aggregate_covariance_matrices(
-                factors_name=factors_name, factor_args=factor_args
-            )
+            self.logger.info(f"Fitted all partitioned covariance matrices in {elapsed_time:.2f} seconds.")
+            self.aggregate_covariance_matrices(factors_name=factors_name, factor_args=factor_args)
 
         profile_summary = self.profiler.summary()
         if profile_summary != "":
@@ -326,15 +291,9 @@ class CovarianceComputer(Computer):
 
         data_partition_size = factor_args.covariance_data_partition_size
         module_partition_size = factor_args.covariance_module_partition_size
-        all_required_partitions = [
-            (i, j)
-            for i in range(data_partition_size)
-            for j in range(module_partition_size)
-        ]
+        all_required_partitions = [(i, j) for i in range(data_partition_size) for j in range(module_partition_size)]
         all_partition_exists = [
-            covariance_matrices_exist(
-                output_dir=factors_output_dir, partition=partition
-            )
+            covariance_matrices_exist(output_dir=factors_output_dir, partition=partition)
             for partition in all_required_partitions
         ]
         if not all_partition_exists:
@@ -367,6 +326,4 @@ class CovarianceComputer(Computer):
             self.state.wait_for_everyone()
         end_time = get_time(state=self.state)
         elapsed_time = end_time - start_time
-        self.logger.info(
-            f"Aggregated all partitioned covariance matrices in {elapsed_time:.2f} seconds."
-        )
+        self.logger.info(f"Aggregated all partitioned covariance matrices in {elapsed_time:.2f} seconds.")

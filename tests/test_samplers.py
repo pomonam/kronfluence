@@ -24,9 +24,7 @@ def test_eval_distributed_sampler(
 
     indices = []
     for rank in range(num_replicas):
-        sampler = DistributedEvalSampler(
-            train_dataset, num_replicas=num_replicas, rank=rank
-        )
+        sampler = DistributedEvalSampler(train_dataset, num_replicas=num_replicas, rank=rank)
         indices.append(np.array(list(iter(sampler))))
 
     assert len(np.hstack(indices)) == dataset_size
@@ -50,9 +48,7 @@ def test_eval_distributed_sampler_with_stack(
     num_replicas = 4
     indices = []
     for rank in range(num_replicas):
-        sampler = DistributedSamplerWithStack(
-            train_dataset, num_replicas=num_replicas, rank=rank
-        )
+        sampler = DistributedSamplerWithStack(train_dataset, num_replicas=num_replicas, rank=rank)
         indices.append(np.array(list(iter(sampler))))
 
     for i, sample_indices in enumerate(indices):

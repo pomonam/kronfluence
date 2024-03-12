@@ -24,35 +24,21 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                 The flattened activation tensor and the number of stacked activations. The flattened
                 activation is a 2-dimensional matrix with dimension `activation_num x activation_dim`.
         """
-        flattened_activation = rearrange(
-            tensor=input_activation, pattern="b ... d_in -> (b ...) d_in"
-        )
+        flattened_activation = rearrange(tensor=input_activation, pattern="b ... d_in -> (b ...) d_in")
 
         flattened_attention_mask = None
-        if (
-            self._attention_mask is not None
-            and flattened_activation.size(0) == self._attention_mask.numel()
-        ):
+        if self._attention_mask is not None and flattened_activation.size(0) == self._attention_mask.numel():
             # If the binary attention mask is provided, zero-out appropriate activations.
-            flattened_attention_mask = rearrange(
-                tensor=self._attention_mask, pattern="b ... -> (b ...) 1"
-            )
+            flattened_attention_mask = rearrange(tensor=self._attention_mask, pattern="b ... -> (b ...) 1")
             flattened_activation = flattened_activation * flattened_attention_mask
 
         if self.original_module.bias is not None:
-            append_term = flattened_activation.new_ones(
-                flattened_activation.shape[0], 1
-            )
+            append_term = flattened_activation.new_ones(flattened_activation.shape[0], 1)
             if flattened_attention_mask is not None:
                 append_term = append_term * flattened_attention_mask
-            flattened_activation = torch.cat(
-                [flattened_activation, append_term], dim=-1
-            )
-        count = (
-            flattened_activation.size(0)
-            if flattened_attention_mask is None
-            else flattened_attention_mask.sum()
-        )
+            flattened_activation = torch.cat([flattened_activation, append_term], dim=-1)
+
+        count = flattened_activation.size(0) if flattened_attention_mask is None else flattened_attention_mask.sum()
         return flattened_activation, count
 
     def _get_flattened_gradient(self, output_gradient: torch.Tensor) -> torch.Tensor:
@@ -92,4 +78,5 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
             shape = list(input_activation.shape[:-1]) + [1]
             append_term = input_activation.new_ones(shape, requires_grad=False)
             input_activation = torch.cat([input_activation, append_term], dim=-1)
+
         return torch.einsum("b...i,b...o->boi", (input_activation, output_gradient))

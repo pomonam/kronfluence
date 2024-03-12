@@ -11,9 +11,7 @@ from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import prepare_test
 
 
-def prepare_model_and_analyzer(
-    model: nn.Module, task: Task
-) -> Tuple[nn.Module, Analyzer]:
+def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
     model = prepare_model(model=model, task=task)
     analyzer = Analyzer(
         analysis_name=f"pytest_{__name__}",

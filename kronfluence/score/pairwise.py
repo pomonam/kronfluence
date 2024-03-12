@@ -41,8 +41,7 @@ def pairwise_scores_save_path(
     if partition is not None:
         data_partition, module_partition = partition
         return output_dir / (
-            f"pairwise_scores_data_partition{data_partition}"
-            f"_module_partition{module_partition}.safetensors"
+            f"pairwise_scores_data_partition{data_partition}" f"_module_partition{module_partition}.safetensors"
         )
     return output_dir / "pairwise_scores.safetensors"
 
@@ -99,10 +98,7 @@ def _compute_pairwise_dot_products_with_loader(
     score_chunks: Dict[str, List[torch.Tensor]] = {}
     if score_args.per_module_score:
         for module in model.modules():
-            if (
-                isinstance(module, TrackedModule)
-                and module.name in tracked_module_names
-            ):
+            if isinstance(module, TrackedModule) and module.name in tracked_module_names:
                 score_chunks[module.name] = []
     else:
         score_chunks[ALL_MODULE_NAME] = []
@@ -137,14 +133,9 @@ def _compute_pairwise_dot_products_with_loader(
             with torch.no_grad():
                 if score_args.per_module_score:
                     for module in model.modules():
-                        if (
-                            isinstance(module, TrackedModule)
-                            and module.name in tracked_module_names
-                        ):
+                        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
                             score_chunks[module.name].append(
-                                module.get_factor(
-                                    factor_name=PAIRWISE_SCORE_MATRIX_NAME
-                                ).cpu()
+                                module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME).cpu()
                             )
                 else:
                     # Aggregate the pairwise scores across all modules.
@@ -156,15 +147,8 @@ def _compute_pairwise_dot_products_with_loader(
                         requires_grad=False,
                     )
                     for module in model.modules():
-                        if (
-                            isinstance(module, TrackedModule)
-                            and module.name in tracked_module_names
-                        ):
-                            pairwise_scores.add_(
-                                module.get_factor(
-                                    factor_name=PAIRWISE_SCORE_MATRIX_NAME
-                                )
-                            )
+                        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+                            pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
                     # `.cpu()` synchronizes the CUDA stream.
                     score_chunks[ALL_MODULE_NAME].append(pairwise_scores.cpu())
                 release_scores(model=model)
@@ -299,15 +283,11 @@ def compute_pairwise_scores_with_loaders(
 
                 if state.use_distributed:
                     # Stack preconditioned query gradient across multiple devices or nodes.
-                    synchronize_preconditioned_gradient(
-                        model=model, num_processes=state.num_processes
-                    )
+                    synchronize_preconditioned_gradient(model=model, num_processes=state.num_processes)
                     if query_index == len(query_loader) - 1 and query_remainder > 0:
                         # Remove duplicate data points if the dataset is not exactly divisible
                         # by the current batch size.
-                        truncate_preconditioned_gradient(
-                            model=model, keep_size=query_remainder
-                        )
+                        truncate_preconditioned_gradient(model=model, keep_size=query_remainder)
 
             # Compute the dot product between preconditioning query gradient and all training gradients.
             release_memory()
@@ -331,8 +311,6 @@ def compute_pairwise_scores_with_loaders(
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
 
         for module_name in total_scores_chunks:
-            total_scores_chunks[module_name] = torch.cat(
-                total_scores_chunks[module_name], dim=0
-            )
+            total_scores_chunks[module_name] = torch.cat(total_scores_chunks[module_name], dim=0)
 
     return total_scores_chunks

@@ -24,9 +24,7 @@ WORLD_SIZE = int(os.environ["WORLD_SIZE"])
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Influence analysis on ImageNet datasets."
-    )
+    parser = argparse.ArgumentParser(description="Influence analysis on ImageNet datasets.")
 
     parser.add_argument(
         "--dataset_dir",
@@ -66,9 +64,7 @@ def parse_args():
 
 
 class ClassificationTask(Task):
-    def compute_model_output(
-        self, batch: BATCH_DTYPE, model: nn.Module
-    ) -> torch.Tensor:
+    def compute_model_output(self, batch: BATCH_DTYPE, model: nn.Module) -> torch.Tensor:
         inputs, _ = batch
         return model(inputs)
 
@@ -97,15 +93,11 @@ class ClassificationTask(Task):
     ) -> torch.Tensor:
         _, labels = batch
 
-        bindex = torch.arange(outputs.shape[0]).to(
-            device=outputs.device, non_blocking=False
-        )
+        bindex = torch.arange(outputs.shape[0]).to(device=outputs.device, non_blocking=False)
         logits_correct = outputs[bindex, labels]
 
         cloned_logits = outputs.clone()
-        cloned_logits[bindex, labels] = torch.tensor(
-            -torch.inf, device=outputs.device, dtype=outputs.dtype
-        )
+        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=outputs.device, dtype=outputs.dtype)
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
@@ -132,9 +124,7 @@ def main():
     model = prepare_model(model, task)
 
     model = model.to(device=device)
-    model = DistributedDataParallel(
-        model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK
-    )
+    model = DistributedDataParallel(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
 
     analyzer = Analyzer(
         analysis_name=args.analysis_name,

@@ -38,8 +38,7 @@ def self_scores_save_path(
     if partition is not None:
         data_partition, module_partition = partition
         return output_dir / (
-            f"self_scores_data_partition{data_partition}"
-            f"_module_partition{module_partition}.safetensors"
+            f"self_scores_data_partition{data_partition}" f"_module_partition{module_partition}.safetensors"
         )
     return output_dir / "self_scores.safetensors"
 
@@ -148,10 +147,7 @@ def compute_self_scores_with_loaders(
     score_chunks: Dict[str, List[torch.Tensor]] = {}
     if score_args.per_module_score:
         for module in model.modules():
-            if (
-                isinstance(module, TrackedModule)
-                and module.name in tracked_module_names
-            ):
+            if isinstance(module, TrackedModule) and module.name in tracked_module_names:
                 score_chunks[module.name] = []
     else:
         score_chunks[ALL_MODULE_NAME] = []
@@ -180,14 +176,9 @@ def compute_self_scores_with_loaders(
             with torch.no_grad():
                 if score_args.per_module_score:
                     for module in model.modules():
-                        if (
-                            isinstance(module, TrackedModule)
-                            and module.name in tracked_module_names
-                        ):
+                        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
                             score_chunks[module.name].append(
-                                module.get_factor(
-                                    factor_name=SELF_SCORE_VECTOR_NAME
-                                ).cpu()
+                                module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).cpu()
                             )
                 else:
                     # Aggregate the self-influence scores across all modules.
@@ -199,13 +190,8 @@ def compute_self_scores_with_loaders(
                         requires_grad=False,
                     )
                     for module in model.modules():
-                        if (
-                            isinstance(module, TrackedModule)
-                            and module.name in tracked_module_names
-                        ):
-                            self_scores.add_(
-                                module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME)
-                            )
+                        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+                            self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
                     # `.cpu()` synchronizes the CUDA stream.
                     score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
                 release_scores(model=model)

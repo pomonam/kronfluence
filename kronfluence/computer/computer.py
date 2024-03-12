@@ -72,9 +72,7 @@ class Computer(ABC):
 
         # Create and configure logger.
         disable_log = log_main_process_only and self.state.process_index != 0
-        self.logger = get_logger(
-            name=__name__, log_level=log_level, disable_log=disable_log
-        )
+        self.logger = get_logger(name=__name__, log_level=log_level, disable_log=disable_log)
         self.logger.info(f"Initializing Computer with parameters: {locals()}")
         self.logger.info(f"Process state configuration:\n{repr(self.state)}")
 
@@ -102,9 +100,7 @@ class Computer(ABC):
             )
 
         if cpu and isinstance(model, (DataParallel, DDP, FSDP)):
-            error_msg = (
-                "To enforce CPU, the model must not be wrapped with DP, DDP, or FSDP."
-            )
+            error_msg = "To enforce CPU, the model must not be wrapped with DP, DDP, or FSDP."
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -129,9 +125,7 @@ class Computer(ABC):
         """Saves arguments at the specified path."""
         arguments_save_path = output_dir / f"{arguments_name}_arguments.json"
         if arguments_save_path.exists() and not overwrite_output_dir:
-            self.logger.info(
-                f"Found existing saved arguments at {arguments_save_path}."
-            )
+            self.logger.info(f"Found existing saved arguments at {arguments_save_path}.")
             loaded_arguments = load_json(arguments_save_path)
             if loaded_arguments != arguments.to_dict():
                 error_msg = (
@@ -146,15 +140,11 @@ class Computer(ABC):
             save_json(arguments.to_dict(), arguments_save_path)
             self.logger.info(f"Saved arguments at {arguments_save_path}.")
 
-    def _load_arguments(
-        self, arguments_name: str, output_dir: Path
-    ) -> Optional[Dict[str, Any]]:
+    def _load_arguments(self, arguments_name: str, output_dir: Path) -> Optional[Dict[str, Any]]:
         """Loads arguments from the specified path."""
         arguments_save_path = output_dir / f"{arguments_name}_arguments.json"
         if not arguments_save_path.exists():
-            self.logger.warning(
-                f"Could not find existing saved arguments at {arguments_save_path}."
-            )
+            self.logger.warning(f"Could not find existing saved arguments at {arguments_save_path}.")
             return None
         return load_json(arguments_save_path)
 
@@ -167,9 +157,7 @@ class Computer(ABC):
         overwrite_output_dir: bool = False,
     ) -> None:
         """Saves dataset metadata at the specified path."""
-        dataset_metadata_save_path = (
-            output_dir / f"{dataset_name}_dataset_metadata.json"
-        )
+        dataset_metadata_save_path = output_dir / f"{dataset_name}_dataset_metadata.json"
         dataset_metadata = {
             "type": type(dataset).__name__,
             "dataset_size": len(dataset),
@@ -177,9 +165,7 @@ class Computer(ABC):
         }
 
         if dataset_metadata_save_path.exists() and not overwrite_output_dir:
-            self.logger.info(
-                f"Found existing saved dataset metadata at {dataset_metadata_save_path}."
-            )
+            self.logger.info(f"Found existing saved dataset metadata at {dataset_metadata_save_path}.")
             # Load the existing dataset metadata for comparison.
             loaded_metadata = load_json(dataset_metadata_save_path)
             if loaded_metadata != dataset_metadata:
@@ -213,8 +199,6 @@ class Computer(ABC):
                 error_msg = "DistributedEvalSampler is not currently supported with `stack=True`."
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
-            # Different from `DistributedSampler`, `DistributedEvalSampler` does not add extra duplicate
-            # data points to make the loader evenly divisible.
             sampler = DistributedEvalSampler(
                 dataset=dataset,
                 num_replicas=self.state.num_processes,
@@ -341,9 +325,7 @@ class Computer(ABC):
         self.logger.info("Automatically determining executable batch size.")
 
         def executable_batch_size_func(batch_size: int) -> None:
-            self.logger.info(
-                f"Attempting to set per-device batch size to {batch_size}."
-            )
+            self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
             set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
             self.model.zero_grad(set_to_none=True)
             release_memory()
@@ -365,9 +347,7 @@ class Computer(ABC):
         return per_device_batch_size
 
     @torch.no_grad()
-    def _aggregate_factors(
-        self, aggregated_factors: FACTOR_TYPE, loaded_factors: FACTOR_TYPE
-    ) -> FACTOR_TYPE:
+    def _aggregate_factors(self, aggregated_factors: FACTOR_TYPE, loaded_factors: FACTOR_TYPE) -> FACTOR_TYPE:
         """Aggregates factors from the current loaded factors."""
         for factor_name, factors in loaded_factors.items():
             if factor_name not in aggregated_factors:
@@ -375,22 +355,16 @@ class Computer(ABC):
 
             for module_name in factors:
                 if module_name not in aggregated_factors[factor_name]:
-                    aggregated_factors[factor_name][module_name] = (
-                        factors[module_name]
-                    ).to(device=self.state.device)
+                    aggregated_factors[factor_name][module_name] = (factors[module_name]).to(device=self.state.device)
                 else:
                     # Aggregate the factors from `loaded_factors` to `aggregated_factors`.
-                    aggregated_factors[factor_name][module_name].add_(
-                        factors[module_name].to(device=self.state.device)
-                    )
+                    aggregated_factors[factor_name][module_name].add_(factors[module_name].to(device=self.state.device))
         return aggregated_factors
 
     def load_factor_args(self, factors_name: str) -> Optional[Dict[str, Any]]:
         """Loads factor arguments with the given factor name."""
         factors_output_dir = self.factors_output_dir(factors_name=factors_name)
-        arguments_save_path = (
-            factors_output_dir / f"{FACTOR_ARGUMENTS_NAME}_arguments.json"
-        )
+        arguments_save_path = factors_output_dir / f"{FACTOR_ARGUMENTS_NAME}_arguments.json"
         if not arguments_save_path.exists():
             return None
         return load_json(arguments_save_path)
@@ -419,9 +393,7 @@ class Computer(ABC):
     def load_score_args(self, scores_name: str) -> Optional[Dict[str, Any]]:
         """Loads score arguments with the given score name."""
         scores_output_dir = self.scores_output_dir(scores_name=scores_name)
-        arguments_save_path = (
-            scores_output_dir / f"{SCORE_ARGUMENTS_NAME}_arguments.json"
-        )
+        arguments_save_path = scores_output_dir / f"{SCORE_ARGUMENTS_NAME}_arguments.json"
         if not arguments_save_path.exists():
             return None
         return load_json(arguments_save_path)
@@ -440,14 +412,10 @@ class Computer(ABC):
             return load_self_scores(output_dir=scores_output_dir)
         return None
 
-    def _load_all_required_factors(
-        self, factors_name: str, strategy: str, factor_config: Any
-    ) -> FACTOR_TYPE:
+    def _load_all_required_factors(self, factors_name: str, strategy: str, factor_config: Any) -> FACTOR_TYPE:
         loaded_factors: FACTOR_TYPE = {}
         if factor_config.requires_covariance_matrices_for_precondition:
-            covariance_factors = self.load_covariance_matrices(
-                factors_name=factors_name
-            )
+            covariance_factors = self.load_covariance_matrices(factors_name=factors_name)
             if covariance_factors is None:
                 error_msg = (
                     f"Strategy {strategy} requires loading covariance matrices before computing"
@@ -503,18 +471,14 @@ class Computer(ABC):
         data_partition_size = score_args.data_partition_size
         module_partition_size = score_args.module_partition_size
         all_required_partitions = [
-            (i, j)
-            for i in range(score_args.data_partition_size)
-            for j in range(score_args.module_partition_size)
+            (i, j) for i in range(score_args.data_partition_size) for j in range(score_args.module_partition_size)
         ]
         all_partition_exists = [
-            exists_fnc(output_dir=scores_output_dir, partition=partition)
-            for partition in all_required_partitions
+            exists_fnc(output_dir=scores_output_dir, partition=partition) for partition in all_required_partitions
         ]
         if not all_partition_exists:
             self.logger.info(
-                "Influence scores are not aggregated as scores for some partitions "
-                "are not yet computed."
+                "Influence scores are not aggregated as scores for some partitions " "are not yet computed."
             )
             return
 
@@ -533,13 +497,9 @@ class Computer(ABC):
 
                         for module_name, scores in loaded_scores.items():
                             if module_name not in aggregated_module_scores:
-                                aggregated_module_scores[module_name] = scores.to(
-                                    device=self.state.device
-                                )
+                                aggregated_module_scores[module_name] = scores.to(device=self.state.device)
                             else:
-                                aggregated_module_scores[module_name].add_(
-                                    scores.to(device=self.state.device)
-                                )
+                                aggregated_module_scores[module_name].add_(scores.to(device=self.state.device))
                         del loaded_scores
 
                     for module_name, scores in aggregated_module_scores.items():
@@ -557,6 +517,4 @@ class Computer(ABC):
             self.state.wait_for_everyone()
         end_time = get_time(state=self.state)
         elapsed_time = end_time - start_time
-        self.logger.info(
-            f"Aggregated all partitioned scores in {elapsed_time:.2f} seconds."
-        )
+        self.logger.info(f"Aggregated all partitioned scores in {elapsed_time:.2f} seconds.")

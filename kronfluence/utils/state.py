@@ -34,11 +34,7 @@ class State:
         if not self.initialized:
             self.cpu = cpu
 
-            if (
-                int(os.environ.get("LOCAL_RANK", -1)) != -1
-                and not cpu
-                and torch.cuda.is_available()
-            ):
+            if int(os.environ.get("LOCAL_RANK", -1)) != -1 and not cpu and torch.cuda.is_available():
                 if not dist.is_initialized():
                     dist.init_process_group(backend="nccl")
                 self.num_processes = torch.distributed.get_world_size()

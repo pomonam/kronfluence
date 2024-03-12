@@ -12,9 +12,7 @@ from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
 
 
-def prepare_model_and_analyzer(
-    model: nn.Module, task: Task
-) -> Tuple[nn.Module, Analyzer]:
+def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
     model = prepare_model(model=model, task=task)
     analyzer = Analyzer(
         analysis_name=f"pytest_{__name__}",
@@ -116,9 +114,7 @@ def test_self_scores_batch_size_equivalence(
     factor_args = FactorArguments(
         strategy=strategy,
     )
-    factors_name = (
-        f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}"
-    )
+    factors_name = f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -215,9 +211,7 @@ def test_self_scores_partition_equivalence(
         task=task,
     )
 
-    factors_name = (
-        f"pytest_{test_name}_{test_self_scores_partition_equivalence.__name__}"
-    )
+    factors_name = f"pytest_{test_name}_{test_self_scores_partition_equivalence.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -226,9 +220,7 @@ def test_self_scores_partition_equivalence(
         overwrite_output_dir=True,
     )
 
-    scores_name = (
-        f"pytest_{test_name}_{test_self_scores_partition_equivalence.__name__}_scores"
-    )
+    scores_name = f"pytest_{test_name}_{test_self_scores_partition_equivalence.__name__}_scores"
     analyzer.compute_self_scores(
         scores_name=scores_name,
         factors_name=factors_name,
@@ -299,9 +291,7 @@ def test_per_module_scores_equivalence(
         overwrite_output_dir=True,
     )
 
-    scores_name = (
-        f"pytest_{test_name}_{test_per_module_scores_equivalence.__name__}_scores"
-    )
+    scores_name = f"pytest_{test_name}_{test_per_module_scores_equivalence.__name__}_scores"
     analyzer.compute_self_scores(
         scores_name=scores_name,
         factors_name=factors_name,
@@ -322,9 +312,7 @@ def test_per_module_scores_equivalence(
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    per_module_scores = analyzer.load_self_scores(
-        scores_name=scores_name + "_per_module"
-    )
+    per_module_scores = analyzer.load_self_scores(scores_name=scores_name + "_per_module")
 
     total_scores = None
     for module_name in per_module_scores:
@@ -361,9 +349,7 @@ def test_compute_self_scores_with_indices(
         model=model,
         task=task,
     )
-    factors_name = (
-        f"pytest_{test_name}_{test_compute_self_scores_with_indices.__name__}"
-    )
+    factors_name = f"pytest_{test_name}_{test_compute_self_scores_with_indices.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -373,9 +359,7 @@ def test_compute_self_scores_with_indices(
     )
 
     score_args = ScoreArguments(data_partition_size=2)
-    scores_name = (
-        f"pytest_{test_name}_{test_compute_self_scores_with_indices.__name__}_scores"
-    )
+    scores_name = f"pytest_{test_name}_{test_compute_self_scores_with_indices.__name__}_scores"
     analyzer.compute_self_scores(
         scores_name=scores_name,
         factors_name=factors_name,

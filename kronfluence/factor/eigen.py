@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import torch
 import torch.distributed as dist
@@ -21,6 +21,7 @@ from kronfluence.module.constants import (
     GRADIENT_EIGENVECTORS_NAME,
     LAMBDA_FACTOR_NAMES,
     NUM_COVARIANCE_PROCESSED,
+    PARTITION_TYPE,
 )
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
@@ -47,7 +48,7 @@ def eigendecomposition_save_path(
 
 def save_eigendecomposition(
     output_dir: Path,
-    eigen_factors: Dict[str, Dict[str, torch.Tensor]],
+    eigen_factors: FACTOR_TYPE,
 ) -> None:
     """Saves Eigendecomposition results to disk."""
     assert set(eigen_factors.keys()) == set(EIGENDECOMPOSITION_FACTOR_NAMES)
@@ -97,12 +98,12 @@ def perform_eigendecomposition(
     """Performs Eigendecomposition on activation and pseudo-gradient covariance matrices.
 
     Args:
+        covariance_factors (FACTOR_TYPE):
+            The covariance matrices to perform Eigendecomposition on.
         model (nn.Module):
             The model which contains modules which Eigendecomposition will be performed.
         state (State):
             The current process's information (e.g., device being used).
-        covariance_factors (FACTOR_TYPE):
-            The covariance matrices to load from.
         factor_args (FactorArguments):
             Arguments related to performing Eigendecomposition.
 
@@ -110,7 +111,7 @@ def perform_eigendecomposition(
         FACTOR_TYPE:
             The Eigendecomposition results in CPU. The Eigendecomposition results are organized in
             nested dictionaries, where the first key in the name of the Eigendecomposition factor (e.g.,
-            eigenvector), and the second key is the module name.
+            activation eigenvector), and the second key is the module name.
     """
     eigen_factors: FACTOR_TYPE = {}
     for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
@@ -144,16 +145,12 @@ def perform_eigendecomposition(
                     device=state.device,
                     dtype=factor_args.eigendecomposition_dtype,
                 )
-                # In case covariance matrices are not symmetric due to numerical issues.
+                # Deal with cases where covariance matrices are not symmetric due to numerical issues.
                 covariance_matrix = 0.5 * (covariance_matrix + covariance_matrix.t())
                 eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
-                eigen_factors[eigenvectors_name][module_name] = (
-                    eigenvectors.to(dtype=original_dtype).contiguous().cpu()
-                )
-                eigen_factors[eigenvalues_name][module_name] = eigenvalues.to(
-                    dtype=original_dtype
-                ).cpu()
-                del eigenvectors, eigenvalues
+                eigen_factors[eigenvalues_name][module_name] = eigenvalues.to(dtype=original_dtype).cpu()
+                eigen_factors[eigenvectors_name][module_name] = eigenvectors.to(dtype=original_dtype).contiguous().cpu()
+                del eigenvalues, eigenvectors
             pbar.update(1)
     return eigen_factors
 
@@ -161,7 +158,7 @@ def perform_eigendecomposition(
 def lambda_matrices_save_path(
     output_dir: Path,
     lambda_factor_name: str,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> Path:
     """Generates the path for saving/loading Lambda matrices."""
     assert lambda_factor_name in LAMBDA_FACTOR_NAMES
@@ -176,8 +173,8 @@ def lambda_matrices_save_path(
 
 def save_lambda_matrices(
     output_dir: Path,
-    lambda_factors: Dict[str, Dict[str, torch.Tensor]],
-    partition: Optional[Tuple[int, int]] = None,
+    lambda_factors: FACTOR_TYPE,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> None:
     """Saves Lambda matrices to disk."""
     assert set(lambda_factors.keys()) == set(LAMBDA_FACTOR_NAMES)
@@ -192,7 +189,7 @@ def save_lambda_matrices(
 
 def load_lambda_matrices(
     output_dir: Path,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> FACTOR_TYPE:
     """Loads Lambda matrices from disk."""
     lambda_factors = {}
@@ -208,7 +205,7 @@ def load_lambda_matrices(
 
 def lambda_matrices_exist(
     output_dir: Path,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
     """Check if Lambda matrices exist at specified path."""
     for name in LAMBDA_FACTOR_NAMES:
@@ -254,7 +251,7 @@ def fit_lambda_matrices_with_loader(
         Tuple[torch.Tensor, FACTOR_TYPE]:
             A tuple containing the number of data points processed, and computed Lambda matrices in CPU.
             The Lambda matrices are organized in nested dictionaries, where the first key in the name of
-            the Lambda matrix and the second key is the module name.
+            the computed variable and the second key is the module name.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
@@ -267,9 +264,7 @@ def fit_lambda_matrices_with_loader(
         if eigen_factors is not None:
             for name in eigen_factors:
                 set_factors(model=model, factor_name=name, factors=eigen_factors[name])
-    num_data_processed = torch.zeros(
-        (1,), dtype=torch.int64, device=state.device, requires_grad=False
-    )
+    num_data_processed = torch.zeros((1,), dtype=torch.int64, device=state.device, requires_grad=False)
 
     with tqdm(
         total=len(loader),
@@ -299,8 +294,6 @@ def fit_lambda_matrices_with_loader(
     with torch.no_grad():
         saved_factors: FACTOR_TYPE = {}
         for covariance_factor_name in LAMBDA_FACTOR_NAMES:
-            saved_factors[covariance_factor_name] = load_factors(
-                model=model, factor_name=covariance_factor_name
-            )
+            saved_factors[covariance_factor_name] = load_factors(model=model, factor_name=covariance_factor_name)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
     return num_data_processed, saved_factors

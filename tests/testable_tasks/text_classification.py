@@ -29,9 +29,7 @@ def make_tiny_bert(seed: int = 0) -> nn.Module:
     return model
 
 
-def make_bert_dataset(
-    num_data: int, do_not_pad: bool = False, seed: int = 0
-) -> data.Dataset:
+def make_bert_dataset(num_data: int, do_not_pad: bool = False, seed: int = 0) -> data.Dataset:
     torch.manual_seed(seed)
     raw_datasets = load_dataset(
         "glue",
@@ -41,9 +39,7 @@ def make_bert_dataset(
     num_labels = len(label_list)
     assert num_labels == 2
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        "hf-internal-testing/tiny-bert", use_fast=True, trust_remote_code=True
-    )
+    tokenizer = AutoTokenizer.from_pretrained("hf-internal-testing/tiny-bert", use_fast=True, trust_remote_code=True)
     sentence1_key, sentence2_key = ("sentence1", "sentence2")
     padding = "max_length"
     max_seq_length = 128
@@ -52,13 +48,9 @@ def make_bert_dataset(
 
     def preprocess_function(examples):
         texts = (
-            (examples[sentence1_key],)
-            if sentence2_key is None
-            else (examples[sentence1_key], examples[sentence2_key])
+            (examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key])
         )
-        result = tokenizer(
-            *texts, padding=padding, max_length=max_seq_length, truncation=True
-        )
+        result = tokenizer(*texts, padding=padding, max_length=max_seq_length, truncation=True)
         if "label" in examples:
             result["labels"] = examples["label"]
         return result
@@ -109,15 +101,11 @@ class TextClassificationTask(Task):
         ).logits
 
         labels = batch["labels"]
-        bindex = torch.arange(logits.shape[0]).to(
-            device=logits.device, non_blocking=False
-        )
+        bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
         logits_correct = logits[bindex, labels]
 
         cloned_logits = logits.clone()
-        cloned_logits[bindex, labels] = torch.tensor(
-            -torch.inf, device=logits.device, dtype=logits.dtype
-        )
+        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()

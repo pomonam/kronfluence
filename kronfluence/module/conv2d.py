@@ -47,18 +47,12 @@ def extract_patches(
         for k, s, d in zip(_pair(kernel_size), _pair(stride), _pair(dilation)):
             p_left, p_right = get_conv_paddings(k, s, padding, d)
             if p_left != p_right:
-                raise UnsupportableModuleError(
-                    "Unequal padding not supported in unfold."
-                )
+                raise UnsupportableModuleError("Unequal padding not supported in unfold.")
             padding_as_int.append(p_left)
         padding = tuple(padding_as_int)
 
-    inputs = rearrange(
-        tensor=inputs, pattern="b (g c_in) i1 i2 -> b g c_in i1 i2", g=groups
-    )
-    inputs = reduce(
-        tensor=inputs, pattern="b g c_in i1 i2 -> b c_in i1 i2", reduction="mean"
-    )
+    inputs = rearrange(tensor=inputs, pattern="b (g c_in) i1 i2 -> b g c_in i1 i2", g=groups)
+    inputs = reduce(tensor=inputs, pattern="b g c_in i1 i2 -> b c_in i1 i2", reduction="mean")
     inputs_unfold = F.unfold(
         input=inputs,
         kernel_size=kernel_size,
@@ -66,9 +60,7 @@ def extract_patches(
         padding=padding,
         stride=stride,
     )
-    return rearrange(
-        tensor=inputs_unfold, pattern="b c_in_k1_k2 o1_o2 -> b o1_o2 c_in_k1_k2"
-    )
+    return rearrange(tensor=inputs_unfold, pattern="b c_in_k1_k2 o1_o2 -> b o1_o2 c_in_k1_k2")
 
 
 class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
@@ -100,6 +92,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
             tensor=input_activation,
             pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
         )
+
         if self.original_module.bias is not None:
             flattened_activation = torch.cat(
                 [
@@ -165,11 +158,6 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
                 ],
                 dim=-1,
             )
-
-        input_activation = input_activation.view(
-            output_gradient.size(0), -1, input_activation.size(-1)
-        )
-        output_gradient = rearrange(
-            tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o"
-        )
+        input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
+        output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
         return torch.einsum("abm,abn->amn", (output_gradient, input_activation))

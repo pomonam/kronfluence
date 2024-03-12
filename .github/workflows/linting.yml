@@ -46,23 +46,9 @@ jobs:
       run: |
         isort --profile black kronfluence
 
-  black:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v2
-
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.9
-
-    - name: Install black
-      run: |
-        pip install --upgrade pip
-        pip install black==24.1.1
-
-    - name: Run black
-      run: |
-        black --check kronfluence
+  jobs:
+    actionlint:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: reviewdog/action-actionlint@v1

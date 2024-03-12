@@ -100,12 +100,8 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger()
 
-    train_dataset = get_regression_dataset(
-        data_name=args.dataset_name, split="train", data_path=args.dataset_dir
-    )
-    eval_dataset = get_regression_dataset(
-        data_name=args.dataset_name, split="valid", data_path=args.dataset_dir
-    )
+    train_dataset = get_regression_dataset(data_name=args.dataset_name, split="train", data_path=args.dataset_dir)
+    eval_dataset = get_regression_dataset(data_name=args.dataset_name, split="valid", data_path=args.dataset_dir)
 
     model = construct_regression_mlp()
 
@@ -147,9 +143,7 @@ def main():
         overwrite_output_dir=True,
     )
 
-    with profile(
-        activities=[ProfilerActivity.CPU], profile_memory=True, record_shapes=True
-    ) as prof:
+    with profile(activities=[ProfilerActivity.CPU], profile_memory=True, record_shapes=True) as prof:
         with record_function("eigen"):
             analyzer.perform_eigendecomposition(
                 factors_name=args.factor_strategy,

@@ -19,9 +19,7 @@ from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
 
 
-def prepare_model_and_analyzer(
-    model: nn.Module, task: Task
-) -> Tuple[nn.Module, Analyzer]:
+def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
     model = prepare_model(model=model, task=task)
     analyzer = Analyzer(
         analysis_name=f"pytest_{__name__}",
@@ -194,9 +192,7 @@ def test_lambda_matrices_batch_size_equivalence(
     )
 
     for name in LAMBDA_FACTOR_NAMES:
-        assert check_tensor_dict_equivalence(
-            bs1_lambda_factors[name], bs8_lambda_factors[name], atol=ATOL, rtol=RTOL
-        )
+        assert check_tensor_dict_equivalence(bs1_lambda_factors[name], bs8_lambda_factors[name], atol=ATOL, rtol=RTOL)
 
 
 @pytest.mark.parametrize(
@@ -297,9 +293,7 @@ def test_lambda_matrices_iterative_aggregate(
         task=task,
     )
 
-    factors_name = (
-        f"pytest_{test_name}_{test_lambda_matrices_iterative_aggregate.__name__}"
-    )
+    factors_name = f"pytest_{test_name}_{test_lambda_matrices_iterative_aggregate.__name__}"
     factor_args = FactorArguments(
         use_empirical_fisher=True,
         lambda_iterative_aggregate=False,
@@ -333,9 +327,7 @@ def test_lambda_matrices_iterative_aggregate(
     )
 
     for name in LAMBDA_FACTOR_NAMES:
-        assert check_tensor_dict_equivalence(
-            lambda_factors[name], iterative_lambda_factors[name], atol=ATOL, rtol=RTOL
-        )
+        assert check_tensor_dict_equivalence(lambda_factors[name], iterative_lambda_factors[name], atol=ATOL, rtol=RTOL)
 
 
 @pytest.mark.parametrize(
@@ -365,9 +357,7 @@ def test_lambda_matrices_max_examples(
     )
 
     MAX_EXAMPLES = 28
-    factor_args = FactorArguments(
-        use_empirical_fisher=True, lambda_max_examples=MAX_EXAMPLES
-    )
+    factor_args = FactorArguments(use_empirical_fisher=True, lambda_max_examples=MAX_EXAMPLES)
     factors_name = f"pytest_{test_name}_{test_lambda_matrices_max_examples.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,

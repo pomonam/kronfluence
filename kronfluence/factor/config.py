@@ -13,24 +13,24 @@ from kronfluence.module.constants import (
     NUM_LAMBDA_PROCESSED,
 )
 
+STORAGE_TYPE = Dict[str, Any]
+
 
 class FactorStrategy(str, BaseEnum):
-    """A strategy for computing preconditioning factor."""
+    """Strategy for computing preconditioning factors."""
 
     IDENTITY = "identity"
-    DIAGONAL = "diag"
+    DIAGONAL = "diagonal"
     KFAC = "kfac"
     EKFAC = "ekfac"
 
 
 class FactorConfig(metaclass=ABCMeta):
-    """Configuration for each factor strategy."""
+    """Configuration for each available factor strategy."""
 
     CONFIGS: Dict[FactorStrategy, Any] = {}
 
-    def __init_subclass__(
-        cls, factor_strategy: Optional[FactorStrategy] = None, **kwargs
-    ) -> None:
+    def __init_subclass__(cls, factor_strategy: Optional[FactorStrategy] = None, **kwargs) -> None:
         """Registers all subclasses of `FactorConfig`."""
         super().__init_subclass__(**kwargs)
         if factor_strategy is not None:
@@ -40,41 +40,33 @@ class FactorConfig(metaclass=ABCMeta):
     @property
     @abstractmethod
     def requires_covariance_matrices(self) -> bool:
-        """Returns True if the given strategy requires computing covariance matrices."""
-        raise NotImplementedError(
-            "Subclasses must implement the `requires_covariance_matrices` property."
-        )
+        """Returns True if the strategy requires computing covariance matrices."""
+        raise NotImplementedError("Subclasses must implement the `requires_covariance_matrices` property.")
 
     @property
     @abstractmethod
     def requires_eigendecomposition(self) -> bool:
-        """Returns True if the given strategy requires performing Eigendecomposition."""
-        raise NotImplementedError(
-            "Subclasses must implement the `requires_eigendecomposition` property."
-        )
+        """Returns True if the strategy requires performing Eigendecomposition."""
+        raise NotImplementedError("Subclasses must implement the `requires_eigendecomposition` property.")
 
     @property
     @abstractmethod
     def requires_lambda_matrices(self) -> bool:
-        """Returns True if the given strategy requires computing Lambda matrices."""
-        raise NotImplementedError(
-            "Subclasses must implement the `requires_lambda_matrices` property."
-        )
+        """Returns True if the strategy requires computing Lambda matrices."""
+        raise NotImplementedError("Subclasses must implement the `requires_lambda_matrices` property.")
 
     @property
     @abstractmethod
     def requires_eigendecomposition_for_lambda(self) -> bool:
-        """Returns True if the given strategy requires loading Eigendecomposition results, before
-        computing Lambda matrices."""
-        raise NotImplementedError(
-            "Subclasses must implement the `requires_eigendecomposition_for_lambda` property."
-        )
+        """Returns True if the strategy requires loading Eigendecomposition results, before computing
+        Lambda matrices."""
+        raise NotImplementedError("Subclasses must implement the `requires_eigendecomposition_for_lambda` property.")
 
     @property
     @abstractmethod
     def requires_covariance_matrices_for_precondition(self) -> bool:
-        """Returns True if the given strategy requires loading covariance matrices, before
-        computing preconditioned gradient."""
+        """Returns True if the strategy requires loading covariance matrices, before computing
+        preconditioned gradient."""
         raise NotImplementedError(
             "Subclasses must implement the `requires_covariance_matrices_for_precondition` property."
         )
@@ -82,8 +74,8 @@ class FactorConfig(metaclass=ABCMeta):
     @property
     @abstractmethod
     def requires_eigendecomposition_for_precondition(self) -> bool:
-        """Returns True if the given strategy requires loading Eigendecomposition results, before
-        computing preconditioned gradient."""
+        """Returns True if the strategy requires loading Eigendecomposition results, before computing
+        preconditioned gradient."""
         raise NotImplementedError(
             "Subclasses must implement the `requires_eigendecomposition_for_precondition` property."
         )
@@ -91,33 +83,30 @@ class FactorConfig(metaclass=ABCMeta):
     @property
     @abstractmethod
     def requires_lambda_matrices_for_precondition(self) -> bool:
-        """Returns True if the given strategy requires loading Lambda matrices, before
-        computing the preconditioned gradient."""
-        raise NotImplementedError(
-            "Subclasses must implement the `requires_lambda_matrices_for_precondition` property."
-        )
+        """Returns True if the strategy requires loading Lambda matrices, before computing
+        the preconditioned gradient."""
+        raise NotImplementedError("Subclasses must implement the `requires_lambda_matrices_for_precondition` property.")
 
     @abstractmethod
     def precondition_gradient(
         self,
         gradient: torch.Tensor,
-        storage: Dict[str, torch.Tensor],
-        damping: float,
+        storage: STORAGE_TYPE,
+        damping: Optional[float],
     ) -> torch.Tensor:
-        """Preconditions the per-sample-gradient with the appropriate strategy. The per-sample-gradient
-        is a 3-dimensional tensor with shape `batch_size x input_dim x output_dim`.
+        """Preconditions the per-sample-gradient. The per-sample-gradient is a 3-dimensional
+        tensor with the shape `batch_size x input_dim x output_dim`.
 
         Args:
             gradient (torch.Tensor):
                 The per-sample-gradient tensor.
             storage (Dict[str, Any]):
-                A dictionary containing various factors to help perform preconditioning.
+                A dictionary containing various factors required to compute the preconditioned gradient.
+                See `TrackedModule` for details.
             damping (float):
                 The damping factor when computing the preconditioned gradient.
         """
-        raise NotImplementedError(
-            "Subclasses must implement the `precondition_gradient` property."
-        )
+        raise NotImplementedError("Subclasses must implement the `precondition_gradient` property.")
 
 
 class Identity(FactorConfig, factor_strategy=FactorStrategy.IDENTITY):
@@ -154,8 +143,8 @@ class Identity(FactorConfig, factor_strategy=FactorStrategy.IDENTITY):
     def precondition_gradient(
         self,
         gradient: torch.Tensor,
-        storage: Dict[str, torch.Tensor],
-        damping: Optional[int],
+        storage: STORAGE_TYPE,
+        damping: Optional[float],
     ) -> torch.Tensor:
         del storage, damping
         return gradient
@@ -195,12 +184,10 @@ class Diagonal(FactorConfig, factor_strategy=FactorStrategy.DIAGONAL):
     def precondition_gradient(
         self,
         gradient: torch.Tensor,
-        storage: Dict[str, torch.Tensor],
-        damping: Optional[int],
+        storage: STORAGE_TYPE,
+        damping: Optional[float],
     ) -> torch.Tensor:
-        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(
-            dtype=gradient.dtype, device=gradient.device
-        )
+        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=gradient.dtype, device=gradient.device)
         num_lambda_processed = storage[NUM_LAMBDA_PROCESSED].to(device=gradient.device)
         if damping is None:
             damping = 0.1 * torch.mean(lambda_matrix)
@@ -245,24 +232,14 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
     def precondition_gradient(
         self,
         gradient: torch.Tensor,
-        storage: Dict[str, torch.Tensor],
-        damping: Optional[int],
+        storage: STORAGE_TYPE,
+        damping: Optional[float],
     ) -> torch.Tensor:
-        activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(
-            dtype=gradient.dtype, device=gradient.device
-        )
-        gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(
-            dtype=gradient.dtype, device=gradient.device
-        )
-        activation_eigenvalues = storage[ACTIVATION_EIGENVALUES_NAME].to(
-            dtype=gradient.dtype, device=gradient.device
-        )
-        gradient_eigenvalues = storage[GRADIENT_EIGENVALUES_NAME].to(
-            dtype=gradient.dtype, device=gradient.device
-        )
-        lambda_matrix = torch.kron(
-            activation_eigenvalues.unsqueeze(0), gradient_eigenvalues.unsqueeze(-1)
-        ).unsqueeze(0)
+        activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
+        gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
+        activation_eigenvalues = storage[ACTIVATION_EIGENVALUES_NAME].to(dtype=gradient.dtype, device=gradient.device)
+        gradient_eigenvalues = storage[GRADIENT_EIGENVALUES_NAME].to(dtype=gradient.dtype, device=gradient.device)
+        lambda_matrix = torch.kron(activation_eigenvalues.unsqueeze(0), gradient_eigenvalues.unsqueeze(-1)).unsqueeze(0)
 
         rotated_gradient = torch.einsum(
             "ij,bjl,lk->bik",
@@ -321,18 +298,12 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
     def precondition_gradient(
         self,
         gradient: torch.Tensor,
-        storage: Dict[str, torch.Tensor],
-        damping: Optional[int],
+        storage: STORAGE_TYPE,
+        damping: Optional[float],
     ) -> torch.Tensor:
-        activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(
-            dtype=gradient.dtype, device=gradient.device
-        )
-        gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(
-            dtype=gradient.dtype, device=gradient.device
-        )
-        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(
-            dtype=gradient.dtype, device=gradient.device
-        )
+        activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
+        gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
+        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=gradient.dtype, device=gradient.device)
         num_lambda_processed = storage[NUM_LAMBDA_PROCESSED].to(device=gradient.device)
 
         rotated_gradient = torch.einsum(

@@ -38,15 +38,11 @@ class ClassificationTask(Task):
         inputs, labels = batch
         logits = model(inputs.double())
 
-        bindex = torch.arange(logits.shape[0]).to(
-            device=logits.device, non_blocking=False
-        )
+        bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
         logits_correct = logits[bindex, labels]
 
         cloned_logits = logits.clone()
-        cloned_logits[bindex, labels] = torch.tensor(
-            -torch.inf, device=logits.device, dtype=logits.dtype
-        )
+        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()

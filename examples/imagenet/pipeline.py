@@ -8,9 +8,7 @@ from torch.utils.data import Dataset
 
 
 def construct_resnet50() -> nn.Module:
-    return torchvision.models.resnet50(
-        weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1
-    )
+    return torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1)
 
 
 def get_imagenet_dataset(
@@ -20,15 +18,11 @@ def get_imagenet_dataset(
 ) -> Dataset:
     assert split in ["train", "eval_train", "valid"]
 
-    normalize = torchvision.transforms.Normalize(
-        mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
-    )
+    normalize = torchvision.transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
 
     if split == "train":
         transform_config = [
-            torchvision.transforms.RandomResizedCrop(
-                size=224, scale=(0.08, 1.0), ratio=(0.75, 4.0 / 3.0)
-            ),
+            torchvision.transforms.RandomResizedCrop(size=224, scale=(0.08, 1.0), ratio=(0.75, 4.0 / 3.0)),
             torchvision.transforms.RandomHorizontalFlip(),
         ]
         transform_config.extend([torchvision.transforms.ToTensor(), normalize])

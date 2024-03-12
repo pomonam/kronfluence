@@ -55,9 +55,7 @@ def get_glue_dataset(
     num_labels = len(label_list)
     assert num_labels == 2
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        "bert-base-cased", use_fast=True, trust_remote_code=True
-    )
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased", use_fast=True, trust_remote_code=True)
 
     sentence1_key, sentence2_key = GLUE_TASK_TO_KEYS[data_name]
     padding = "max_length"
@@ -65,13 +63,9 @@ def get_glue_dataset(
 
     def preprocess_function(examples):
         texts = (
-            (examples[sentence1_key],)
-            if sentence2_key is None
-            else (examples[sentence1_key], examples[sentence2_key])
+            (examples[sentence1_key],) if sentence2_key is None else (examples[sentence1_key], examples[sentence2_key])
         )
-        result = tokenizer(
-            *texts, padding=padding, max_length=max_seq_length, truncation=True
-        )
+        result = tokenizer(*texts, padding=padding, max_length=max_seq_length, truncation=True)
         if "label" in examples:
             result["labels"] = examples["label"]
         return result

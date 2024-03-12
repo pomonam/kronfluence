@@ -40,14 +40,10 @@ class CPUTest(unittest.TestCase):
         cls.task = ClassificationTask()
         cls.model = prepare_model(cls.model, cls.task)
 
-        cls.analyzer = Analyzer(
-            analysis_name="gpu_test", model=cls.model, task=cls.task, cpu=True
-        )
+        cls.analyzer = Analyzer(analysis_name="gpu_test", model=cls.model, task=cls.task, cpu=True)
 
     def test_covariance_matrices(self) -> None:
-        covariance_factors = self.analyzer.load_covariance_matrices(
-            factors_name=OLD_FACTOR_NAME
-        )
+        covariance_factors = self.analyzer.load_covariance_matrices(factors_name=OLD_FACTOR_NAME)
         factor_args = FactorArguments(
             use_empirical_fisher=True,
             activation_covariance_dtype=torch.float64,
@@ -61,9 +57,7 @@ class CPUTest(unittest.TestCase):
             per_device_batch_size=16,
             overwrite_output_dir=True,
         )
-        new_covariance_factors = self.analyzer.load_covariance_matrices(
-            factors_name=NEW_FACTOR_NAME
-        )
+        new_covariance_factors = self.analyzer.load_covariance_matrices(factors_name=NEW_FACTOR_NAME)
 
         for name in COVARIANCE_FACTOR_NAMES:
             for module_name in covariance_factors[name]:
@@ -78,9 +72,7 @@ class CPUTest(unittest.TestCase):
             )
 
     def test_lambda_matrices(self):
-        lambda_factors = self.analyzer.load_lambda_matrices(
-            factors_name=OLD_FACTOR_NAME
-        )
+        lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
         factor_args = FactorArguments(
             use_empirical_fisher=True,
             activation_covariance_dtype=torch.float64,
@@ -95,9 +87,7 @@ class CPUTest(unittest.TestCase):
             overwrite_output_dir=True,
             load_from_factors_name=OLD_FACTOR_NAME,
         )
-        new_lambda_factors = self.analyzer.load_lambda_matrices(
-            factors_name=NEW_FACTOR_NAME
-        )
+        new_lambda_factors = self.analyzer.load_lambda_matrices(factors_name=NEW_FACTOR_NAME)
 
         for name in LAMBDA_FACTOR_NAMES:
             for module_name in lambda_factors[name]:
@@ -131,9 +121,7 @@ class CPUTest(unittest.TestCase):
             score_args=score_args,
             overwrite_output_dir=True,
         )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(
-            scores_name=NEW_SCORE_NAME
-        )
+        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
 
         torch.set_printoptions(threshold=30_000)
         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][10]}")

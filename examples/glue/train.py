@@ -14,9 +14,7 @@ from examples.mnist.pipeline import construct_mnist_mlp, get_mnist_dataset
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Train classification models on MNIST datasets."
-    )
+    parser = argparse.ArgumentParser(description="Train classification models on MNIST datasets.")
 
     parser.add_argument(
         "--dataset_name",
@@ -95,9 +93,7 @@ def main():
         set_seed(args.seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_dataset = get_glue_dataset(
-        data_name=args.dataset_name, split="train", data_path=args.dataset_dir
-    )
+    train_dataset = get_glue_dataset(data_name=args.dataset_name, split="train", data_path=args.dataset_dir)
     train_dataloader = DataLoader(
         dataset=train_dataset,
         batch_size=args.train_batch_size,

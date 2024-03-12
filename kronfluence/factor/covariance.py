@@ -116,13 +116,14 @@ def fit_covariance_matrices_with_loader(
             Arguments related to computing covariance matrices.
         tracked_module_names (List[str], optional):
             A list of module names that covariance matrices will be computed. If not specified, covariance
-            matrices will be computed for all available tracked modules.
+            matrices will be computed for all tracked modules.
 
     Returns:
         Tuple[torch.Tensor, FACTOR_TYPE]:
             A tuple containing the number of data points processed, and computed covariance matrices in CPU.
             The covariance matrices are organized in nested dictionaries, where the first key in the name of the
-            covariance matrix (e.g., activation covariance) and the second key is the module name.
+            covariance matrix (e.g., activation covariance and gradient covariance) and the second key is
+            the module name.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
@@ -132,9 +133,7 @@ def fit_covariance_matrices_with_loader(
             tracked_module_names=tracked_module_names,
             mode=ModuleMode.COVARIANCE,
         )
-    num_data_processed = torch.zeros(
-        (1,), dtype=torch.int64, device=state.device, requires_grad=False
-    )
+    num_data_processed = torch.zeros((1,), dtype=torch.int64, device=state.device, requires_grad=False)
 
     with tqdm(
         total=len(loader),
@@ -170,8 +169,6 @@ def fit_covariance_matrices_with_loader(
     with torch.no_grad():
         saved_factors: FACTOR_TYPE = {}
         for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
-            saved_factors[covariance_factor_name] = load_factors(
-                model=model, factor_name=covariance_factor_name
-            )
+            saved_factors[covariance_factor_name] = load_factors(model=model, factor_name=covariance_factor_name)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
     return num_data_processed, saved_factors

@@ -21,8 +21,7 @@ if __name__ == "__main__":
     setup(
         name="kronfluence",
         version="0.0.1",
-        author="The kronfluence Team",
-        description="Influence Function computations with (Eigenvalue-corrected) Kronecker Factorization",
+        description="Influence Functions with (Eigenvalue-corrected) Kronecker-factored Approximate Curvature",
         long_description=long_description,
         long_description_content_type="text/markdown",
         license="Apache-2.0",
@@ -36,6 +35,8 @@ if __name__ == "__main__":
             "PyTorch",
             "Training Data Attribution",
             "Influence Functions",
+            "KFAC",
+            "EKFAC",
         ],
         classifiers=[
             "Development Status :: 3 - Alpha",

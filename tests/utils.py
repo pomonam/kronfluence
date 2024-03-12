@@ -67,12 +67,8 @@ def prepare_test(
         data_collator = None
     elif test_name == "bert":
         model = make_tiny_bert(seed=seed)
-        train_dataset = make_bert_dataset(
-            num_data=train_size, seed=seed, do_not_pad=do_not_pad
-        )
-        query_dataset = make_bert_dataset(
-            num_data=query_size, seed=seed + 1, do_not_pad=do_not_pad
-        )
+        train_dataset = make_bert_dataset(num_data=train_size, seed=seed, do_not_pad=do_not_pad)
+        query_dataset = make_bert_dataset(num_data=query_size, seed=seed + 1, do_not_pad=do_not_pad)
         task = TextClassificationTask()
         data_collator = default_data_collator
     elif test_name == "gpt":
@@ -82,9 +78,7 @@ def prepare_test(
         task = LanguageModelingTask()
         data_collator = default_data_collator
     else:
-        raise NotImplementedError(
-            f"{test_name} is not a valid test configuration name."
-        )
+        raise NotImplementedError(f"{test_name} is not a valid test configuration name.")
     model.eval()
     return model, train_dataset, query_dataset, data_collator, task
 
@@ -124,9 +118,7 @@ def reshape_parameter_gradient_to_module_matrix(
                 del gradient_dict[module_name + ".bias"]
     elif isinstance(module, nn.Conv2d):
         gradient_matrix = gradient_dict[module_name + ".weight"]
-        gradient_matrix = gradient_matrix.view(
-            gradient_matrix.size(0), gradient_matrix.size(1), -1
-        )
+        gradient_matrix = gradient_matrix.view(gradient_matrix.size(0), gradient_matrix.size(1), -1)
         if remove_gradient:
             del gradient_dict[module_name + ".weight"]
         if module_name + ".bias" in gradient_dict:
