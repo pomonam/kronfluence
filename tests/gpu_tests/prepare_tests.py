@@ -91,6 +91,7 @@ def run_analysis() -> None:
         analysis_name="gpu_test",
         model=model,
         task=task,
+        disable_model_save=True,
     )
 
     factor_args = FactorArguments(
