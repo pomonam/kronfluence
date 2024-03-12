@@ -13,7 +13,7 @@ from examples.glue.pipeline import construct_bert, get_glue_dataset
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train classification models on MNIST datasets.")
+    parser = argparse.ArgumentParser(description="Train text classification models on GLUE datasets.")
 
     parser.add_argument(
         "--dataset_name",

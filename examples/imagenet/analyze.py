@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=1024,
+        default=512,
         help="Batch size for compute factors and scores.",
     )
     parser.add_argument(
