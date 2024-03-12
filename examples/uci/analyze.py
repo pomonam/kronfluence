@@ -83,7 +83,7 @@ def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
 
-    train_dataset = get_regression_dataset(data_name=args.dataset_name, split="train", dataset_dir=args.dataset_dir)
+    train_dataset = get_regression_dataset(data_name=args.dataset_name, split="eval_train", dataset_dir=args.dataset_dir)
     eval_dataset = get_regression_dataset(data_name=args.dataset_name, split="valid", dataset_dir=args.dataset_dir)
 
     model = construct_regression_mlp()

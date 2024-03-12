@@ -129,7 +129,7 @@ def main():
         factors_name=args.factor_strategy,
         dataset=train_dataset,
         factor_args=factor_args,
-        per_device_batch_size=None,
+        per_device_batch_size=args.factor_batch_size,
         overwrite_output_dir=True,
     )
     scores = analyzer.compute_pairwise_scores(
