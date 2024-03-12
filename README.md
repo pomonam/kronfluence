@@ -50,17 +50,15 @@ pip install -e .
 
 ## Getting Started
 
-Kronfluence currently supports influence computations on `nn.Linear` and `nn.Conv2d` modules.
-It also supports several other Hessian approximation techniques: `identity`, `diagonal`, `KFAC`, and `EKFAC`.
-The implementation is compatible with [Distributed Data Parallel (DDP)](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html), 
-[Fully Sharded Data Parallel (FSDP)](https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html), and [`torch.compile`](https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html).
-See [DOCUMENTATION.md](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) for detailed description on how to configure the experiment.
+Kronfluence supports influence computations on `nn.Linear` and `nn.Conv2d` modules. The implementation is compatible with [Distributed Data Parallel (DDP)](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html), 
+[Fully Sharded Data Parallel (FSDP)](https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html), and [torch.compile](https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html). See the [**Technical Documentation**](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) 
+page for a comprehensive guide on configuring the experiment.
 
 ### Examples
 
 The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples on how to use Kronfluence.
 
-**TL;DR:** You need to prepare the trained model and datasets, and pass them into the `Analyzer`.
+**TL;DR** You need to prepare the trained model and datasets, and pass them into the `Analyzer`.
 
 ```python
 import torch
@@ -94,7 +92,7 @@ eval_dataset = torchvision.datasets.MNIST(
     train=True,
 )
 
-# Initialize the task for MNIST with relevant loss and measurement function.
+# Initialize the task with relevant loss and measurement function.
 task = MnistTask()
 
 # Prepare the model for influence computation with the specified task.

@@ -20,17 +20,29 @@ def prepare_model(
     model: nn.Module,
     task: Task,
 ) -> nn.Module:
-    """Prepares the model to be tracked."""
+    """Prepares the model before passing it to `Analyzer`. This function sets `param.requires_grad = False`
+    for all modules that does not require influence computation and installs `TrackedModule` to supported
+    modules.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model to be analyzed.
+        task (Task):
+            The specific task associated with the model.
+    """
     model.eval()
+    # Set `params.requires_grad = False` for all parameters. The modules influence functions will be computed
+    # will again set `params.requires_grad = True` in `wrap_tracked_modules`.
     for params in model.parameters():
         params.requires_grad = False
+    # Install `TrackedModule` to the model.
     model = wrap_tracked_modules(model=model, task=task)
     return model
 
 
 class Analyzer(CovarianceComputer, EigenComputer, PairwiseScoreComputer, SelfScoreComputer):
     """
-    Handles the computation of all preconditioning factors (e.g., covariance and Lambda matrices for EKFAC)
+    Handles the computation of all factors (e.g., covariance and Lambda matrices for EKFAC)
     and influence scores for a given PyTorch model.
     """
 
@@ -135,7 +147,7 @@ class Analyzer(CovarianceComputer, EigenComputer, PairwiseScoreComputer, SelfSco
             dataloader_kwargs (DataLoaderKwargs, optional):
                 Controls additional arguments for PyTorch's DataLoader.
             factor_args (FactorArguments, optional):
-                Arguments related to computing the preconditioning factors. If not specified,
+                Arguments related to computing the factors. If not specified,
                 the default values of `FactorArguments` will be used.
             overwrite_output_dir (bool, optional):
                 If True, the existing factors with the same name will be overwritten.

@@ -7,7 +7,7 @@ import torch
 
 @dataclass
 class Arguments:
-    """Base class for specifying arguments for computing preconditioning factors and influence scores."""
+    """Base class for specifying arguments for computing factors and influence scores."""
 
     def to_dict(self) -> Dict[str, Any]:
         """Converts the arguments to a dictionary."""
