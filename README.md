@@ -1,13 +1,24 @@
 <p align="center">
-    <br>
-    <img src=".assets/kronfluence.png" width="400"/>
-    <br>
-<p>
+<a href="#"><img width="425" img src=".assets/kronfluence.png" alt="Kronfluence Logo"/></a>
+</p>
 
-[![CI](https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/CI.yml/badge.svg)](https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/CI.yml)
-[![Lint](https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/linting.yml/badge.svg)](https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/linting.yml)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/mlcommons/algorithmic-efficiency/blob/main/LICENSE.md)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
+<p align="center">
+    <a href="https://github.com/pomonam/kronfluence/LICENSE.md">
+        <img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
+    </a>
+    <a href="https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/CI.yml">
+        <img alt="CI" src="https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/CI.yml/badge.svg">
+    </a>
+    <a href="https://github.com/mlcommons/algorithmic-efficiency/actions/workflows">
+        <img alt="Linting" src="https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/linting.yml/badge.svg">
+    </a>
+    <a href="https://github.com/astral-sh/ruff">
+        <img alt="Ruff" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json">
+    </a>
+</p>
+
+---
 
 **kronfluence** is a PyTorch-based library designed to compute [influence functions](https://arxiv.org/abs/1703.04730) using [Kronecker-factored Approximate Curvature (KFAC)](https://arxiv.org/abs/1503.05671) or [Eigenvalue-corrected KFAC (EKFAC)](https://arxiv.org/abs/1806.03884).
 For a detailed description of the methodology, see the [**paper**](https://arxiv.org/abs/2308.03296) *Studying Large Language Model Generalization with Influence Functions*.
