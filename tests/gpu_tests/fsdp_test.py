@@ -1,0 +1,217 @@
+import functools
+import logging
+import os
+import unittest
+
+import torch
+import torch.distributed as dist
+from analyzer import Analyzer, prepare_model
+from arguments import FactorArguments, ScoreArguments
+from module.constants import (
+    ALL_MODULE_NAME,
+    COVARIANCE_FACTOR_NAMES,
+    LAMBDA_FACTOR_NAMES,
+)
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp.wrap import enable_wrap, size_based_auto_wrap_policy, wrap
+from torch.nn.parallel import DistributedDataParallel
+from torch.utils import data
+
+from tests.gpu_tests.pipeline import (
+    ClassificationTask,
+    construct_mnist_mlp,
+    get_mnist_dataset,
+)
+from tests.utils import check_tensor_dict_equivalence
+
+LOCAL_RANK = int(os.environ["LOCAL_RANK"])
+WORLD_RANK = int(os.environ["RANK"])
+WORLD_SIZE = int(os.environ["WORLD_SIZE"])
+logging.basicConfig(level=logging.DEBUG)
+OLD_FACTOR_NAME = "single_gpu"
+NEW_FACTOR_NAME = "fsdp"
+OLD_SCORE_NAME = "single_gpu"
+NEW_SCORE_NAME = "fsdp"
+
+
+class FSDPTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.model = construct_mnist_mlp()
+        cls.model.load_state_dict(torch.load("model.pth"))
+        cls.model = cls.model.double()
+
+        cls.train_dataset = get_mnist_dataset(split="train", data_path="data")
+        cls.train_dataset = data.Subset(cls.train_dataset, indices=list(range(200)))
+        cls.eval_dataset = get_mnist_dataset(split="valid", data_path="data")
+        cls.eval_dataset = data.Subset(cls.eval_dataset, indices=list(range(100)))
+
+        cls.task = ClassificationTask()
+        cls.model = prepare_model(cls.model, cls.task)
+
+        dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
+        device = torch.device("cuda:{}".format(LOCAL_RANK))
+        torch.cuda.set_device(LOCAL_RANK)
+
+        cls.model = cls.model.to(device=device)
+        cls.model = DistributedDataParallel(
+            cls.model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK
+        )
+        my_auto_wrap_policy = functools.partial(
+            size_based_auto_wrap_policy, min_num_params=100
+        )
+        cls.model = FSDP(
+            cls.model, use_orig_params=True, auto_wrap_policy=my_auto_wrap_policy
+        )
+
+        cls.analyzer = Analyzer(
+            analysis_name="gpu_test",
+            model=cls.model,
+            task=cls.task,
+        )
+
+    def test_covariance_matrices(self) -> None:
+        covariance_factors = self.analyzer.load_covariance_matrices(
+            factors_name=OLD_FACTOR_NAME
+        )
+        factor_args = FactorArguments(
+            use_empirical_fisher=True,
+            activation_covariance_dtype=torch.float64,
+            gradient_covariance_dtype=torch.float64,
+            lambda_dtype=torch.float64,
+        )
+        self.analyzer.fit_covariance_matrices(
+            factors_name=NEW_FACTOR_NAME,
+            dataset=self.train_dataset,
+            factor_args=factor_args,
+            per_device_batch_size=16,
+            overwrite_output_dir=True,
+        )
+        new_covariance_factors = self.analyzer.load_covariance_matrices(
+            factors_name=NEW_FACTOR_NAME
+        )
+
+        for name in COVARIANCE_FACTOR_NAMES:
+            if LOCAL_RANK == 0:
+                for module_name in covariance_factors[name]:
+                    print(f"Name: {name, module_name}")
+                    print(f"Previous factor: {covariance_factors[name][module_name]}")
+                    print(f"New factor: {new_covariance_factors[name][module_name]}")
+            if LOCAL_RANK == 0:
+                assert check_tensor_dict_equivalence(
+                    covariance_factors[name],
+                    new_covariance_factors[name],
+                    atol=1e-5,
+                    rtol=1e-3,
+                )
+
+    def test_lambda_matrices(self):
+        lambda_factors = self.analyzer.load_lambda_matrices(
+            factors_name=OLD_FACTOR_NAME
+        )
+        factor_args = FactorArguments(
+            use_empirical_fisher=True,
+            activation_covariance_dtype=torch.float64,
+            gradient_covariance_dtype=torch.float64,
+            lambda_dtype=torch.float64,
+        )
+        self.analyzer.fit_lambda_matrices(
+            factors_name=NEW_FACTOR_NAME,
+            dataset=self.train_dataset,
+            factor_args=factor_args,
+            per_device_batch_size=16,
+            overwrite_output_dir=True,
+            load_from_factors_name=OLD_FACTOR_NAME,
+        )
+        new_lambda_factors = self.analyzer.load_lambda_matrices(
+            factors_name=NEW_FACTOR_NAME
+        )
+
+        for name in LAMBDA_FACTOR_NAMES:
+            if LOCAL_RANK == 0:
+                for module_name in lambda_factors[name]:
+                    print(f"Name: {name, module_name}")
+                    print(f"Previous factor: {lambda_factors[name][module_name]}")
+                    print(f"New factor: {new_lambda_factors[name][module_name]}")
+            if LOCAL_RANK == 0:
+                assert check_tensor_dict_equivalence(
+                    lambda_factors[name],
+                    new_lambda_factors[name],
+                    atol=1e-3,
+                    rtol=1e-1,
+                )
+
+    def test_pairwise_scores(self) -> None:
+        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
+
+        score_args = ScoreArguments(
+            score_dtype=torch.float64,
+            per_sample_gradient_dtype=torch.float64,
+            precondition_dtype=torch.float64,
+        )
+        self.analyzer.compute_pairwise_scores(
+            scores_name=NEW_SCORE_NAME,
+            factors_name=OLD_FACTOR_NAME,
+            query_dataset=self.eval_dataset,
+            train_dataset=self.train_dataset,
+            train_indices=list(range(42)),
+            query_indices=list(range(23)),
+            per_device_query_batch_size=2,
+            per_device_train_batch_size=4,
+            score_args=score_args,
+            overwrite_output_dir=True,
+        )
+        new_pairwise_scores = self.analyzer.load_pairwise_scores(
+            scores_name=NEW_SCORE_NAME
+        )
+
+        if LOCAL_RANK == 0:
+            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
+            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
+            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+            assert check_tensor_dict_equivalence(
+                pairwise_scores,
+                new_pairwise_scores,
+                atol=1e-5,
+                rtol=1e-3,
+            )
+
+    def test_self_scores(self) -> None:
+        self_scores = self.analyzer.load_self_scores(scores_name=OLD_SCORE_NAME)
+
+        score_args = ScoreArguments(
+            score_dtype=torch.float64,
+            per_sample_gradient_dtype=torch.float64,
+            precondition_dtype=torch.float64,
+        )
+        self.analyzer.compute_self_scores(
+            scores_name=NEW_SCORE_NAME,
+            factors_name=OLD_FACTOR_NAME,
+            train_dataset=self.train_dataset,
+            train_indices=list(range(42)),
+            per_device_train_batch_size=4,
+            score_args=score_args,
+            overwrite_output_dir=True,
+        )
+        new_self_scores = self.analyzer.load_self_scores(scores_name=NEW_SCORE_NAME)
+
+        if LOCAL_RANK == 0:
+            print(f"Previous score: {self_scores[ALL_MODULE_NAME]}")
+            print(f"Previous shape: {self_scores[ALL_MODULE_NAME].shape}")
+            print(f"New score: {new_self_scores[ALL_MODULE_NAME]}")
+            print(f"New shape: {new_self_scores[ALL_MODULE_NAME].shape}")
+            assert check_tensor_dict_equivalence(
+                self_scores,
+                new_self_scores,
+                atol=1e-5,
+                rtol=1e-3,
+            )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        dist.destroy_process_group()
+
+
+if __name__ == "__main__":
+    unittest.main()
