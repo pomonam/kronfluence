@@ -53,13 +53,13 @@ def parse_args():
     parser.add_argument(
         "--query_batch_size",
         type=int,
-        default=128,
+        default=64,
         help="Batch size for computing query gradient.",
     )
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=128,
+        default=256,
         help="Batch size for computing training gradient.",
     )
 
