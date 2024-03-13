@@ -306,21 +306,27 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=gradient.dtype, device=gradient.device)
         num_lambda_processed = storage[NUM_LAMBDA_PROCESSED].to(device=gradient.device)
 
-        rotated_gradient = torch.einsum(
-            "ij,bjl,lk->bik",
-            (
-                gradient_eigenvectors.t(),
-                gradient,
-                activation_eigenvectors,
-            ),
+        gradient = torch.matmul(
+            gradient_eigenvectors.t(),
+            torch.matmul(gradient, activation_eigenvectors)
         )
+
+        # rotated_gradient = torch.einsum(
+        #     "ij,bjl,lk->bik",
+        #     (
+        #         gradient_eigenvectors.t(),
+        #         gradient,
+        #         activation_eigenvectors,
+        #     ),
+        # )
 
         if damping is None:
             damping = 0.1 * torch.mean(lambda_matrix)
 
-        rotated_gradient.div_(lambda_matrix + damping)
-        return (num_lambda_processed *
-                torch.einsum(
-            "ij,bjl,lk->bik",
-            (gradient_eigenvectors, rotated_gradient, activation_eigenvectors.t()),
-        ))
+        gradient.div_(lambda_matrix + damping)
+        gradient = torch.matmul(
+            gradient_eigenvectors,
+            torch.matmul(gradient, activation_eigenvectors.t())
+        )
+        gradient.mul_(num_lambda_processed)
+        return gradient
