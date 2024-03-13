@@ -446,14 +446,18 @@ class TrackedModule(nn.Module):
                     )
                     self._storage[LAMBDA_MATRIX_NAME].add_(sqrt_lambda.square_())
             else:
-                sqrt_lambda = torch.einsum(
-                    "ij,bjl,lk->bik",
-                    (
-                        self._storage[GRADIENT_EIGENVECTORS_NAME].t(),
-                        per_sample_gradient,
-                        self._storage[ACTIVATION_EIGENVECTORS_NAME],
-                    ),
+                sqrt_lambda = torch.matmul(
+                    self._storage[GRADIENT_EIGENVECTORS_NAME].t(),
+                    torch.matmul(per_sample_gradient, self._storage[ACTIVATION_EIGENVECTORS_NAME])
                 )
+                # sqrt_lambda = torch.einsum(
+                #     "ij,bjl,lk->bik",
+                #     (
+                #         self._storage[GRADIENT_EIGENVECTORS_NAME].t(),
+                #         per_sample_gradient,
+                #         self._storage[ACTIVATION_EIGENVECTORS_NAME],
+                #     ),
+                # )
                 del per_sample_gradient
                 self._storage[LAMBDA_MATRIX_NAME].add_(sqrt_lambda.square_().sum(dim=0))
         else:
@@ -472,10 +476,12 @@ class TrackedModule(nn.Module):
             else:
                 self._cached_activations.append(cached_activation)
             # Register backward hook to obtain gradient with respect to the output.
-            outputs.register_hook(backward_hook)
+            self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
+            handle = self._cached_hooks.pop()
+            handle.remove()
             cached_activation = self._cached_activations.pop()
             if self.factor_args.cached_activation_cpu_offload:
                 cached_activation = cached_activation.to(device=output_gradient.device)
@@ -490,8 +496,6 @@ class TrackedModule(nn.Module):
             else:
                 self._cached_per_sample_gradient.add_(per_sample_gradient)
 
-            # If the module was used multiple times throughout the forward pass,
-            # only compute the Lambda matrix after aggregating all per-sample-gradients.
             if len(self._cached_activations) == 0:
                 self._update_lambda_matrix(per_sample_gradient=self._cached_per_sample_gradient)
                 self._cached_per_sample_gradient = None

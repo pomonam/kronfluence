@@ -38,10 +38,16 @@ def parse_args():
         help="Strategy to compute preconditioning factors.",
     )
     parser.add_argument(
-        "--factor_batch_size",
+        "--covariance_batch_size",
         type=int,
         default=512,
-        help="Batch size for computing factors.",
+        help="Batch size for computing covariance matrices.",
+    )
+    parser.add_argument(
+        "--lambda_batch_size",
+        type=int,
+        default=256,
+        help="Batch size for computing Lambda matrices.",
     )
     parser.add_argument(
         "--query_batch_size",
@@ -136,11 +142,24 @@ def main():
     factor_args = FactorArguments(
         strategy=args.factor_strategy,
     )
-    analyzer.fit_all_factors(
+    analyzer.fit_covariance_matrices(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
         factor_args=factor_args,
-        per_device_batch_size=args.factor_batch_size,
+        per_device_batch_size=args.covariance_batch_size,
+        dataloader_kwargs=dataloader_kwargs,
+        overwrite_output_dir=False,
+    )
+    analyzer.perform_eigendecomposition(
+        factors_name=args.factor_strategy,
+        factor_args=factor_args,
+        overwrite_output_dir=False,
+    )
+    analyzer.fit_lambda_matrices(
+        factors_name=args.factor_strategy,
+        dataset=train_dataset,
+        factor_args=factor_args,
+        per_device_batch_size=args.lambda_batch_size,
         dataloader_kwargs=dataloader_kwargs,
         overwrite_output_dir=False,
     )
