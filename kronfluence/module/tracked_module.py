@@ -592,7 +592,6 @@ class TrackedModule(nn.Module):
                     storage=self._storage,
                     damping=self.score_args.damping,
                 )
-                assert preconditioned_gradient.is_contiguous()
                 self._cached_per_sample_gradient = None
                 preconditioned_gradient = preconditioned_gradient.to(dtype=self.score_args.score_dtype)
 
@@ -651,7 +650,7 @@ class TrackedModule(nn.Module):
                     )
                     torch.distributed.all_gather_into_tensor(
                         output_tensor=stacked_matrix,
-                        input_tensor=self._storage[PRECONDITIONED_GRADIENT_NAME][i],
+                        input_tensor=self._storage[PRECONDITIONED_GRADIENT_NAME][i].contiguous(),
                     )
                     self._storage[PRECONDITIONED_GRADIENT_NAME][i] = stacked_matrix.transpose(0, 1).reshape(
                         num_processes * size[0], size[1], size[2]
@@ -666,7 +665,7 @@ class TrackedModule(nn.Module):
                 )
                 torch.distributed.all_gather_into_tensor(
                     output_tensor=stacked_preconditioned_gradient,
-                    input_tensor=self._storage[PRECONDITIONED_GRADIENT_NAME],
+                    input_tensor=self._storage[PRECONDITIONED_GRADIENT_NAME].contiguous(),
                 )
                 self._storage[PRECONDITIONED_GRADIENT_NAME] = stacked_preconditioned_gradient.transpose(0, 1).reshape(
                     num_processes * size[0], size[1], size[2]

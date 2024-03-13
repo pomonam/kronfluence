@@ -13,7 +13,7 @@ from torch import nn
 from torch.nn.parallel.distributed import DistributedDataParallel
 
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
-from utils.dataset import DataLoaderKwargs
+from kronfluence.utils.dataset import DataLoaderKwargs
 
 torch.backends.cudnn.benchmark = True
 BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
@@ -68,9 +68,6 @@ def parse_args():
 
 
 class ClassificationTask(Task):
-    def compute_model_output(self, batch: BATCH_DTYPE, model: nn.Module) -> torch.Tensor:
-        inputs, _ = batch
-        return model(inputs)
 
     def compute_train_loss(
         self,
