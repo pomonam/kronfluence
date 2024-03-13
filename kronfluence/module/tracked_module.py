@@ -99,6 +99,7 @@ class TrackedModule(nn.Module):
         self._cached_per_sample_gradient: Optional[torch.Tensor] = None
         self._attention_mask: Optional[torch.Tensor] = None
         self._registered_hooks: List[RemovableHandle] = []
+        self._cached_hooks: List[RemovableHandle] = []
         self._storage: Dict[str, Optional[Any]] = {}
 
         # Storage for activation and pseudo-gradient covariance matrices. #
@@ -198,6 +199,10 @@ class TrackedModule(nn.Module):
             handle = self._registered_hooks.pop()
             handle.remove()
         self._registered_hooks = []
+        while self._cached_hooks:
+            handle = self._cached_hooks.pop()
+            handle.remove()
+        self._cached_hooks = []
 
     ##############################################
     # Methods for computing covariance matrices. #
@@ -307,10 +312,12 @@ class TrackedModule(nn.Module):
             # Compute and update activation covariance matrix in the forward pass.
             self._update_activation_covariance_matrix(inputs[0].detach())
             # Register backward hook to obtain gradient with respect to the output.
-            outputs.register_hook(backward_hook)
+            self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
+            handle = self._cached_hooks.pop()
+            handle.remove()
             # Compute and update pseudo-gradient covariance matrix in the backward pass.
             self._update_gradient_covariance_matrix(output_gradient.detach())
 

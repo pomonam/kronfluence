@@ -2,6 +2,7 @@ import copy
 import math
 from typing import Dict, List, Optional, Tuple
 
+import datasets
 import numpy as np
 import torch
 import torchvision
@@ -76,7 +77,7 @@ def get_cifar10_dataset(
     do_corrupt: bool,
     indices: List[int] = None,
     data_dir: str = "data/",
-):
+) -> datasets.Dataset:
     assert split in ["train", "eval_train", "valid"]
 
     normalize = torchvision.transforms.Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.261))

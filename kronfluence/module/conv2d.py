@@ -53,14 +53,14 @@ def extract_patches(
 
     inputs = rearrange(tensor=inputs, pattern="b (g c_in) i1 i2 -> b g c_in i1 i2", g=groups)
     inputs = reduce(tensor=inputs, pattern="b g c_in i1 i2 -> b c_in i1 i2", reduction="mean")
-    inputs_unfold = F.unfold(
+    inputs = F.unfold(
         input=inputs,
         kernel_size=kernel_size,
         dilation=dilation,
         padding=padding,
         stride=stride,
     )
-    return rearrange(tensor=inputs_unfold, pattern="b c_in_k1_k2 o1_o2 -> b o1_o2 c_in_k1_k2")
+    return rearrange(tensor=inputs, pattern="b c_in_k1_k2 o1_o2 -> b o1_o2 c_in_k1_k2")
 
 
 class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
@@ -88,21 +88,21 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
             dilation=self.original_module.dilation,
             groups=self.original_module.groups,
         )
-        flattened_activation = rearrange(
+        input_activation = rearrange(
             tensor=input_activation,
             pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
         )
 
         if self.original_module.bias is not None:
-            flattened_activation = torch.cat(
+            input_activation = torch.cat(
                 [
-                    flattened_activation,
-                    flattened_activation.new_ones(flattened_activation.shape[0], 1),
+                    input_activation,
+                    input_activation.new_ones(input_activation.shape[0], 1),
                 ],
                 dim=-1,
             )
-        count = flattened_activation.size(0)
-        return flattened_activation, count
+        count = input_activation.size(0)
+        return input_activation, count
 
     def _get_flattened_gradient(self, output_gradient: torch.Tensor) -> torch.Tensor:
         """Returns the flattened gradient tensor.

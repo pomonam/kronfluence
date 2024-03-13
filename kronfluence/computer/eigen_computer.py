@@ -87,6 +87,7 @@ class EigenComputer(Computer):
         with self.profiler.profile("Load Covariance"):
             covariance_factors = load_covariance_matrices(output_dir=load_factors_output_dir)
 
+        eigen_factors = None
         if self.state.is_main_process:
             release_memory()
             start_time = time.time()

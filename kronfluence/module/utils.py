@@ -9,7 +9,10 @@ from torch.nn.parallel.distributed import DistributedDataParallel as DDP
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.module.tracked_module import ModuleMode, TrackedModule
 from kronfluence.task import Task
-from kronfluence.utils.exceptions import TrackedModuleNotFoundError, IllegalTaskConfigurationError
+from kronfluence.utils.exceptions import (
+    IllegalTaskConfigurationError,
+    TrackedModuleNotFoundError,
+)
 
 
 def _get_submodules(model: nn.Module, key: str) -> Tuple[nn.Module, str]:

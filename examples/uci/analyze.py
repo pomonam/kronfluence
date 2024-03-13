@@ -99,6 +99,7 @@ def main():
         analysis_name=args.dataset_name,
         model=model,
         task=task,
+        profile=True,
         cpu=True,
     )
     factor_args = FactorArguments(

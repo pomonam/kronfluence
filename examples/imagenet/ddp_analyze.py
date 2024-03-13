@@ -124,10 +124,11 @@ def main():
         analysis_name="ddp",
         model=model,
         task=task,
+        profile=True,
         disable_model_save=True,
     )
     dataloader_kwargs = DataLoaderKwargs(
-        num_workers=4,
+        num_workers=2,
         pin_memory=True,
         prefetch_factor=2,
     )
