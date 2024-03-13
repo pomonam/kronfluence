@@ -59,7 +59,7 @@ def parse_args():
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=256,
+        default=128,
         help="Batch size for computing training gradient.",
     )
 
