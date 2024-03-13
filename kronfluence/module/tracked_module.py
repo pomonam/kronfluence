@@ -592,6 +592,7 @@ class TrackedModule(nn.Module):
                     storage=self._storage,
                     damping=self.score_args.damping,
                 )
+                assert preconditioned_gradient.is_contiguous()
                 self._cached_per_sample_gradient = None
                 preconditioned_gradient = preconditioned_gradient.to(dtype=self.score_args.score_dtype)
 
