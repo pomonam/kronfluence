@@ -15,6 +15,7 @@ from torch.nn.parallel.distributed import DistributedDataParallel
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
 from utils.dataset import DataLoaderKwargs
 
+torch.backends.cudnn.benchmark = True
 BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
 WORLD_RANK = int(os.environ["RANK"])
@@ -52,13 +53,13 @@ def parse_args():
     parser.add_argument(
         "--query_batch_size",
         type=int,
-        default=256,
+        default=128,
         help="Batch size for computing query gradient.",
     )
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=1024,
+        default=256,
         help="Batch size for computing training gradient.",
     )
 
