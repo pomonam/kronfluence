@@ -319,7 +319,8 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
             damping = 0.1 * torch.mean(lambda_matrix)
 
         rotated_gradient.div_(lambda_matrix + damping)
-        return num_lambda_processed * torch.einsum(
+        return (num_lambda_processed *
+                torch.einsum(
             "ij,bjl,lk->bik",
             (gradient_eigenvectors, rotated_gradient, activation_eigenvectors.t()),
-        )
+        ))

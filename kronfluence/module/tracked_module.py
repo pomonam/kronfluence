@@ -428,25 +428,25 @@ class TrackedModule(nn.Module):
             self._storage[NUM_LAMBDA_PROCESSED] = torch.zeros(
                 size=(1,),
                 dtype=torch.int64,
-                device=per_sample_gradient.device,
+                # device=per_sample_gradient.device,
                 requires_grad=False,
             )
 
         if FactorConfig.CONFIGS[self.factor_args.strategy].requires_eigendecomposition_for_lambda:
             if self.factor_args.lambda_iterative_aggregate:
                 # This batch-wise iterative update can be useful when the GPU memory is limited.
-                rotated_gradient = torch.matmul(
+                per_sample_gradient = torch.matmul(
                     per_sample_gradient,
                     self._storage[ACTIVATION_EIGENVECTORS_NAME],
                 )
                 for i in range(batch_size):
                     sqrt_lambda = torch.matmul(
                         self._storage[GRADIENT_EIGENVECTORS_NAME].t(),
-                        rotated_gradient[i, :, :],
+                        per_sample_gradient[i, :, :],
                     )
                     self._storage[LAMBDA_MATRIX_NAME].add_(sqrt_lambda.square_())
             else:
-                sqrt_lambda = torch.matmul(
+                per_sample_gradient = torch.matmul(
                     self._storage[GRADIENT_EIGENVECTORS_NAME].t(),
                     torch.matmul(per_sample_gradient, self._storage[ACTIVATION_EIGENVECTORS_NAME])
                 )
@@ -458,8 +458,8 @@ class TrackedModule(nn.Module):
                 #         self._storage[ACTIVATION_EIGENVECTORS_NAME],
                 #     ),
                 # )
-                del per_sample_gradient
-                self._storage[LAMBDA_MATRIX_NAME].add_(sqrt_lambda.square_().sum(dim=0))
+                # del per_sample_gradient
+                self._storage[LAMBDA_MATRIX_NAME].add_(per_sample_gradient.square_().sum(dim=0))
         else:
             self._storage[LAMBDA_MATRIX_NAME].add_(per_sample_gradient.square_().sum(dim=0))
 
@@ -662,7 +662,7 @@ class TrackedModule(nn.Module):
                         output_tensor=stacked_matrix,
                         input_tensor=self._storage[PRECONDITIONED_GRADIENT_NAME][i].contiguous(),
                     )
-                    self._storage[PRECONDITIONED_GRADIENT_NAME][i] = stacked_matrix.transpose(0, 1).reshape(
+                    self._storage[PRECONDITIONED_GRADIENT_NAME][i] = stacked_matrix.transpose(0, 1).view(
                         num_processes * size[0], size[1], size[2]
                     )
 
@@ -677,7 +677,7 @@ class TrackedModule(nn.Module):
                     output_tensor=stacked_preconditioned_gradient,
                     input_tensor=self._storage[PRECONDITIONED_GRADIENT_NAME].contiguous(),
                 )
-                self._storage[PRECONDITIONED_GRADIENT_NAME] = stacked_preconditioned_gradient.transpose(0, 1).reshape(
+                self._storage[PRECONDITIONED_GRADIENT_NAME] = stacked_preconditioned_gradient.transpose(0, 1).view(
                     num_processes * size[0], size[1], size[2]
                 )
 
