@@ -71,7 +71,7 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
         Returns:
             torch.Tensor:
                 The per-sample-gradient tensor. The per-sample-gradient is a 3-dimensional matrix
-                with dimension `batch_size x input_dim x gradient_dim`. An additional dimension is added
+                with dimension `batch_size x gradient_dim x input_dim`. An additional dimension is added
                 when the bias term is used.
         """
         if self.original_module.bias is not None:
