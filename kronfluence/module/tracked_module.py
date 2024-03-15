@@ -56,10 +56,9 @@ class TrackedModule(nn.Module):
 
     SUPPORTED_MODULES: Dict[Type[nn.Module], Any] = {}
 
-    def __init_subclass__(cls, module_type: Optional[Type[nn.Module]] = None, **kwargs) -> None:
+    def __init_subclass__(cls, module_type: Type[nn.Module] = None, **kwargs) -> None:
         """Automatically registers subclasses as supported modules."""
         super().__init_subclass__(**kwargs)
-        assert module_type is not None
         if module_type is not None:
             cls.SUPPORTED_MODULES[module_type] = cls
 
