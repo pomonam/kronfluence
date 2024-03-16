@@ -170,7 +170,7 @@ class CovarianceComputer(Computer):
 
         if no_partition:
             if total_data_examples < self.state.num_processes:
-                error_msg = "There are more data examples than the number of processes."
+                error_msg = "The number of processes are more than the data examples."
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
             if per_device_batch_size is None:
@@ -237,7 +237,7 @@ class CovarianceComputer(Computer):
 
                 max_total_examples = total_data_examples // factor_args.covariance_data_partition_size
                 if max_total_examples < self.state.num_processes:
-                    error_msg = "There are more data examples than the number of processes."
+                    error_msg = "The number of processes are more than the data examples."
                     self.logger.error(error_msg)
                     raise ValueError(error_msg)
                 if per_device_batch_size is None:
@@ -298,10 +298,10 @@ class CovarianceComputer(Computer):
         data_partition_size = factor_args.covariance_data_partition_size
         module_partition_size = factor_args.covariance_module_partition_size
         all_required_partitions = [(i, j) for i in range(data_partition_size) for j in range(module_partition_size)]
-        all_partition_exists = [
+        all_partition_exists = all(
             covariance_matrices_exist(output_dir=factors_output_dir, partition=partition)
             for partition in all_required_partitions
-        ]
+        )
         if not all_partition_exists:
             self.logger.info(
                 "Covariance matrices are not aggregated as covariance matrices for some partitions "
