@@ -39,7 +39,7 @@ from kronfluence.utils.dataset import (
     find_executable_batch_size,
     make_indices_partition,
 )
-from kronfluence.utils.exceptions import FactorsNotFoundError, UnsupportableModuleError
+from kronfluence.utils.exceptions import FactorsNotFoundError, UnsupportableModuleError, TrackedModuleNotFoundError
 from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger, get_time
 from kronfluence.utils.save import (
     FACTOR_ARGUMENTS_NAME,
@@ -80,15 +80,16 @@ class Computer(ABC):
         self.model.eval()
         self.task = task
 
-        tracked_module_names = get_tracked_module_names(self.model)
-        if len(tracked_module_names) == 0:
+        try:
+            tracked_module_names = get_tracked_module_names(self.model)
+        except TrackedModuleNotFoundError as e:
             error_msg = (
                 f"No tracked modules found in the provided model: {self.model}. "
                 f"Please make sure to run `prepare_model` before passing it in to the "
                 f"Analyzer."
             )
             self.logger.error(error_msg)
-            raise UnsupportableModuleError(error_msg)
+            raise UnsupportableModuleError(error_msg) from e
         self.logger.info(f"Tracking modules with names: {tracked_module_names}.")
 
         if self.state.use_distributed and not isinstance(model, (DDP, FSDP)):

@@ -293,7 +293,7 @@ def fit_lambda_matrices_with_loader(
 
     with torch.no_grad():
         saved_factors: FACTOR_TYPE = {}
-        for covariance_factor_name in LAMBDA_FACTOR_NAMES:
-            saved_factors[covariance_factor_name] = load_factors(model=model, factor_name=covariance_factor_name)
+        for lambda_factor_name in LAMBDA_FACTOR_NAMES:
+            saved_factors[lambda_factor_name] = load_factors(model=model, factor_name=lambda_factor_name)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
     return num_data_processed, saved_factors
