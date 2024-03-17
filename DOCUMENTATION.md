@@ -10,11 +10,11 @@ Kronfluence has been tested on the following versions of [PyTorch](https://pytor
 
 Kronfluence supports:
 - Computing influence functions on selected modules. At the moment, we support `nn.Linear` and `nn.Conv2d` modules;
-- Computing influence functions with several preconditioning strategies: `identity`, `diagonal`, `KFAC`, and `EKFAC`;
+- Computing influence functions with several strategies: `identity`, `diagonal`, `KFAC`, and `EKFAC`;
 - Computing pairwise and self-influence scores.
 
 > [!NOTE]
-> We are planning to support ensembling influence scores in our next release, which will support methods like [TracIn](https://arxiv.org/abs/2002.08484).
+> We are planning to support ensembling influence scores in our next release, which will more easily support methods like [TracIn](https://arxiv.org/abs/2002.08484).
 
 > [!NOTE]  
 > If there are specific modules you would like to see supported, please submit an issue.
@@ -42,7 +42,7 @@ query_dataset = prepare_query_dataset()
 
 **Define a Task.**
 To compute influence scores, you need to define a [`Task`](https://github.com/pomonam/kronfluence/blob/main/kronfluence/task.py) class.
-This class encapsulates information about the trained model and how influence functions will be computed:
+This class encapsulates information about the trained model and how influence scores will be computed:
 (1) how to compute the training loss; (2) how to compute the measurement (f(θ) in the [paper](https://arxiv.org/abs/2308.03296));
 (3) which modules to use for influence function computations; and (4) whether the model used [attention mask](https://huggingface.co/docs/transformers/en/glossary#attention-mask).
 
@@ -68,7 +68,7 @@ class YourTask(Task):
     ) -> torch.Tensor:
         # TODO: Complete this method.
 
-    def influence_modules(self) -> Optional[List[str]]:
+    def tracked_modules(self) -> Optional[List[str]]:
         # TODO: Complete this method.
         return None  # Compute influence scores on all available modules.
 
@@ -90,25 +90,32 @@ model = prepare_model(model=model, task=task)
 ...
 ```
 
-If you specified module names in `Task.influence_modules`, `TrackedModule` will only be installed for the specified modules.
+If you specified specific module names in `Task.tracked_modules`, `TrackedModule` will only be installed for these modules.
 
 **\[Optional\] Create a DDP and FSDP Module.** 
-After calling `prepare_model`, you can create DDP or FSDP module or further use `torch.compile`.
+After calling `prepare_model`, you can create DDP or FSDP module or even use `torch.compile`.
 
-**Set up the Analyzer and Fit Hessian Factors.** 
+**Set up the Analyzer and Fit Factors.** 
 Initialize the `Analyzer` and execute `fit_all_factors` to compute all factors that aim to approximate the Hessian 
 (or Gauss-Newton Hessian). The computed factors will be stored on disk.
 ```python
 from kronfluence.analyzer import Analyzer
+from kronfluence.utils.dataset import DataLoaderKwargs
 ...
 analyzer = Analyzer(analysis_name="model_with_seed0", model=model, task=task)
+
+# [Optional] Set up the parameters for the DataLoader.
+dataloader_kwargs = DataLoaderKwargs(num_workers=4, pin_memory=True)
+analyzer.set_dataloader_kwargs(dataloader_kwargs)
+
+# Compute all factors.
 analyzer.fit_all_factors(factors_name="initial_factor", dataset=train_dataset)
 ...
 ```
 
 **Compute Influence Scores.** 
-Once the factors have been fitted, you can compute both pairwise or self-influence scores. When computing the scores,
-you can specify the factor name. 
+Once the factors have been computed, you can compute either pairwise or self-influence scores. When computing the scores,
+you can specify the factor name you want to use. 
 ```python
 ...
 scores = analyzer.compute_pairwise_scores(
@@ -126,32 +133,40 @@ You can organize all factors and scores for the specific model with `factor_name
 ### FAQs
 
 **What should I do if my model does not have any nn.Linear or nn.Conv2d modules?**
-Currently, the implementation does not support influence computations for modules other than `nn.Linear` or `nn.Conv2d` modules.
-Try rewriting the model so that they use supported modules (as done for the `conv1d` module for [GPT-2](https://github.com/pomonam/kronfluence/tree/documentation/examples/wikitext)).
+Currently, the implementation does not support influence computations for modules other than `nn.Linear` or `nn.Conv2d`.
+Try rewriting the model so that they use supported modules (as done for the `conv1d` module in [GPT-2](https://github.com/pomonam/kronfluence/tree/documentation/examples/wikitext)).
 Alternatively, you can create a subclass of `TrackedModule` to compute influence scores for your custom modules.
 If there are specific modules you would like to see supported, please submit an issue.
 
-**How should I write task.influence_modules?**
+**How should I write task.tracked_modules?**
 We recommend using all supported modules for influence computations. However, if you would like to compute influence scores
 on subset of the modules (e.g., influence computations on only MLP layers for transformer or influence computation only on the last layer),
 use `model.named_modules()` to determine what modules to use. You can specify the list of module names you want to analyze.
 
+> [!NOTE]
+> If the embedding layer for transformers are defined with `nn.Linear`, you must write
+> `task.tracked_modules` to avoid influence computations embedding matrices.
+
 **How should I implement Task.compute_train_loss?**
+Implement the loss function used to train the model. However, the function should return 
+the summed loss and should not include weight decay. 
 
 **How should I implement Task.compute_measurement?**
-
+It depends on the analysis you would like to perform. Influence functions compute the [local effect of downweighting/upweighting
+a data point on the query's measurable quantity](https://arxiv.org/abs/2209.05364). You can use the loss, [margin](https://arxiv.org/abs/2303.14186), 
+or [conditional log-likelihood](https://arxiv.org/abs/2308.03296). 
 
 **I encounter TrackedModuleNotFoundError while using DDP or FSDP.**
 Ensure to call `prepare_model` before wrapping your model with DDP or FSDP. Calling `prepare_model` on DDP modules can
 cause `TrackedModuleNotFoundError`.
 
 **My model uses supported modules, but influence scores are not computed.**
-Kronfluence uses module hooks to compute factors and influence scores. For these to be accurately tracked and computed,
+Kronfluence uses module hooks to compute factors and influence scores. For these to be tracked and computed,
 the model should directly call the module.
 ```python
 import torch
 from torch import nn
-...
+    ...
     self.linear = nn.Linear(8, 1, bias=True)
     ...
 def forward(x: torch.Tensor) -> torch.Tensor:
@@ -176,6 +191,7 @@ factor_args = FactorArguments(
     strategy="ekfac",  # Choose from "identity", "diagonal", "KFAC", or "EKFAC".
     use_empirical_fisher=False,
     immediate_gradient_removal=False,
+    ignore_bias=False,
 
     # Settings for covariance matrix fitting.
     covariance_max_examples=100_000,
@@ -209,6 +225,7 @@ in `Task.compute_train_loss` and can be used as an approximation if you are unsu
 - `immediate_gradient_removal`: Specifies whether to instantly set `param.grad = None` within module hooks. Generally,
 recommended to be `False`, as it requires installing additional hooks. This should not affect the fitted factors, but
 can potentially reduce peak memory.
+- `ignore_bias`: Specifies whether to ignore factor computations on bias.
 
 ### Fitting Covariance Matrices
 
@@ -303,8 +320,6 @@ different eigenvectors when performing Eigendecomposition.
 You can use the largest possible batch size that does not result in OOM. Typically, the batch size for fitting Lambda
 matrices should be smaller than that used for fitting covariance matrices.
 
-**What should I do when data loader is slow or if I want to use collate_fn for data loaders?**
-
 ---
 
 ### Score Configuration
@@ -384,14 +399,11 @@ scores = analyzer.load_pairwise_scores(scores_name="self")
 ### FAQs
 
 **How should I select the batch size?**
-You can use the largest possible batch size that does not result in OOM. Typically, the batch size for fitting Lambda
-matrices should be smaller than that used for fitting covariance matrices.
+You can use the largest possible batch size that does not result in OOM.
 
 **Influence scores are very large in magnitude**
-Ideally, influence functions need to be divided
-
-**What should I do when data loader is slow or if I want to use collate_fn for data loaders?**
-
+Ideally, influence scores need to be divided by the total number of training data points. However, the code does
+not normalize the scores.
 
 ## Multi-GPU Support
 
@@ -401,3 +413,5 @@ Ideally, influence functions need to be divided
 
 
 ## References
+
+1. 

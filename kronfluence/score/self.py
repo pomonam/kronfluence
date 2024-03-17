@@ -13,6 +13,7 @@ from kronfluence.module import TrackedModule
 from kronfluence.module.constants import (
     ALL_MODULE_NAME,
     FACTOR_TYPE,
+    PARTITION_TYPE,
     SCORE_TYPE,
     SELF_SCORE_VECTOR_NAME,
 )
@@ -32,7 +33,7 @@ from kronfluence.utils.state import State, no_sync, release_memory
 
 def self_scores_save_path(
     output_dir: Path,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> Path:
     """Generates the path for saving/loading self-influence scores."""
     if partition is not None:
@@ -45,7 +46,7 @@ def self_scores_save_path(
 
 def self_scores_exist(
     output_dir: Path,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
     """Check if the self-influence scores exist at specified path."""
     save_path = self_scores_save_path(
@@ -58,19 +59,20 @@ def self_scores_exist(
 def save_self_scores(
     output_dir: Path,
     scores: SCORE_TYPE,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
+    metadata: Optional[Dict[str, str]] = None,
 ) -> None:
     """Saves self-influence scores to disk."""
     save_path = self_scores_save_path(
         output_dir=output_dir,
         partition=partition,
     )
-    save_file(tensors=scores, filename=save_path)
+    save_file(tensors=scores, filename=save_path, metadata=metadata)
 
 
 def load_self_scores(
     output_dir: Path,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> Dict[str, torch.Tensor]:
     """Loads self-influence scores from disk."""
     save_path = self_scores_save_path(
@@ -142,7 +144,6 @@ def compute_self_scores_with_loaders(
             tracked_module_names=tracked_module_names,
             keep_factors=True,
         )
-
     dataset_size = len(train_loader.dataset)
     score_chunks: Dict[str, List[torch.Tensor]] = {}
     if score_args.per_module_score:
@@ -151,6 +152,7 @@ def compute_self_scores_with_loaders(
                 score_chunks[module.name] = []
     else:
         score_chunks[ALL_MODULE_NAME] = []
+    total_steps = 0
 
     with tqdm(
         total=len(train_loader),
@@ -158,9 +160,9 @@ def compute_self_scores_with_loaders(
         bar_format=TQDM_BAR_FORMAT,
         disable=not state.is_main_process,
     ) as pbar:
-        for train_batch in train_loader:
+        for index, batch in enumerate(train_loader):
             train_batch = send_to_device(
-                train_batch,
+                tensor=train_batch,
                 device=state.device,
             )
 
@@ -172,6 +174,7 @@ def compute_self_scores_with_loaders(
                     sample=False,
                 )
                 loss.backward()
+            total_steps += 1
 
             with torch.no_grad():
                 if score_args.per_module_score:
@@ -196,6 +199,13 @@ def compute_self_scores_with_loaders(
                     score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
                 release_scores(model=model)
 
+            if (
+                state.use_distributed
+                and total_steps % score_args.distributed_sync_steps == 0
+                and index not in [len(train_loader) - 1, len(train_loader) - 2]
+            ):
+                state.wait_for_everyone()
+
             pbar.update(1)
 
     with torch.no_grad():
@@ -209,23 +219,12 @@ def compute_self_scores_with_loaders(
         for module_name, chunks in score_chunks.items():
             total_scores[module_name] = torch.cat(chunks, dim=0)
             if state.use_distributed:
-                total_scores[module_name] = total_scores[module_name].to(
-                    device=state.device,
-                    non_blocking=False,
-                )
-                torch.cuda.synchronize(state.device)
-                release_memory()
-                stacked_scores = torch.empty(
-                    size=(total_scores[module_name].size(0) * state.num_processes,),
-                    dtype=total_scores[module_name].dtype,
-                    device=state.device,
-                    requires_grad=False,
-                )
-                torch.distributed.all_gather_into_tensor(
-                    output_tensor=stacked_scores,
-                    input_tensor=total_scores[module_name],
-                )
-                stacked_scores = stacked_scores[:dataset_size]
-                total_scores[module_name] = stacked_scores.cpu()
-                del stacked_scores
+                total_scores[module_name] = total_scores[module_name].to(device=state.device)
+                gather_list = None
+                if state.is_main_process:
+                    gather_list = [torch.zeros_like(total_scores[module_name]) for _ in range(state.num_processes)]
+                torch.distributed.gather(total_scores[module_name], gather_list)
+                if state.is_main_process:
+                    total_scores[module_name] = torch.cat(gather_list, dim=0)[:, :dataset_size].cpu()
+    state.wait_for_everyone()
     return total_scores

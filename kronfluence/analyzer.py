@@ -8,8 +8,6 @@ from torch import nn
 from torch.utils import data
 
 from kronfluence.arguments import FactorArguments
-from kronfluence.computer.pairwise_score_computer import PairwiseScoreComputer
-from kronfluence.computer.self_score_computer import SelfScoreComputer
 from kronfluence.module.utils import wrap_tracked_modules
 from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
@@ -56,7 +54,7 @@ class Analyzer(FactorComputer, ScoreComputer):
         log_main_process_only: bool = True,
         profile: bool = False,
         output_dir: str = "./analyses",
-        disable_model_save: bool = False,
+        disable_model_save: bool = True,
     ) -> None:
         """Initializes an instance of the Analyzer class.
 
@@ -81,7 +79,7 @@ class Analyzer(FactorComputer, ScoreComputer):
                 The file path to the directory, where analysis results will be stored. If the directory
                 does not exist, it will be created. Defaults to './analyses'.
             disable_model_save (bool, optional):
-                If set to True, prevents the saving of the model state. Defaults to False.
+                If set to True, prevents the saving of the model state. Defaults to True.
         """
         super().__init__(
             name=analysis_name,

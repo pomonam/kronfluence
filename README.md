@@ -19,13 +19,13 @@
 
 ---
 
-> **Kronfluence** is a PyTorch-based library designed to compute [influence functions](https://arxiv.org/abs/1703.04730) using [Kronecker-factored Approximate Curvature (KFAC)](https://arxiv.org/abs/1503.05671) or [Eigenvalue-corrected KFAC (EKFAC)](https://arxiv.org/abs/1806.03884).
+> **Kronfluence** is a repository designed to compute [influence functions](https://arxiv.org/abs/1703.04730) using [Kronecker-factored Approximate Curvature (KFAC)](https://arxiv.org/abs/1503.05671) or [Eigenvalue-corrected KFAC (EKFAC)](https://arxiv.org/abs/1806.03884).
 For a detailed description of the methodology, see the [**paper**](https://arxiv.org/abs/2308.03296) *Studying Large Language Model Generalization with Influence Functions*.
 
 ---
 
 > [!WARNING]
-> This library is under active development and has not reached its first stable release.
+> This repository is under active development and has not reached its first stable release.
 
 ## Installation
 
@@ -50,15 +50,13 @@ pip install -e .
 
 ## Getting Started
 
-Kronfluence supports influence computations on `nn.Linear` and `nn.Conv2d` modules. The implementation is compatible with [Distributed Data Parallel (DDP)](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html), 
-[Fully Sharded Data Parallel (FSDP)](https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html), and [torch.compile](https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html). See the [**Technical Documentation**](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) 
+Kronfluence supports influence computations on `nn.Linear` and `nn.Conv2d` modules. See the [**Technical Documentation**](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) 
 page for a comprehensive guide on configuring the experiment.
 
 ### Examples
 
 The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples on how to use Kronfluence.
-
-**TL;DR** You need to prepare the trained model and datasets, and pass them into the `Analyzer`.
+We plan to add more language model examples. **TL;DR** You need to prepare the trained model and datasets, and pass them into the `Analyzer`.
 
 ```python
 import torch
@@ -92,7 +90,7 @@ eval_dataset = torchvision.datasets.MNIST(
     train=True,
 )
 
-# Initialize the task with relevant loss and measurement function.
+# Initialize the task with relevant loss and measurement.
 task = MnistTask()
 
 # Prepare the model for influence computation with the specified task.
@@ -102,7 +100,7 @@ analyzer = Analyzer(analysis_name="mnist", model=model, task=task)
 # Fit all EKFAC factors for the given model on the training dataset.
 analyzer.fit_all_factors(factors_name="ekfac", dataset=train_dataset)
 
-# Compute all pairwise influence scores using the fitted factors.
+# Compute all pairwise influence scores using the computed factors.
 analyzer.compute_pairwise_scores(
     scores_name="pairwise_scores",
     factors_name="ekfac",

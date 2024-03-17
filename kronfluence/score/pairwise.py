@@ -14,6 +14,7 @@ from kronfluence.module.constants import (
     ALL_MODULE_NAME,
     FACTOR_TYPE,
     PAIRWISE_SCORE_MATRIX_NAME,
+    PARTITION_TYPE,
     SCORE_TYPE,
 )
 from kronfluence.module.tracked_module import ModuleMode
@@ -34,7 +35,7 @@ from kronfluence.utils.state import State, no_sync, release_memory
 
 def pairwise_scores_save_path(
     output_dir: Path,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> Path:
     """Generates the path for saving/loading pairwise scores."""
     if partition is not None:
@@ -47,7 +48,7 @@ def pairwise_scores_save_path(
 
 def pairwise_scores_exist(
     output_dir: Path,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
     """Check if the pairwise scores exist at specified path."""
     save_path = pairwise_scores_save_path(
@@ -60,19 +61,20 @@ def pairwise_scores_exist(
 def save_pairwise_scores(
     output_dir: Path,
     scores: SCORE_TYPE,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
+    metadata: Optional[Dict[str, str]] = None,
 ) -> None:
     """Saves pairwise influence scores to disk."""
     save_path = pairwise_scores_save_path(
         output_dir=output_dir,
         partition=partition,
     )
-    save_file(tensors=scores, filename=save_path)
+    save_file(tensors=scores, filename=save_path, metadata=metadata)
 
 
 def load_pairwise_scores(
     output_dir: Path,
-    partition: Optional[Tuple[int, int]] = None,
+    partition: Optional[PARTITION_TYPE] = None,
 ) -> Dict[str, torch.Tensor]:
     """Loads pairwise scores from disk."""
     save_path = pairwise_scores_save_path(
@@ -82,7 +84,7 @@ def load_pairwise_scores(
     return load_file(filename=save_path)
 
 
-def _compute_pairwise_dot_products_with_loader(
+def _compute_dot_products_with_loader(
     model: nn.Module,
     task: Task,
     state: State,
@@ -90,9 +92,15 @@ def _compute_pairwise_dot_products_with_loader(
     score_args: ScoreArguments,
     tracked_module_names: List[str],
 ) -> Union[Dict[str, torch.Tensor], torch.Tensor]:
-    """After computing the preconditioned query gradient, the pairwise dot products with
-    training gradients are computed."""
-
+    """After computing the preconditioned query gradient, compute the dot product with
+    the corresponding loader."""
+    with torch.no_grad():
+        set_mode(
+            model=model,
+            mode=ModuleMode.PAIRWISE_SCORE,
+            tracked_module_names=tracked_module_names,
+            keep_factors=True,
+        )
     dataset_size = len(train_loader.dataset)
     score_chunks: Dict[str, List[torch.Tensor]] = {}
     if score_args.per_module_score:
@@ -101,22 +109,15 @@ def _compute_pairwise_dot_products_with_loader(
                 score_chunks[module.name] = []
     else:
         score_chunks[ALL_MODULE_NAME] = []
-
-    with torch.no_grad():
-        set_mode(
-            model=model,
-            mode=ModuleMode.PAIRWISE_SCORE,
-            tracked_module_names=tracked_module_names,
-            keep_factors=True,
-        )
+    total_steps = 0
 
     with tqdm(
         total=len(train_loader),
-        desc="Computing dot products on training dataset",
+        desc="Computing pairwise scores (training gradient)",
         bar_format=TQDM_BAR_FORMAT,
         disable=not state.is_main_process,
     ) as pbar:
-        for batch in train_loader:
+        for index, batch in enumerate(train_loader):
             batch = send_to_device(tensor=batch, device=state.device)
 
             with no_sync(model=model, state=state):
@@ -127,6 +128,7 @@ def _compute_pairwise_dot_products_with_loader(
                     sample=False,
                 )
                 loss.backward()
+            total_steps += 1
 
             with torch.no_grad():
                 if score_args.per_module_score:
@@ -149,6 +151,13 @@ def _compute_pairwise_dot_products_with_loader(
                     score_chunks[ALL_MODULE_NAME].append(pairwise_scores.cpu())
                 release_scores(model=model)
 
+            if (
+                state.use_distributed
+                and total_steps % score_args.distributed_sync_steps == 0
+                and index not in [len(train_loader) - 1, len(train_loader) - 2]
+            ):
+                state.wait_for_everyone()
+
             pbar.update(1)
 
     with torch.no_grad():
@@ -169,6 +178,7 @@ def _compute_pairwise_dot_products_with_loader(
                 torch.distributed.gather(total_scores[module_name], gather_list)
                 if state.is_main_process:
                     total_scores[module_name] = torch.cat(gather_list, dim=1)[:, :dataset_size].cpu()
+    state.wait_for_everyone()
     return total_scores
 
 
@@ -247,7 +257,7 @@ def compute_pairwise_scores_with_loaders(
 
     with tqdm(
         total=len(query_loader),
-        desc="Computing pairwise influence scores",
+        desc="Computing pairwise scores (query gradient)",
         bar_format=TQDM_BAR_FORMAT,
         disable=not state.is_main_process,
     ) as pbar:
@@ -272,7 +282,7 @@ def compute_pairwise_scores_with_loaders(
 
             # Compute the dot product between preconditioning query gradient and all training gradients.
             release_memory()
-            scores = _compute_pairwise_dot_products_with_loader(
+            scores = _compute_dot_products_with_loader(
                 model=model,
                 state=state,
                 task=task,

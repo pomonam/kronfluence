@@ -178,7 +178,7 @@ class ScoreArguments(Arguments):
         default=False,
         metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
     )
-    ddp_sync_steps: int = field(
+    distributed_sync_steps: int = field(
         default=1_000,
         metadata={
             "help": "Whether to use empirical fisher (using labels from batch) instead of "

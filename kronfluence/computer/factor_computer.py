@@ -1,9 +1,10 @@
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 import torch
+from module.constants import FACTOR_TYPE
 from torch.utils import data
 
 from kronfluence.arguments import FactorArguments
@@ -108,6 +109,62 @@ class FactorComputer(Computer):
         self.logger.info(f"Executable batch size determined: {per_device_batch_size}.")
         return per_device_batch_size
 
+    @torch.no_grad()
+    def _aggregate_factors(
+        self,
+        factors_name: str,
+        data_partition_size: int,
+        module_partition_size: int,
+        exists_fnc: Callable,
+        load_fnc: Callable,
+        save_fnc: Callable,
+    ) -> Optional[FACTOR_TYPE]:
+        """Aggregates all factors computed for all data and module partitions."""
+        factors_output_dir = self.factors_output_dir(factors_name=factors_name)
+        if not factors_output_dir.exists():
+            error_msg = (
+                f"Factors output directory {factors_output_dir} is not found when trying to "
+                f"aggregate partitioned factors."
+            )
+            self.logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
+
+        all_required_partitions = [(i, j) for i in range(data_partition_size) for j in range(module_partition_size)]
+        all_partition_exists = all(
+            exists_fnc(output_dir=factors_output_dir, partition=partition) for partition in all_required_partitions
+        )
+        if not all_partition_exists:
+            self.logger.warning("Factors are not aggregated as factors for some partitions are not yet computed.")
+            return
+
+        start_time = get_time(state=self.state)
+        if self.state.is_main_process:
+            aggregated_factors: FACTOR_TYPE = {}
+            for data_partition in range(data_partition_size):
+                for module_partition in range(module_partition_size):
+                    loaded_factors = load_fnc(
+                        output_dir=factors_output_dir,
+                        partition=(data_partition, module_partition),
+                    )
+                    for factor_name, factors in loaded_factors.items():
+                        if factor_name not in aggregated_factors:
+                            aggregated_factors[factor_name]: Dict[str, torch.Tensor] = {}
+
+                        for module_name in factors:
+                            if module_name not in aggregated_factors[factor_name]:
+                                aggregated_factors[factor_name][module_name] = factors[module_name]
+                            else:
+                                aggregated_factors[factor_name][module_name].add_(factors[module_name])
+                    del loaded_factors
+            save_fnc(
+                output_dir=factors_output_dir,
+                factors=aggregated_factors,
+            )
+            self.state.wait_for_everyone()
+        end_time = get_time(state=self.state)
+        elapsed_time = end_time - start_time
+        self.logger.info(f"Aggregated all partitioned factors in {elapsed_time:.2f} seconds.")
+
     def fit_covariance_matrices(
         self,
         factors_name: str,
@@ -115,8 +172,8 @@ class FactorComputer(Computer):
         per_device_batch_size: Optional[int] = None,
         dataloader_kwargs: Optional[DataLoaderKwargs] = None,
         factor_args: Optional[FactorArguments] = None,
-        target_data_partitions: Optional[Sequence[int]] = None,
-        target_module_partitions: Optional[Sequence[int]] = None,
+        target_data_partitions: Optional[Union[Sequence[int], int]] = None,
+        target_module_partitions: Optional[Union[Sequence[int], int]] = None,
         overwrite_output_dir: bool = False,
     ) -> None:
         """Computes activation and pseudo-covariance matrices with the given dataset.
@@ -134,10 +191,10 @@ class FactorComputer(Computer):
             factor_args (FactorArguments, optional):
                 Arguments related to computing the factors. If not specified, the default values of
                 `FactorArguments` will be used.
-            target_data_partitions(Sequence[int], optional):
+            target_data_partitions(Sequence[int], int, optional):
                 The list of data partition to fit covariance matrices. By default, covariance
                 matrices will be computed for all partitions.
-            target_module_partitions(Sequence[int], optional):
+            target_module_partitions(Sequence[int], int, optional):
                 The list of module partition to fit covariance matrices. By default, covariance
                 matrices will be computed for all partitions.
             overwrite_output_dir (bool, optional):
@@ -413,8 +470,8 @@ class FactorComputer(Computer):
         per_device_batch_size: Optional[int] = None,
         dataloader_kwargs: Optional[DataLoaderKwargs] = None,
         factor_args: Optional[FactorArguments] = None,
-        target_data_partitions: Optional[Sequence[int]] = None,
-        target_module_partitions: Optional[Sequence[int]] = None,
+        target_data_partitions: Optional[Union[Sequence[int], int]] = None,
+        target_module_partitions: Optional[Union[Sequence[int], int]] = None,
         overwrite_output_dir: bool = False,
         load_from_factors_name: Optional[str] = None,
     ) -> None:
@@ -433,10 +490,10 @@ class FactorComputer(Computer):
             factor_args (FactorArguments, optional):
                 Arguments related to computing the factors. If not specified, the default values of
                 `FactorArguments` will be used.
-            target_data_partitions(Sequence[int], optional):
+            target_data_partitions(Sequence[int], int, optional):
                 The list of data partition to fit Lambda matrices. By default, Lambda
                 matrices will be computed for all partitions.
-            target_module_partitions(Sequence[int], optional):
+            target_module_partitions(Sequence[int], int, optional):
                 The list of module partition to fit Lambda matrices. By default, Lambda
                 matrices will be computed for all partitions.
             overwrite_output_dir (bool, optional):
