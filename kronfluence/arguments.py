@@ -18,6 +18,15 @@ class Arguments:
                 config[key] = str(value)
         return config
 
+    def to_str_dict(self) -> Dict[str, str]:
+        """Converts the arguments to a dictionary, where all values are converted to strings."""
+        config = copy.deepcopy(self.__dict__)
+
+        for key, value in config.items():
+            config[key] = str(value)
+
+        return config
+
 
 @dataclass
 class FactorArguments(Arguments):
@@ -41,6 +50,20 @@ class FactorArguments(Arguments):
     immediate_gradient_removal: bool = field(
         default=False,
         metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
+    )
+    ignore_bias: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use empirical fisher (using labels from batch) instead of "
+            "true Fisher (using sampled labels)."
+        },
+    )
+    distributed_sync_steps: int = field(
+        default=1_000,
+        metadata={
+            "help": "Whether to use empirical fisher (using labels from batch) instead of "
+            "true Fisher (using sampled labels)."
+        },
     )
 
     # Configuration for fitting covariance matrices. #
@@ -154,6 +177,13 @@ class ScoreArguments(Arguments):
     immediate_gradient_removal: bool = field(
         default=False,
         metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
+    )
+    ddp_sync_steps: int = field(
+        default=1_000,
+        metadata={
+            "help": "Whether to use empirical fisher (using labels from batch) instead of "
+            "true Fisher (using sampled labels)."
+        },
     )
 
     data_partition_size: int = field(

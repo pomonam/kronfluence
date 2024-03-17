@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.distributed as dist
@@ -27,6 +27,7 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     get_tracked_module_names,
     load_factors,
+    remove_attention_mask,
     set_factors,
     set_mode,
     synchronize_lambda_matrices,
@@ -39,25 +40,22 @@ from kronfluence.utils.state import State, no_sync
 
 def eigendecomposition_save_path(
     output_dir: Path,
-    eigen_factor_name: str,
+    factor_name: str,
 ) -> Path:
     """Generates the path for saving/loading Eigendecomposition results."""
-    assert eigen_factor_name in EIGENDECOMPOSITION_FACTOR_NAMES
-    return output_dir / f"{eigen_factor_name}_eigendecomposition.safetensors"
+    assert factor_name in EIGENDECOMPOSITION_FACTOR_NAMES
+    return output_dir / f"{factor_name}.safetensors"
 
 
-def save_eigendecomposition(
-    output_dir: Path,
-    eigen_factors: FACTOR_TYPE,
-) -> None:
+def save_eigendecomposition(output_dir: Path, factors: FACTOR_TYPE, metadata: Optional[Dict[str, str]] = None) -> None:
     """Saves Eigendecomposition results to disk."""
-    assert set(eigen_factors.keys()) == set(EIGENDECOMPOSITION_FACTOR_NAMES)
-    for name in eigen_factors:
+    assert set(factors.keys()) == set(EIGENDECOMPOSITION_FACTOR_NAMES)
+    for factor_name in factors:
         save_path = eigendecomposition_save_path(
             output_dir=output_dir,
-            eigen_factor_name=name,
+            factor_name=factor_name,
         )
-        save_file(tensors=eigen_factors[name], filename=save_path)
+        save_file(tensors=factors[factor_name], filename=save_path, metadata=metadata)
 
 
 def load_eigendecomposition(
@@ -65,12 +63,12 @@ def load_eigendecomposition(
 ) -> FACTOR_TYPE:
     """Loads Eigendecomposition results from disk."""
     eigen_factors = {}
-    for name in EIGENDECOMPOSITION_FACTOR_NAMES:
+    for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
         save_path = eigendecomposition_save_path(
             output_dir=output_dir,
-            eigen_factor_name=name,
+            factor_name=factor_name,
         )
-        eigen_factors[name] = load_file(filename=save_path)
+        eigen_factors[factor_name] = load_file(filename=save_path)
     return eigen_factors
 
 
@@ -78,10 +76,10 @@ def eigendecomposition_exist(
     output_dir: Path,
 ) -> bool:
     """Checks if Eigendecomposition results exist at specified path."""
-    for name in EIGENDECOMPOSITION_FACTOR_NAMES:
+    for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
         save_path = eigendecomposition_save_path(
             output_dir=output_dir,
-            eigen_factor_name=name,
+            factor_name=factor_name,
         )
         if not save_path.exists():
             return False
@@ -138,17 +136,18 @@ def perform_eigendecomposition(
                 ),
             ]:
                 original_dtype = covariance_factors[covariance_name][module_name].dtype
-                covariance_factors[covariance_name][module_name].div_(
-                    covariance_factors[NUM_COVARIANCE_PROCESSED][module_name]
-                )
                 covariance_matrix = covariance_factors[covariance_name][module_name].to(
                     device=state.device,
                     dtype=factor_args.eigendecomposition_dtype,
                 )
-                # Deal with cases where covariance matrices are not symmetric due to numerical issues.
+                # Normalize covariance matrices.
+                covariance_matrix.div_(
+                    covariance_factors[NUM_COVARIANCE_PROCESSED][module_name].to(device=state.device)
+                )
+                # In cases where covariance matrices are not exactly symmetric due to numerical issues.
                 covariance_matrix = 0.5 * (covariance_matrix + covariance_matrix.t())
                 eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
-                eigen_factors[eigenvalues_name][module_name] = eigenvalues.to(dtype=original_dtype).cpu()
+                eigen_factors[eigenvalues_name][module_name] = eigenvalues.to(dtype=original_dtype).contiguous().cpu()
                 eigen_factors[eigenvectors_name][module_name] = eigenvectors.to(dtype=original_dtype).contiguous().cpu()
                 del eigenvalues, eigenvectors
             pbar.update(1)
@@ -157,34 +156,34 @@ def perform_eigendecomposition(
 
 def lambda_matrices_save_path(
     output_dir: Path,
-    lambda_factor_name: str,
+    factor_name: str,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> Path:
     """Generates the path for saving/loading Lambda matrices."""
-    assert lambda_factor_name in LAMBDA_FACTOR_NAMES
+    assert factor_name in LAMBDA_FACTOR_NAMES
     if partition is not None:
         data_partition, module_partition = partition
         return output_dir / (
-            f"{lambda_factor_name}_lambda_data_partition{data_partition}"
-            f"_module_partition{module_partition}.safetensors"
+            f"{factor_name}_data_partition{data_partition}_module_partition{module_partition}.safetensors"
         )
-    return output_dir / f"{lambda_factor_name}_lambda.safetensors"
+    return output_dir / f"{factor_name}.safetensors"
 
 
 def save_lambda_matrices(
     output_dir: Path,
-    lambda_factors: FACTOR_TYPE,
+    factors: FACTOR_TYPE,
     partition: Optional[PARTITION_TYPE] = None,
+    metadata: Optional[Dict[str, str]] = None,
 ) -> None:
     """Saves Lambda matrices to disk."""
-    assert set(lambda_factors.keys()) == set(LAMBDA_FACTOR_NAMES)
-    for name in lambda_factors:
+    assert set(factors.keys()) == set(LAMBDA_FACTOR_NAMES)
+    for factor_name in factors:
         save_path = lambda_matrices_save_path(
             output_dir=output_dir,
-            lambda_factor_name=name,
+            factor_name=factor_name,
             partition=partition,
         )
-        save_file(tensors=lambda_factors[name], filename=save_path)
+        save_file(tensors=factors[factor_name], filename=save_path, metadata=metadata)
 
 
 def load_lambda_matrices(
@@ -193,13 +192,13 @@ def load_lambda_matrices(
 ) -> FACTOR_TYPE:
     """Loads Lambda matrices from disk."""
     lambda_factors = {}
-    for name in LAMBDA_FACTOR_NAMES:
+    for factor_name in LAMBDA_FACTOR_NAMES:
         save_path = lambda_matrices_save_path(
             output_dir=output_dir,
-            lambda_factor_name=name,
+            factor_name=factor_name,
             partition=partition,
         )
-        lambda_factors[name] = load_file(filename=save_path)
+        lambda_factors[factor_name] = load_file(filename=save_path)
     return lambda_factors
 
 
@@ -208,10 +207,10 @@ def lambda_matrices_exist(
     partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
     """Check if Lambda matrices exist at specified path."""
-    for name in LAMBDA_FACTOR_NAMES:
+    for factor_name in LAMBDA_FACTOR_NAMES:
         save_path = lambda_matrices_save_path(
             output_dir=output_dir,
-            lambda_factor_name=name,
+            factor_name=factor_name,
             partition=partition,
         )
         if not save_path.exists():
@@ -255,6 +254,7 @@ def fit_lambda_matrices_with_loader(
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
+        remove_attention_mask(model=model)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
         set_mode(
             model=model,
@@ -264,7 +264,8 @@ def fit_lambda_matrices_with_loader(
         if eigen_factors is not None:
             for name in eigen_factors:
                 set_factors(model=model, factor_name=name, factors=eigen_factors[name])
-    num_data_processed = torch.zeros((1,), dtype=torch.int64, device=state.device, requires_grad=False)
+    total_steps = 0
+    num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
 
     with tqdm(
         total=len(loader),
@@ -272,8 +273,8 @@ def fit_lambda_matrices_with_loader(
         bar_format=TQDM_BAR_FORMAT,
         disable=not state.is_main_process,
     ) as pbar:
-        for batch in loader:
-            batch = send_to_device(batch, device=state.device)
+        for index, batch in enumerate(loader):
+            batch = send_to_device(tensor=batch, device=state.device)
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
@@ -283,17 +284,30 @@ def fit_lambda_matrices_with_loader(
                     sample=not factor_args.use_empirical_fisher,
                 )
                 loss.backward()
-            num_data_processed += find_batch_size(batch)
+            num_data_processed += find_batch_size(data=batch)
+            total_steps += 1
+
+            if (
+                state.use_distributed
+                and total_steps % factor_args.distributed_sync_steps == 0
+                and index not in [len(loader) - 1, len(loader) - 2]
+            ):
+                # Periodically synchronize all processes to avoid timeout at the final Lambda synchronization.
+                state.wait_for_everyone()
+
             pbar.update(1)
 
-    if state.use_distributed:
-        # Aggregate Lambda matrices across multiple devices or nodes.
-        synchronize_lambda_matrices(model=model)
-        dist.all_reduce(tensor=num_data_processed, op=torch.distributed.ReduceOp.SUM)
-
     with torch.no_grad():
+        if state.use_distributed:
+            # Aggregate Lambda matrices across multiple devices or nodes.
+            synchronize_lambda_matrices(model=model)
+            num_data_processed = num_data_processed.to(device=state.device)
+            dist.all_reduce(tensor=num_data_processed, op=torch.distributed.ReduceOp.SUM)
+
         saved_factors: FACTOR_TYPE = {}
-        for lambda_factor_name in LAMBDA_FACTOR_NAMES:
-            saved_factors[lambda_factor_name] = load_factors(model=model, factor_name=lambda_factor_name)
+        if state.is_main_process:
+            for factor_name in LAMBDA_FACTOR_NAMES:
+                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name)
+        state.wait_for_everyone()
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
     return num_data_processed, saved_factors

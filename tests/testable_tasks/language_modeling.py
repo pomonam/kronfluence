@@ -125,7 +125,7 @@ class LanguageModelingTask(Task):
     ) -> torch.Tensor:
         return self.compute_train_loss(batch, model)
 
-    def influence_modules(self) -> List[str]:
+    def tracked_modules(self) -> List[str]:
         total_modules = []
 
         for i in range(4):

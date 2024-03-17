@@ -241,23 +241,13 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
         gradient_eigenvalues = storage[GRADIENT_EIGENVALUES_NAME].to(dtype=gradient.dtype, device=gradient.device)
         lambda_matrix = torch.kron(activation_eigenvalues.unsqueeze(0), gradient_eigenvalues.unsqueeze(-1)).unsqueeze(0)
 
-        rotated_gradient = torch.einsum(
-            "ij,bjl,lk->bik",
-            (
-                gradient_eigenvectors.t(),
-                gradient,
-                activation_eigenvectors,
-            ),
-        )
+        gradient = torch.matmul(gradient_eigenvectors.t(), torch.matmul(gradient, activation_eigenvectors))
 
         if damping is None:
             damping = 0.1 * torch.mean(lambda_matrix)
 
-        rotated_gradient.div_(lambda_matrix + damping)
-        return torch.einsum(
-            "ij,bjl,lk->bik",
-            (gradient_eigenvectors, rotated_gradient, activation_eigenvectors.t()),
-        )
+        gradient.div_(lambda_matrix + damping)
+        return torch.matmul(gradient_eigenvectors, torch.matmul(gradient, activation_eigenvectors.t()))
 
 
 class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
@@ -306,27 +296,12 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=gradient.dtype, device=gradient.device)
         num_lambda_processed = storage[NUM_LAMBDA_PROCESSED].to(device=gradient.device)
 
-        gradient = torch.matmul(
-            gradient_eigenvectors.t(),
-            torch.matmul(gradient, activation_eigenvectors)
-        )
-
-        # rotated_gradient = torch.einsum(
-        #     "ij,bjl,lk->bik",
-        #     (
-        #         gradient_eigenvectors.t(),
-        #         gradient,
-        #         activation_eigenvectors,
-        #     ),
-        # )
+        gradient = torch.matmul(gradient_eigenvectors.t(), torch.matmul(gradient, activation_eigenvectors))
 
         if damping is None:
             damping = 0.1 * torch.mean(lambda_matrix)
 
         gradient.div_(lambda_matrix + damping)
-        gradient = torch.matmul(
-            gradient_eigenvectors,
-            torch.matmul(gradient, activation_eigenvectors.t())
-        )
+        gradient = torch.matmul(gradient_eigenvectors, torch.matmul(gradient, activation_eigenvectors.t()))
         gradient.mul_(num_lambda_processed)
         return gradient

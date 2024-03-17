@@ -1,37 +1,42 @@
 import argparse
 import logging
 import os
+from typing import Tuple
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from accelerate.utils import set_seed
 from torch import nn
+from torch.optim import lr_scheduler
 from torch.utils import data
 from tqdm import tqdm
 
-from examples.uci.pipeline import construct_regression_mlp, get_regression_dataset
+from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train regression models on UCI datasets.")
+    parser = argparse.ArgumentParser(description="Train ResNet-9 model on CIFAR-10 dataset.")
 
     parser.add_argument(
-        "--dataset_name",
-        type=str,
-        default="concrete",
-        help="The name of the UCI regression dataset.",
+        "--corrupt_percentage",
+        type=float,
+        default=None,
+        help="Percentage of the training dataset to corrupt.",
     )
     parser.add_argument(
         "--dataset_dir",
         type=str,
         default="./data",
-        help="A folder containing the UCI regression dataset.",
+        help="A folder to download or load CIFAR-10 dataset.",
     )
 
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=32,
+        default=512,
         help="Batch size for the training dataloader.",
     )
     parser.add_argument(
@@ -44,19 +49,19 @@ def parse_args():
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=0.03,
-        help="Fixed learning rate to train the model.",
+        default=0.4,
+        help="Initial learning rate to train the model.",
     )
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=1e-5,
+        default=0.001,
         help="Weight decay to train the model.",
     )
     parser.add_argument(
         "--num_train_epochs",
         type=int,
-        default=40,
+        default=25,
         help="Total number of epochs to train the model.",
     )
 
@@ -77,8 +82,6 @@ def parse_args():
 
     if args.checkpoint_dir is not None:
         os.makedirs(args.checkpoint_dir, exist_ok=True)
-        args.checkpoint_dir = os.path.join(args.checkpoint_dir, args.dataset_name)
-        os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     return args
 
@@ -97,8 +100,18 @@ def train(
         shuffle=True,
         drop_last=True,
     )
-    model = construct_regression_mlp()
+
+    model = construct_resnet9().to(DEVICE)
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+
+    iters_per_epoch = len(train_dataloader)
+    lr_peak_epoch = num_train_epochs // 4
+    lr_schedule = np.interp(
+        np.arange((num_train_epochs + 1) * iters_per_epoch),
+        [0, lr_peak_epoch * iters_per_epoch, num_train_epochs * iters_per_epoch],
+        [0, 1, 0],
+    )
+    scheduler = lr_scheduler.LambdaLR(optimizer, lr_schedule.__getitem__)
 
     model.train()
     for epoch in range(num_train_epochs):
@@ -107,17 +120,19 @@ def train(
             for batch in tepoch:
                 tepoch.set_description(f"Epoch {epoch}")
                 model.zero_grad()
-                inputs, targets = batch
+                inputs, labels = batch
+                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
                 outputs = model(inputs)
-                loss = F.mse_loss(outputs, targets)
-                total_loss += loss.detach().float()
+                loss = F.cross_entropy(outputs, labels)
                 loss.backward()
                 optimizer.step()
+                scheduler.step()
+                total_loss += loss.detach().float()
                 tepoch.set_postfix(loss=total_loss.item() / len(train_dataloader))
     return model
 
 
-def evaluate(model: nn.Module, dataset: data.Dataset, batch_size: int) -> float:
+def evaluate(model: nn.Module, dataset: data.Dataset, batch_size: int) -> Tuple[float, float]:
     dataloader = data.DataLoader(
         dataset=dataset,
         batch_size=batch_size,
@@ -126,15 +141,17 @@ def evaluate(model: nn.Module, dataset: data.Dataset, batch_size: int) -> float:
     )
 
     model.eval()
-    total_loss = 0.0
+    total_loss, total_correct = 0.0, 0
     for batch in dataloader:
         with torch.no_grad():
-            inputs, targets = batch
+            inputs, labels = batch
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
             outputs = model(inputs)
-            loss = F.mse_loss(outputs, targets, reduction="sum")
+            loss = F.cross_entropy(outputs, labels, reduction="sum")
             total_loss += loss.detach().float()
+            total_correct += outputs.detach().argmax(1).eq(labels).sum()
 
-    return total_loss.item() / len(dataloader.dataset)
+    return total_loss.item() / len(dataloader.dataset), total_correct.item() / len(dataloader.dataset)
 
 
 def main():
@@ -145,7 +162,7 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
-    train_dataset = get_regression_dataset(data_name=args.dataset_name, split="train", dataset_dir=args.dataset_dir)
+    train_dataset = get_cifar10_dataset(split="train", corrupt_percentage=args.corrupt_percentage, dataset_dir=args.dataset_dir)
     model = train(
         dataset=train_dataset,
         batch_size=args.train_batch_size,
@@ -154,18 +171,19 @@ def main():
         weight_decay=args.weight_decay,
     )
 
-    eval_train_dataset = get_regression_dataset(
-        data_name=args.dataset_name, split="eval_train", dataset_dir=args.dataset_dir
-    )
-    train_loss = evaluate(model=model, dataset=eval_train_dataset, batch_size=args.eval_batch_size)
-    logger.info(f"Train loss: {train_loss}")
+    eval_train_dataset = get_cifar10_dataset(split="eval_train", dataset_dir=args.dataset_dir)
+    train_loss, train_acc = evaluate(model=model, dataset=eval_train_dataset, batch_size=args.eval_batch_size)
+    logger.info(f"Train loss: {train_loss}, Train Accuracy: {train_acc}")
 
-    eval_dataset = get_regression_dataset(data_name=args.dataset_name, split="valid", dataset_dir=args.dataset_dir)
-    eval_loss = evaluate(model=model, dataset=eval_dataset, batch_size=args.eval_batch_size)
-    logger.info(f"Evaluation loss: {eval_loss}")
+    eval_dataset = get_cifar10_dataset(split="valid", dataset_dir=args.dataset_dir)
+    eval_loss, eval_acc = evaluate(model=model, dataset=eval_dataset, batch_size=args.eval_batch_size)
+    logger.info(f"Evaluation loss: {eval_loss}, Evaluation Accuracy: {eval_acc}")
 
     if args.checkpoint_dir is not None:
-        torch.save(model.state_dict(), os.path.join(args.checkpoint_dir, "model.pth"))
+        model_name = "model"
+        if args.corrupt_percentage is not None:
+            model_name += "_corrupt_" + str(args.corrupt_percentage)
+        torch.save(model.state_dict(), os.path.join(args.checkpoint_dir, f"{model_name}.pth"))
 
 
 if __name__ == "__main__":

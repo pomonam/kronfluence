@@ -38,7 +38,7 @@ def self_scores_save_path(
     if partition is not None:
         data_partition, module_partition = partition
         return output_dir / (
-            f"self_scores_data_partition{data_partition}" f"_module_partition{module_partition}.safetensors"
+            f"self_scores_data_partition{data_partition}_module_partition{module_partition}.safetensors"
         )
     return output_dir / "self_scores.safetensors"
 

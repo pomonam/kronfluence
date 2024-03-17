@@ -22,13 +22,13 @@ def load_file(path: Path) -> Dict[str, torch.Tensor]:
 
 
 def save_json(obj: Any, path: Path) -> None:
-    """Saves the object to a json file."""
+    """Saves the object to a JSON file."""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=4)
 
 
 def load_json(path: Path) -> Dict[str, Any]:
-    """Loads an object from the json file."""
+    """Loads an object from the JSON file."""
     with open(path, "rb") as f:
         obj = json.load(f)
     return obj

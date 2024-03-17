@@ -1,13 +1,13 @@
 from typing import Optional
 
 from accelerate.utils import extract_model_from_parallel
+from computer.factor_computer import FactorComputer
+from computer.score_computer import ScoreComputer
 from safetensors.torch import save_file
 from torch import nn
 from torch.utils import data
 
 from kronfluence.arguments import FactorArguments
-from kronfluence.computer.covariance_computer import CovarianceComputer
-from kronfluence.computer.eigen_computer import EigenComputer
 from kronfluence.computer.pairwise_score_computer import PairwiseScoreComputer
 from kronfluence.computer.self_score_computer import SelfScoreComputer
 from kronfluence.module.utils import wrap_tracked_modules
@@ -40,7 +40,7 @@ def prepare_model(
     return model
 
 
-class Analyzer(CovarianceComputer, EigenComputer, PairwiseScoreComputer, SelfScoreComputer):
+class Analyzer(FactorComputer, ScoreComputer):
     """
     Handles the computation of all factors (e.g., covariance and Lambda matrices for EKFAC)
     and influence scores for a given PyTorch model.

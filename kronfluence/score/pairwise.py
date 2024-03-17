@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 import torch
-from accelerate.utils import find_batch_size, send_to_device
+from accelerate.utils import send_to_device
 from safetensors.torch import load_file, save_file
 from torch import nn
 from torch.utils import data
@@ -18,7 +18,6 @@ from kronfluence.module.constants import (
 )
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
-    get_preconditioned_gradient_batch_size,
     get_tracked_module_names,
     release_scores,
     set_factors,
@@ -41,7 +40,7 @@ def pairwise_scores_save_path(
     if partition is not None:
         data_partition, module_partition = partition
         return output_dir / (
-            f"pairwise_scores_data_partition{data_partition}" f"_module_partition{module_partition}.safetensors"
+            f"pairwise_scores_data_partition{data_partition}_module_partition{module_partition}.safetensors"
         )
     return output_dir / "pairwise_scores.safetensors"
 
@@ -104,7 +103,6 @@ def _compute_pairwise_dot_products_with_loader(
         score_chunks[ALL_MODULE_NAME] = []
 
     with torch.no_grad():
-        total_query_batch_size = get_preconditioned_gradient_batch_size(model=model)
         set_mode(
             model=model,
             mode=ModuleMode.PAIRWISE_SCORE,
@@ -119,7 +117,7 @@ def _compute_pairwise_dot_products_with_loader(
         disable=not state.is_main_process,
     ) as pbar:
         for batch in train_loader:
-            batch = send_to_device(batch, device=state.device)
+            batch = send_to_device(tensor=batch, device=state.device)
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
@@ -139,16 +137,14 @@ def _compute_pairwise_dot_products_with_loader(
                             )
                 else:
                     # Aggregate the pairwise scores across all modules.
-                    batch_size = find_batch_size(batch)
-                    pairwise_scores = torch.zeros(
-                        size=(total_query_batch_size, batch_size),
-                        dtype=score_args.score_dtype,
-                        device=state.device,
-                        requires_grad=False,
-                    )
+                    pairwise_scores = None
                     for module in model.modules():
                         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                            pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
+                            if pairwise_scores is None:
+                                pairwise_scores = module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME)
+                            else:
+                                pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
+
                     # `.cpu()` synchronizes the CUDA stream.
                     score_chunks[ALL_MODULE_NAME].append(pairwise_scores.cpu())
                 release_scores(model=model)
@@ -166,28 +162,13 @@ def _compute_pairwise_dot_products_with_loader(
         for module_name, chunks in score_chunks.items():
             total_scores[module_name] = torch.cat(chunks, dim=1)
             if state.use_distributed:
-                size = total_scores[module_name].size()
-                total_scores[module_name] = total_scores[module_name].to(
-                    device=state.device,
-                    non_blocking=False,
-                )
-                torch.cuda.synchronize(state.device)
-                total_scores[module_name] = total_scores[module_name].t().contiguous()
-                release_memory()
-                stacked_scores = torch.empty(
-                    size=(size[1] * state.num_processes, size[0]),
-                    dtype=total_scores[module_name].dtype,
-                    device=state.device,
-                    requires_grad=False,
-                )
-                torch.distributed.all_gather_into_tensor(
-                    output_tensor=stacked_scores,
-                    input_tensor=total_scores[module_name],
-                )
-                stacked_scores = stacked_scores.t().contiguous()
-                stacked_scores = stacked_scores[:, :dataset_size]
-                total_scores[module_name] = stacked_scores.cpu()
-                del stacked_scores
+                total_scores[module_name] = total_scores[module_name].to(device=state.device)
+                gather_list = None
+                if state.is_main_process:
+                    gather_list = [torch.zeros_like(total_scores[module_name]) for _ in range(state.num_processes)]
+                torch.distributed.gather(total_scores[module_name], gather_list)
+                if state.is_main_process:
+                    total_scores[module_name] = torch.cat(gather_list, dim=1)[:, :dataset_size].cpu()
     return total_scores
 
 
@@ -272,7 +253,7 @@ def compute_pairwise_scores_with_loaders(
     ) as pbar:
         for query_index, query_batch in enumerate(query_loader):
             query_batch = send_to_device(
-                query_batch,
+                tensor=query_batch,
                 device=state.device,
             )
 
@@ -281,13 +262,13 @@ def compute_pairwise_scores_with_loaders(
                 measurement = task.compute_measurement(batch=query_batch, model=model)
                 measurement.backward()
 
-                if state.use_distributed:
-                    # Stack preconditioned query gradient across multiple devices or nodes.
-                    synchronize_preconditioned_gradient(model=model, num_processes=state.num_processes)
-                    if query_index == len(query_loader) - 1 and query_remainder > 0:
-                        # Remove duplicate data points if the dataset is not exactly divisible
-                        # by the current batch size.
-                        truncate_preconditioned_gradient(model=model, keep_size=query_remainder)
+            if state.use_distributed:
+                # Stack preconditioned query gradient across multiple devices or nodes.
+                synchronize_preconditioned_gradient(model=model, num_processes=state.num_processes)
+                if query_index == len(query_loader) - 1 and query_remainder > 0:
+                    # Remove duplicate data points if the dataset is not exactly divisible
+                    # by the current batch size.
+                    truncate_preconditioned_gradient(model=model, keep_size=query_remainder)
 
             # Compute the dot product between preconditioning query gradient and all training gradients.
             release_memory()
@@ -299,18 +280,19 @@ def compute_pairwise_scores_with_loaders(
                 score_args=score_args,
                 tracked_module_names=tracked_module_names,
             )
-
-            with torch.no_grad():
-                for module_name, current_scores in scores.items():
-                    if module_name not in total_scores_chunks:
-                        total_scores_chunks[module_name] = []
-                    total_scores_chunks[module_name].append(current_scores)
+            if state.is_main_process:
+                with torch.no_grad():
+                    for module_name, current_scores in scores.items():
+                        if module_name not in total_scores_chunks:
+                            total_scores_chunks[module_name] = []
+                        total_scores_chunks[module_name].append(current_scores)
+            state.wait_for_everyone()
             pbar.update(1)
 
     with torch.no_grad():
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
-
-        for module_name in total_scores_chunks:
-            total_scores_chunks[module_name] = torch.cat(total_scores_chunks[module_name], dim=0)
-
+        if state.is_main_process:
+            for module_name in total_scores_chunks:
+                total_scores_chunks[module_name] = torch.cat(total_scores_chunks[module_name], dim=0)
+        state.wait_for_everyone()
     return total_scores_chunks

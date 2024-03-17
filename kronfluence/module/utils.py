@@ -29,8 +29,7 @@ def wrap_tracked_modules(
     factor_args: Optional[FactorArguments] = None,
     score_args: Optional[ScoreArguments] = None,
 ) -> nn.Module:
-    """Inspects all modules within the model and if supported modules for factor & influence
-    computations are found, wraps them with `TrackedModule`.
+    """Inspects all modules within the model and, if supported modules are found, wraps them with `TrackedModule`.
 
     Args:
         model (nn.Module):
@@ -43,7 +42,8 @@ def wrap_tracked_modules(
             Arguments related to computing the influence scores.
 
     Returns:
-        nn.Module: The wrapped model with `TrackedModule`.
+        nn.Module:
+            The wrapped model with `TrackedModule`.
     """
     if isinstance(model, (DP, DDP, FSDP)):
         raise ValueError(
@@ -52,7 +52,11 @@ def wrap_tracked_modules(
         )
 
     tracked_module_count = 0
-    tracked_module_names = task.influence_modules() if task is not None else None
+    tracked_module_names = task.tracked_modules() if task is not None else None
+    tracked_module_exists_dict = None
+    if tracked_module_names is not None:
+        tracked_module_exists_dict = {name: False for name in tracked_module_names}
+
     named_modules = model.named_modules()
     for module_name, module in named_modules:
         if len(list(module.children())) > 0:
@@ -70,10 +74,20 @@ def wrap_tracked_modules(
                 factor_args=factor_args,
                 score_args=score_args,
             )
+            # We need backward hooks for these modules to be activated.
             tracked_module.requires_grad_(True)
             parent, target_name = _get_submodules(model=model, key=module_name)
             setattr(parent, target_name, tracked_module)
             tracked_module_count += 1
+
+            if tracked_module_exists_dict is not None:
+                tracked_module_exists_dict[module_name] = True
+
+    if tracked_module_exists_dict is not None and not all(list(tracked_module_exists_dict.values())):
+        error_msg = (
+            f"Some provided tracked modules were not found. The current mapping: " f"{tracked_module_exists_dict}."
+        )
+        raise IllegalTaskConfigurationError(error_msg)
 
     if tracked_module_count == 0:
         supported_modules_names = [module.__name__ for module in TrackedModule.SUPPORTED_MODULES]
@@ -85,6 +99,7 @@ def wrap_tracked_modules(
         )
         error_msg += f"\n{model}"
         raise IllegalTaskConfigurationError(error_msg)
+
     return model
 
 

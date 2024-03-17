@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
+from factor.config import FactorConfig
 from torch import nn
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.nn import DataParallel
@@ -12,7 +13,7 @@ from torch.nn.parallel.distributed import DistributedDataParallel as DDP
 from torch.utils import data
 from torch.utils.data import DistributedSampler, SequentialSampler
 
-from kronfluence.arguments import Arguments, ScoreArguments
+from kronfluence.arguments import Arguments, FactorArguments, ScoreArguments
 from kronfluence.factor.covariance import (
     covariance_matrices_exist,
     load_covariance_matrices,
@@ -34,12 +35,17 @@ from kronfluence.score.pairwise import load_pairwise_scores, pairwise_scores_exi
 from kronfluence.score.self import load_self_scores, self_scores_exist
 from kronfluence.task import Task
 from kronfluence.utils.dataset import (
+    DataLoaderKwargs,
     DistributedEvalSampler,
     DistributedSamplerWithStack,
     find_executable_batch_size,
     make_indices_partition,
 )
-from kronfluence.utils.exceptions import FactorsNotFoundError, UnsupportableModuleError, TrackedModuleNotFoundError
+from kronfluence.utils.exceptions import (
+    FactorsNotFoundError,
+    TrackedModuleNotFoundError,
+    UnsupportableModuleError,
+)
 from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger, get_time
 from kronfluence.utils.save import (
     FACTOR_ARGUMENTS_NAME,
@@ -114,12 +120,14 @@ class Computer(ABC):
             self.model.to(self.state.device)
 
         # Create and configure profiler.
-        self.profiler = Profiler() if profile else PassThroughProfiler()
-        self.profiler.set_local_rank(local_rank=self.state.local_process_index)
+        self.profiler = Profiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
 
         # Create and configure output directory.
         self.output_dir = Path(output_dir).joinpath(name).resolve()
         os.makedirs(name=self.output_dir, exist_ok=True)
+
+        # DataLoader parameters.
+        self._dataloader_params = DataLoaderKwargs()
 
     def _save_arguments(
         self,
@@ -235,6 +243,19 @@ class Computer(ABC):
         } | dataloader_params
         return data.DataLoader(dataset=dataset, **dataloader_params)
 
+    def set_dataloader_kwargs(self, dataloader_kwargs: DataLoaderKwargs) -> None:
+        """Sets the default DataLoader parameters to use for all experiments."""
+        self._dataloader_params = dataloader_kwargs
+
+    def _configure_dataloader(self, dataloader_kwargs: DataLoaderKwargs) -> Dict[str, Any]:
+        """Configures the DataLoader, logging appropriate messages."""
+        if dataloader_kwargs is None:
+            dataloader_kwargs = self._dataloader_params
+            self.logger.info(f"DataLoader arguments not provided. Using the configuration: {dataloader_kwargs}.")
+        else:
+            self.logger.info(f"Using the DataLoader parameters: {dataloader_kwargs.to_dict()}.")
+        return dataloader_kwargs.to_dict()
+
     def _get_data_partition(
         self,
         total_data_examples: int,
@@ -316,56 +337,14 @@ class Computer(ABC):
         return (self.output_dir / (FACTOR_SAVE_PREFIX + factors_name)).resolve()
 
     def scores_output_dir(self, scores_name: str) -> Path:
-        """Generates an output directory for storing all influence scores."""
+        """Generates an output directory for storing all scores."""
         return (self.output_dir / (SCORE_SAVE_PREFIX + scores_name)).resolve()
 
-    def _find_executable_factors_batch_size(
-        self,
-        func: Callable,
-        func_kwargs: Dict[str, Any],
-        dataset: data.Dataset,
-        dataloader_params: Dict[str, Any],
-        start_batch_size: int,
-    ) -> int:
-        """Automatically finds executable batch size for performing `func`."""
-        self.logger.info("Automatically determining executable batch size.")
-
-        def executable_batch_size_func(batch_size: int) -> None:
-            self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
-            set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
-            self.model.zero_grad(set_to_none=True)
-            release_memory()
-            total_batch_size = batch_size * self.state.num_processes
-            loader = self._get_dataloader(
-                dataset=dataset,
-                per_device_batch_size=batch_size,
-                # Only runs for a single step.
-                indices=list(range(total_batch_size)),
-                dataloader_params=dataloader_params,
-            )
-            func(loader=loader, **func_kwargs)
-
-        per_device_batch_size = find_executable_batch_size(
-            func=executable_batch_size_func,
-            start_batch_size=start_batch_size,
-        )
-        self.logger.info(f"Executable batch size determined: {per_device_batch_size}.")
-        return per_device_batch_size
-
-    @torch.no_grad()
-    def _aggregate_factors(self, aggregated_factors: FACTOR_TYPE, loaded_factors: FACTOR_TYPE) -> FACTOR_TYPE:
-        """Aggregates factors from the current loaded factors."""
-        for factor_name, factors in loaded_factors.items():
-            if factor_name not in aggregated_factors:
-                aggregated_factors[factor_name]: Dict[str, torch.Tensor] = {}
-
-            for module_name in factors:
-                if module_name not in aggregated_factors[factor_name]:
-                    aggregated_factors[factor_name][module_name] = (factors[module_name]).to(device=self.state.device)
-                else:
-                    # Aggregate the factors from `loaded_factors` to `aggregated_factors`.
-                    aggregated_factors[factor_name][module_name].add_(factors[module_name].to(device=self.state.device))
-        return aggregated_factors
+    def _log_profile_summary(self) -> None:
+        """Log the summary of the profiling results."""
+        profile_summary = self.profiler.summary()
+        if profile_summary != "":
+            self.logger.info(self.profiler.summary())
 
     def load_factor_args(self, factors_name: str) -> Optional[Dict[str, Any]]:
         """Loads factor arguments with the given factor name."""
@@ -418,6 +397,41 @@ class Computer(ABC):
             return load_self_scores(output_dir=scores_output_dir)
         return None
 
+    def _configure_score_args(self, score_args: ScoreArguments) -> ScoreArguments:
+        """Configures the ScoreArguments, logging appropriate messages."""
+        if score_args is None:
+            score_args = ScoreArguments()
+            self.logger.info(f"Score arguments not provided. Using the default configuration: {score_args}.")
+        else:
+            self.logger.info(f"Using the provided configuration: {score_args}.")
+        return score_args
+
+    def _load_and_configure_factor_args(self, factors_name: str) -> Tuple[FactorArguments, FactorConfig]:
+        """Loads factor arguments and its configuration from disk."""
+        factor_args = self.load_factor_args(factors_name=factors_name)
+        factors_output_dir = self.factors_output_dir(factors_name=factors_name)
+        if factor_args is None:
+            error_msg = f"Factors with name `{factors_name}` was not found at {factors_output_dir}."
+            self.logger.error(error_msg)
+            raise FactorsNotFoundError(error_msg)
+        factor_args = FactorArguments(**factor_args)
+        self.logger.info(f"Loaded FactorArguments with configuration: {factor_args}.")
+        strategy = factor_args.strategy
+        factor_config = FactorConfig.CONFIGS[strategy]
+        return factor_args, factor_config
+
+    def _load_and_configure_score_args(self, scores_name: str) -> ScoreArguments:
+        """Loads score arguments from disk."""
+        score_args = self.load_score_args(scores_name=scores_name)
+        scores_output_dir = self.scores_output_dir(scores_name=scores_name)
+        if score_args is None:
+            error_msg = f"Scores with name `{scores_name}` was not found at {scores_output_dir}."
+            self.logger.error(error_msg)
+            raise FactorsNotFoundError(error_msg)
+        score_args = ScoreArguments(**score_args)
+        self.logger.info(f"Loaded ScoreArguments with configuration: {score_args}.")
+        return score_args
+
     def _load_all_required_factors(self, factors_name: str, strategy: str, factor_config: Any) -> FACTOR_TYPE:
         loaded_factors: FACTOR_TYPE = {}
         if factor_config.requires_covariance_matrices_for_precondition:
@@ -455,6 +469,62 @@ class Computer(ABC):
         return loaded_factors
 
     @torch.no_grad()
+    def _aggregate_factors(
+        self,
+        factors_name: str,
+        data_partition_size: int,
+        module_partition_size: int,
+        exists_fnc: Callable,
+        load_fnc: Callable,
+        save_fnc: Callable,
+    ) -> Optional[FACTOR_TYPE]:
+        """Aggregates all factors computed for all data and module partitions."""
+        factors_output_dir = self.factors_output_dir(factors_name=factors_name)
+        if not factors_output_dir.exists():
+            error_msg = (
+                f"Factors output directory {factors_output_dir} is not found when trying to "
+                f"aggregate partitioned factors."
+            )
+            self.logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
+
+        all_required_partitions = [(i, j) for i in range(data_partition_size) for j in range(module_partition_size)]
+        all_partition_exists = all(
+            exists_fnc(output_dir=factors_output_dir, partition=partition) for partition in all_required_partitions
+        )
+        if not all_partition_exists:
+            self.logger.warning("Factors are not aggregated as factors for some partitions are not yet computed.")
+            return
+
+        start_time = get_time(state=self.state)
+        if self.state.is_main_process:
+            aggregated_factors: FACTOR_TYPE = {}
+            for data_partition in range(data_partition_size):
+                for module_partition in range(module_partition_size):
+                    loaded_factors = load_fnc(
+                        output_dir=factors_output_dir,
+                        partition=(data_partition, module_partition),
+                    )
+                    for factor_name, factors in loaded_factors.items():
+                        if factor_name not in aggregated_factors:
+                            aggregated_factors[factor_name]: Dict[str, torch.Tensor] = {}
+
+                        for module_name in factors:
+                            if module_name not in aggregated_factors[factor_name]:
+                                aggregated_factors[factor_name][module_name] = factors[module_name]
+                            else:
+                                aggregated_factors[factor_name][module_name].add_(factors[module_name])
+                    del loaded_factors
+            save_fnc(
+                output_dir=factors_output_dir,
+                factors=aggregated_factors,
+            )
+            self.state.wait_for_everyone()
+        end_time = get_time(state=self.state)
+        elapsed_time = end_time - start_time
+        self.logger.info(f"Aggregated all partitioned factors in {elapsed_time:.2f} seconds.")
+
+    @torch.no_grad()
     def _aggregate_scores(
         self,
         scores_name: str,
@@ -479,13 +549,11 @@ class Computer(ABC):
         all_required_partitions = [
             (i, j) for i in range(score_args.data_partition_size) for j in range(score_args.module_partition_size)
         ]
-        all_partition_exists = [
-            exists_fnc(output_dir=scores_output_dir, partition=partition) for partition in all_required_partitions
-        ]
+        all_partition_exists = all(
+            [exists_fnc(output_dir=scores_output_dir, partition=partition) for partition in all_required_partitions]
+        )
         if not all_partition_exists:
-            self.logger.info(
-                "Influence scores are not aggregated as scores for some partitions " "are not yet computed."
-            )
+            self.logger.info("Influence scores are not aggregated as scores for some partitions are not yet computed.")
             return
 
         start_time = get_time(state=self.state)

@@ -2,6 +2,7 @@ from typing import Tuple, Union
 
 import torch
 from einops import rearrange
+from opt_einsum import contract
 from torch import nn
 
 from kronfluence.module.tracked_module import TrackedModule
@@ -30,12 +31,14 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
         if self._attention_mask is not None and flattened_activation.size(0) == self._attention_mask.numel():
             # If the binary attention mask is provided, zero-out appropriate activations.
             flattened_attention_mask = rearrange(tensor=self._attention_mask, pattern="b ... -> (b ...) 1")
-            flattened_activation = flattened_activation * flattened_attention_mask
+            # Make sure in-place operation does not change the activation during the forward pass.
+            flattened_activation = flattened_activation.clone()
+            flattened_activation.mul_(flattened_attention_mask)
 
-        if self.original_module.bias is not None:
-            append_term = flattened_activation.new_ones(flattened_activation.shape[0], 1)
+        if self.original_module.bias is not None and not self.factor_args.ignore_bias:
+            append_term = flattened_activation.new_ones((flattened_activation.size(0), 1), requires_grad=False)
             if flattened_attention_mask is not None:
-                append_term = append_term * flattened_attention_mask
+                append_term.mul_(flattened_attention_mask)
             flattened_activation = torch.cat([flattened_activation, append_term], dim=-1)
 
         count = flattened_activation.size(0) if flattened_attention_mask is None else flattened_attention_mask.sum()
@@ -71,12 +74,11 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
         Returns:
             torch.Tensor:
                 The per-sample-gradient tensor. The per-sample-gradient is a 3-dimensional matrix
-                with dimension `batch_size x gradient_dim x input_dim`. An additional dimension is added
+                with dimension `batch_size x gradient_dim x activation_dim`. An additional dimension is added
                 when the bias term is used.
         """
-        if self.original_module.bias is not None:
-            shape = list(input_activation.shape[:-1]) + [1]
+        if self.original_module.bias is not None and not self.factor_args.ignore_bias:
+            shape = list(input_activation.size()[:-1]) + [1]
             append_term = input_activation.new_ones(shape, requires_grad=False)
             input_activation = torch.cat([input_activation, append_term], dim=-1)
-
-        return torch.einsum("b...i,b...o->boi", (input_activation, output_gradient))
+        return contract("b...i,b...o->bio", output_gradient, input_activation)

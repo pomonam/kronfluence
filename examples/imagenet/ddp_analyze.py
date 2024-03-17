@@ -6,13 +6,13 @@ from typing import Tuple
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments
-from kronfluence.task import Task
 from torch import nn
 from torch.nn.parallel.distributed import DistributedDataParallel
 
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
+from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.arguments import FactorArguments
+from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 torch.backends.cudnn.benchmark = True
@@ -68,7 +68,6 @@ def parse_args():
 
 
 class ClassificationTask(Task):
-
     def compute_train_loss(
         self,
         batch: BATCH_DTYPE,

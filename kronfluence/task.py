@@ -58,7 +58,7 @@ class Task(ABC):
         """
         raise NotImplementedError("Subclasses must implement the `compute_measurement` method.")
 
-    def influence_modules(self) -> Optional[List[str]]:
+    def tracked_modules(self) -> Optional[List[str]]:
         """Specifies modules for preconditioning factors and influence scores computation.
 
         Returns None by default, applying computations to all supported modules (e.g., nn.Linear, nn.Conv2d).
