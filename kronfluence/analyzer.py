@@ -1,5 +1,7 @@
-from typing import Optional
+from pathlib import Path
+from typing import Dict, Optional
 
+import torch
 from accelerate.utils import extract_model_from_parallel
 from computer.factor_computer import FactorComputer
 from computer.score_computer import ScoreComputer
@@ -19,8 +21,8 @@ def prepare_model(
     task: Task,
 ) -> nn.Module:
     """Prepares the model before passing it to `Analyzer`. This function sets `param.requires_grad = False`
-    for all modules that does not require influence computation and installs `TrackedModule` to supported
-    modules.
+    for all modules that does not require influence computations and installs `TrackedModule` to supported
+    modules. This `TrackedModule` keeps track of relevant statistics needed to compute influence scores.
 
     Args:
         model (nn.Module):
@@ -29,8 +31,6 @@ def prepare_model(
             The specific task associated with the model.
     """
     model.eval()
-    # Set `params.requires_grad = False` for all parameters. The modules influence functions will be computed
-    # will again set `params.requires_grad = True` in `wrap_tracked_modules`.
     for params in model.parameters():
         params.requires_grad = False
     # Install `TrackedModule` to the model.
@@ -91,11 +91,22 @@ class Analyzer(FactorComputer, ScoreComputer):
             profile=profile,
             output_dir=output_dir,
         )
+        self.logger.info(f"Initializing Computer with parameters: {locals()}")
+        self.logger.debug(f"Process state configuration:\n{repr(self.state)}")
 
         # Save model parameters.
         if self.state.is_main_process and not disable_model_save:
             self._save_model()
         self.state.wait_for_everyone()
+
+    def set_dataloader_kwargs(self, dataloader_kwargs: DataLoaderKwargs) -> None:
+        """Sets the default DataLoader parameters to use for all DataLoaders.
+
+        Args:
+            dataloader_kwargs (DataLoaderKwargs):
+                The object containing parameters for DataLoader.
+        """
+        self._dataloader_params = dataloader_kwargs
 
     def _save_model(self) -> None:
         """Saves the model to the output directory."""
@@ -103,7 +114,7 @@ class Analyzer(FactorComputer, ScoreComputer):
         extracted_model = extract_model_from_parallel(self.model)
 
         if model_save_path.exists():
-            self.logger.info(f"Found existing saved model at {model_save_path}.")
+            self.logger.info(f"Found existing saved model at `{model_save_path}`.")
             # Load the existing model's state_dict for comparison.
             loaded_state_dict = load_file(model_save_path)
             if not verify_models_equivalence(loaded_state_dict, extracted_model.state_dict()):
@@ -119,13 +130,14 @@ class Analyzer(FactorComputer, ScoreComputer):
             state_dict = extracted_model.state_dict()
             state_dict = {k: v.clone().contiguous() for k, v in state_dict.items()}
             save_file(state_dict, model_save_path)
-            self.logger.info(f"Saved model at {model_save_path}.")
+            self.logger.info(f"Saved model at `{model_save_path}`.")
 
     def fit_all_factors(
         self,
         factors_name: str,
         dataset: data.Dataset,
         per_device_batch_size: Optional[int] = None,
+        initial_per_device_batch_size_attempt: int = 4096,
         dataloader_kwargs: Optional[DataLoaderKwargs] = None,
         factor_args: Optional[FactorArguments] = None,
         overwrite_output_dir: bool = False,
@@ -142,6 +154,8 @@ class Analyzer(FactorComputer, ScoreComputer):
             per_device_batch_size (int, optional):
                 The per-device batch size used to fit the factors. If not specified, executable
                 per-device batch size is automatically determined.
+            initial_per_device_batch_size_attempt (int):
+                The initial attempted per-device batch size when the batch size is not provided.
             dataloader_kwargs (DataLoaderKwargs, optional):
                 Controls additional arguments for PyTorch's DataLoader.
             factor_args (FactorArguments, optional):
@@ -154,6 +168,7 @@ class Analyzer(FactorComputer, ScoreComputer):
             factors_name=factors_name,
             dataset=dataset,
             per_device_batch_size=per_device_batch_size,
+            initial_per_device_batch_size_attempt=initial_per_device_batch_size_attempt,
             dataloader_kwargs=dataloader_kwargs,
             factor_args=factor_args,
             overwrite_output_dir=overwrite_output_dir,
@@ -167,7 +182,19 @@ class Analyzer(FactorComputer, ScoreComputer):
             factors_name=factors_name,
             dataset=dataset,
             per_device_batch_size=per_device_batch_size,
+            initial_per_device_batch_size_attempt=initial_per_device_batch_size_attempt,
             dataloader_kwargs=dataloader_kwargs,
             factor_args=factor_args,
             overwrite_output_dir=overwrite_output_dir,
         )
+
+    @staticmethod
+    def load_file(path: Path) -> Optional[Dict[str, torch.Tensor]]:
+        """Loads the `.safetensor` file at the given path from disk."""
+        if not path.exists():
+            raise FileNotFoundError(f"File does not exists at `{path}`.")
+        return load_file(path)
+
+    @staticmethod
+    def get_module_summary(model: nn.Module) -> str:
+        pass

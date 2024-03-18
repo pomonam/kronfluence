@@ -16,7 +16,7 @@ T_co = TypeVar("T_co", covariant=True)
 
 @dataclass
 class DataLoaderKwargs(KwargsHandler):
-    """The object used to customize DataLoader. Please refer to https://pytorch.org/docs/stable/data.html for
+    """The object used to customize `DataLoader`. Please refer to https://pytorch.org/docs/stable/data.html for
     detailed information of each argument. The default arguments are copied from PyTorch version 2.2.
     """
 
@@ -48,8 +48,7 @@ def make_indices_partition(total_data_examples: int, partition_size: int) -> Lis
 
 def find_executable_batch_size(func: Callable, start_batch_size: int) -> int:
     """Finds executable batch size for calling the function that does not encounter OOM error. The code is motivated
-    from https://github.com/huggingface/accelerate/blob/v0.27.2/src/accelerate/utils/memory.py#L83.
-    """
+    from https://github.com/huggingface/accelerate/blob/v0.27.2/src/accelerate/utils/memory.py#L83."""
     batch_size = start_batch_size
 
     while True:
@@ -59,7 +58,7 @@ def find_executable_batch_size(func: Callable, start_batch_size: int) -> int:
             func(batch_size)
 
         except Exception as e:  # pylint: disable=broad-exception-caught
-            if should_reduce_batch_size(e):  # pylint: disable=no-else-continue
+            if should_reduce_batch_size(exception=e):  # pylint: disable=no-else-continue
                 batch_size //= 2
                 continue
             else:
@@ -68,9 +67,9 @@ def find_executable_batch_size(func: Callable, start_batch_size: int) -> int:
 
 
 class DistributedEvalSampler(Sampler[T_co]):
-    """DistributedEvalSampler is different from DistributedSampler: ut does not add extra samples to make
-    it evenly divisible. DistributedEvalSampler should not be used for training. The distributed processes could
-    hang forever. See this issue for details: https://github.com/pytorch/pytorch/issues/22584.
+    """DistributedEvalSampler is different from `DistributedSampler`: it does not add extra samples to make
+    the dataset evenly divisible. DistributedEvalSampler should not be used for training; the distributed processes
+    could hang forever. See this issue for details: https://github.com/pytorch/pytorch/issues/22584.
 
     The code is adapted from https://github.com/SeungjunNah/DeepDeblur-PyTorch/blob/master/src/data/sampler.py.
     """
@@ -113,8 +112,11 @@ class DistributedEvalSampler(Sampler[T_co]):
 
 
 class DistributedSamplerWithStack(Sampler[T_co]):
-    """DistributedSampleWithStack is different from DistributedSampler. Instead of subsampling,
-    it stacks the dataset."""
+    """DistributedSampleWithStack is different from `DistributedSampler`. Instead of subsampling,
+    it stacks the dataset. For example, when `num_replicas` is 3, and the dataset of [0, ..., 9] is given,
+    the first, second, and third rank should have [0, 1, 2], [3, 4, 5], and [6, 7, 8], respectively. However,
+    it still adds extra samples to make the dataset evenly divisible.
+    """
 
     def __init__(  # pylint: disable=super-init-not-called
         self,

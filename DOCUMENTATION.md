@@ -9,14 +9,14 @@ Kronfluence has been tested on the following versions of [PyTorch](https://pytor
 ## Supported Modules & Strategies
 
 Kronfluence supports:
-- Computing influence functions on selected modules. At the moment, we support `nn.Linear` and `nn.Conv2d` modules;
+- Computing influence functions on selected PyTorch modules. At the moment, we support `nn.Linear` and `nn.Conv2d`;
 - Computing influence functions with several strategies: `identity`, `diagonal`, `KFAC`, and `EKFAC`;
 - Computing pairwise and self-influence scores.
 
 > [!NOTE]
-> We are planning to support ensembling influence scores in our next release, which will more easily support methods like [TracIn](https://arxiv.org/abs/2002.08484).
+> We are planning to support functionalities to ensemble influence scores in next release.
 
-> [!NOTE]  
+> [!NOTE]
 > If there are specific modules you would like to see supported, please submit an issue.
 
 ---
@@ -90,7 +90,7 @@ model = prepare_model(model=model, task=task)
 ...
 ```
 
-If you specified specific module names in `Task.tracked_modules`, `TrackedModule` will only be installed for these modules.
+If you have specified specific module names in `Task.tracked_modules`, `TrackedModule` will only be installed for these modules.
 
 **\[Optional\] Create a DDP and FSDP Module.** 
 After calling `prepare_model`, you can create DDP or FSDP module or even use `torch.compile`.
@@ -140,8 +140,8 @@ If there are specific modules you would like to see supported, please submit an 
 
 **How should I write task.tracked_modules?**
 We recommend using all supported modules for influence computations. However, if you would like to compute influence scores
-on subset of the modules (e.g., influence computations on only MLP layers for transformer or influence computation only on the last layer),
-use `model.named_modules()` to determine what modules to use. You can specify the list of module names you want to analyze.
+on subset of the modules (e.g., influence computations only on MLP layers for transformer or influence computation only on the last layer),
+inspect `model.named_modules()` to determine what modules to use. You can specify the list of module names you want to analyze.
 
 > [!NOTE]
 > If the embedding layer for transformers are defined with `nn.Linear`, you must write
@@ -149,12 +149,12 @@ use `model.named_modules()` to determine what modules to use. You can specify th
 
 **How should I implement Task.compute_train_loss?**
 Implement the loss function used to train the model. However, the function should return 
-the summed loss and should not include weight decay. 
+the summed loss (over batches and tokens) and should not include regularizations. 
 
 **How should I implement Task.compute_measurement?**
-It depends on the analysis you would like to perform. Influence functions compute the [local effect of downweighting/upweighting
-a data point on the query's measurable quantity](https://arxiv.org/abs/2209.05364). You can use the loss, [margin](https://arxiv.org/abs/2303.14186), 
-or [conditional log-likelihood](https://arxiv.org/abs/2308.03296). 
+It depends on the analysis you would like to perform. Influence functions approximate the [local effect of downweighting/upweighting
+a data point on the query's measurable quantity](https://arxiv.org/abs/2209.05364). You can use the loss, [margin](https://arxiv.org/abs/2303.14186) (for classification), 
+or [conditional log-likelihood](https://arxiv.org/abs/2308.03296) (for language modeling). 
 
 **I encounter TrackedModuleNotFoundError while using DDP or FSDP.**
 Ensure to call `prepare_model` before wrapping your model with DDP or FSDP. Calling `prepare_model` on DDP modules can
@@ -404,13 +404,6 @@ You can use the largest possible batch size that does not result in OOM.
 **Influence scores are very large in magnitude**
 Ideally, influence scores need to be divided by the total number of training data points. However, the code does
 not normalize the scores.
-
-## Multi-GPU Support
-
-### DistributedDataParallel
-
-### Launching Slurm Jobs
-
 
 ## References
 

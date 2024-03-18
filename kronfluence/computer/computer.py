@@ -2,10 +2,8 @@ import logging
 import os
 from abc import ABC
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-import torch
-from factor.config import FactorConfig
 from torch import nn
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.nn import DataParallel
@@ -14,6 +12,7 @@ from torch.utils import data
 from torch.utils.data import DistributedSampler, SequentialSampler
 
 from kronfluence.arguments import Arguments, FactorArguments, ScoreArguments
+from kronfluence.factor.config import FactorConfig
 from kronfluence.factor.covariance import (
     covariance_matrices_exist,
     load_covariance_matrices,
@@ -25,11 +24,9 @@ from kronfluence.factor.eigen import (
     load_lambda_matrices,
 )
 from kronfluence.module.constants import FACTOR_TYPE, SCORE_TYPE
-from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     get_tracked_module_names,
     make_modules_partition,
-    set_mode,
 )
 from kronfluence.score.pairwise import load_pairwise_scores, pairwise_scores_exist
 from kronfluence.score.self import load_self_scores, self_scores_exist
@@ -38,7 +35,6 @@ from kronfluence.utils.dataset import (
     DataLoaderKwargs,
     DistributedEvalSampler,
     DistributedSamplerWithStack,
-    find_executable_batch_size,
     make_indices_partition,
 )
 from kronfluence.utils.exceptions import (
@@ -46,7 +42,7 @@ from kronfluence.utils.exceptions import (
     TrackedModuleNotFoundError,
     UnsupportableModuleError,
 )
-from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger, get_time
+from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger
 from kronfluence.utils.save import (
     FACTOR_ARGUMENTS_NAME,
     FACTOR_SAVE_PREFIX,
@@ -55,7 +51,7 @@ from kronfluence.utils.save import (
     load_json,
     save_json,
 )
-from kronfluence.utils.state import State, release_memory
+from kronfluence.utils.state import State
 
 
 class Computer(ABC):
@@ -72,18 +68,14 @@ class Computer(ABC):
         log_main_process_only: bool = True,
         profile: bool = False,
     ) -> None:
-        """Initializes an instance of the Computer class. See `Analyzer` for the detailed description
-        of all parameters."""
+        """Initializes an instance of the Computer class."""
         self.state = State(cpu=cpu)
 
         # Create and configure logger.
         disable_log = log_main_process_only and self.state.process_index != 0
         self.logger = get_logger(name=__name__, log_level=log_level, disable_log=disable_log)
-        self.logger.info(f"Initializing Computer with parameters: {locals()}")
-        self.logger.debug(f"Process state configuration:\n{repr(self.state)}")
 
         self.model = model
-        self.model.eval()
         self.task = task
 
         try:
@@ -101,7 +93,7 @@ class Computer(ABC):
         if self.state.use_distributed and not isinstance(model, (DDP, FSDP)):
             warning_msg = (
                 "Creating a DDP module. If specific configuration needs to be used "
-                "for DDP, please pass in the model after the manually DDP wrapping."
+                "for DDP, please pass in the model after the manual DDP wrapping."
             )
             self.logger.warning(warning_msg)
             self.model.to(self.state.device)
@@ -129,6 +121,14 @@ class Computer(ABC):
         # DataLoader parameters.
         self._dataloader_params = DataLoaderKwargs()
 
+    def factors_output_dir(self, factors_name: str) -> Path:
+        """Generates an output directory for storing all factors."""
+        return (self.output_dir / (FACTOR_SAVE_PREFIX + factors_name)).resolve()
+
+    def scores_output_dir(self, scores_name: str) -> Path:
+        """Generates an output directory for storing all scores."""
+        return (self.output_dir / (SCORE_SAVE_PREFIX + scores_name)).resolve()
+
     def _save_arguments(
         self,
         arguments_name: str,
@@ -139,7 +139,7 @@ class Computer(ABC):
         """Saves arguments at the specified path."""
         arguments_save_path = output_dir / f"{arguments_name}_arguments.json"
         if arguments_save_path.exists() and not overwrite_output_dir:
-            self.logger.info(f"Found existing saved arguments at {arguments_save_path}.")
+            self.logger.info(f"Found existing saved arguments at `{arguments_save_path}`.")
             loaded_arguments = load_json(arguments_save_path)
             if loaded_arguments != arguments.to_dict():
                 error_msg = (
@@ -152,7 +152,7 @@ class Computer(ABC):
                 raise ValueError(error_msg)
         else:
             save_json(arguments.to_dict(), arguments_save_path)
-            self.logger.info(f"Saved arguments at {arguments_save_path}.")
+            self.logger.info(f"Saved arguments at `{arguments_save_path}`.")
 
     def _save_dataset_metadata(
         self,
@@ -171,7 +171,7 @@ class Computer(ABC):
         }
 
         if dataset_metadata_save_path.exists() and not overwrite_output_dir:
-            self.logger.info(f"Found existing saved dataset metadata at {dataset_metadata_save_path}.")
+            self.logger.info(f"Found existing saved dataset metadata at `{dataset_metadata_save_path}`.")
             # Load the existing dataset metadata for comparison.
             loaded_metadata = load_json(dataset_metadata_save_path)
             if loaded_metadata != dataset_metadata:
@@ -185,7 +185,7 @@ class Computer(ABC):
                 raise ValueError(error_msg)
         else:
             save_json(dataset_metadata, dataset_metadata_save_path)
-            self.logger.info(f"Saved dataset metadata at {dataset_metadata_save_path}.")
+            self.logger.info(f"Saved dataset metadata at `{dataset_metadata_save_path}`.")
 
     def _get_dataloader(
         self,
@@ -196,7 +196,7 @@ class Computer(ABC):
         allow_duplicates: bool = False,
         stack: bool = False,
     ) -> data.DataLoader:
-        """Returns the data loader for the given dataset, per_device_batch_size, and additional parameters."""
+        """Returns the DataLoader for the given dataset, per_device_batch_size, and additional parameters."""
         if indices is not None:
             dataset = data.Subset(dataset=dataset, indices=indices)
 
@@ -234,15 +234,6 @@ class Computer(ABC):
             "drop_last": False,
         } | dataloader_params
         return data.DataLoader(dataset=dataset, **dataloader_params)
-
-    def set_dataloader_kwargs(self, dataloader_kwargs: DataLoaderKwargs) -> None:
-        """Sets the default DataLoader parameters to use for all DataLoaders.
-
-        Args:
-            dataloader_kwargs (DataLoaderKwargs):
-                The object containing parameters for DataLoader.
-        """
-        self._dataloader_params = dataloader_kwargs
 
     def _configure_dataloader(self, dataloader_kwargs: DataLoaderKwargs) -> Dict[str, Any]:
         """Configures the DataLoader, logging appropriate messages."""
@@ -329,14 +320,6 @@ class Computer(ABC):
 
         return modules_partition_list, target_module_partitions
 
-    def factors_output_dir(self, factors_name: str) -> Path:
-        """Generates an output directory for storing all factors."""
-        return (self.output_dir / (FACTOR_SAVE_PREFIX + factors_name)).resolve()
-
-    def scores_output_dir(self, scores_name: str) -> Path:
-        """Generates an output directory for storing all scores."""
-        return (self.output_dir / (SCORE_SAVE_PREFIX + scores_name)).resolve()
-
     def _log_profile_summary(self) -> None:
         """Log the summary of the profiling results."""
         profile_summary = self.profiler.summary()
@@ -372,13 +355,13 @@ class Computer(ABC):
             return None
         return load_lambda_matrices(output_dir=factors_output_dir)
 
-    def load_score_args(self, scores_name: str) -> Optional[Dict[str, Any]]:
+    def load_score_args(self, scores_name: str) -> Optional[ScoreArguments]:
         """Loads score arguments with the given score name."""
         scores_output_dir = self.scores_output_dir(scores_name=scores_name)
         arguments_save_path = scores_output_dir / f"{SCORE_ARGUMENTS_NAME}_arguments.json"
         if not arguments_save_path.exists():
             return None
-        return load_json(arguments_save_path)
+        return ScoreArguments(**load_json(arguments_save_path))
 
     def load_pairwise_scores(self, scores_name: str) -> Optional[SCORE_TYPE]:
         """Loads pairwise scores with the given score name."""
@@ -394,39 +377,23 @@ class Computer(ABC):
             return load_self_scores(output_dir=scores_output_dir)
         return None
 
-    def _load_and_configure_factor_args(self, factors_name: str) -> Tuple[FactorArguments, FactorConfig]:
-        """Loads factor arguments and its configuration from disk."""
-        factor_args = self.load_factor_args(factors_name=factors_name)
+    def load_all_factors(self, factors_name: str) -> FACTOR_TYPE:
+        """Loads factors from disk."""
+        factor_args = self.load_factor_args(factors_name)
         factors_output_dir = self.factors_output_dir(factors_name=factors_name)
         if factor_args is None:
-            error_msg = f"Factors with name `{factors_name}` was not found at {factors_output_dir}."
+            error_msg = f"Factors with name `{factors_name}` was not found at `{factors_output_dir}`."
             self.logger.error(error_msg)
-            raise FactorsNotFoundError(error_msg)
-        self.logger.info(f"Loaded FactorArguments with configuration: {factor_args}.")
-        strategy = factor_args.strategy
-        factor_config = FactorConfig.CONFIGS[strategy]
-        return factor_args, factor_config
+            raise ValueError(error_msg)
 
-    def _load_and_configure_score_args(self, scores_name: str) -> ScoreArguments:
-        """Loads score arguments from disk."""
-        score_args = self.load_score_args(scores_name=scores_name)
-        scores_output_dir = self.scores_output_dir(scores_name=scores_name)
-        if score_args is None:
-            error_msg = f"Scores with name `{scores_name}` was not found at {scores_output_dir}."
-            self.logger.error(error_msg)
-            raise FactorsNotFoundError(error_msg)
-        score_args = ScoreArguments(**score_args)
-        self.logger.info(f"Loaded ScoreArguments with configuration: {score_args}.")
-        return score_args
-
-    def _load_all_required_factors(self, factors_name: str, strategy: str, factor_config: Any) -> FACTOR_TYPE:
         loaded_factors: FACTOR_TYPE = {}
+        factor_config = FactorConfig.CONFIGS[factor_args.strategy]
         if factor_config.requires_covariance_matrices_for_precondition:
             covariance_factors = self.load_covariance_matrices(factors_name=factors_name)
             if covariance_factors is None:
                 error_msg = (
-                    f"Strategy {strategy} requires loading covariance matrices before computing"
-                    f"influence scores. However, the covariance matrices were not found."
+                    f"Strategy `{factor_args.strategy}` computing covariance matrices. "
+                    f"However, the covariance matrices were not found."
                 )
                 self.logger.error(error_msg)
                 raise FactorsNotFoundError(error_msg)
@@ -436,8 +403,8 @@ class Computer(ABC):
             eigen_factors = self.load_eigendecomposition(factors_name=factors_name)
             if eigen_factors is None:
                 error_msg = (
-                    f"Strategy {strategy} requires loading Eigendecomposition results before computing"
-                    f"influence scores. However, the Eigendecomposition results were not found."
+                    f"Strategy `{factor_args.strategy}` computing Eigendecomposition. "
+                    f"However, the Eigendecomposition results were not found."
                 )
                 self.logger.error(error_msg)
                 raise FactorsNotFoundError(error_msg)
@@ -447,8 +414,8 @@ class Computer(ABC):
             lambda_factors = self.load_lambda_matrices(factors_name=factors_name)
             if lambda_factors is None:
                 error_msg = (
-                    f"Strategy {strategy} requires loading Lambda matrices before computing"
-                    f"influence scores. However, the Lambda matrices were not found."
+                    f"Strategy `{factor_args.strategy}` computing Lambda matrices. "
+                    f"However, the Lambda matrices were not found."
                 )
                 self.logger.error(error_msg)
                 raise FactorsNotFoundError(error_msg)

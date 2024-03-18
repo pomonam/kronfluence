@@ -6,7 +6,11 @@ from torch.utils.data import DataLoader
 
 from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode
-from kronfluence.module.utils import set_mode, wrap_tracked_modules
+from kronfluence.module.utils import (
+    make_modules_partition,
+    set_mode,
+    wrap_tracked_modules,
+)
 from tests.utils import prepare_test
 
 
@@ -66,3 +70,15 @@ def test_tracked_modules_forward_equivalence(
 
     for i in range(len(original_losses)):
         assert torch.allclose(original_losses[i], wrapped_losses[i])
+
+
+@pytest.mark.parametrize("total_data_examples", [520, 1000, 8129])
+@pytest.mark.parametrize("partition_size", [2, 270, 520])
+def test_make_modules_partition(total_data_examples: int, partition_size: int) -> None:
+    indices = make_modules_partition(total_module_names=total_data_examples, partition_size=partition_size)
+    assert len(indices) == partition_size
+    reconstructions = []
+    for start_index, end_index in indices:
+        reconstructions.extend(list(range(start_index, end_index)))
+    assert len(reconstructions) == total_data_examples
+    assert len(set(reconstructions)) == len(reconstructions)

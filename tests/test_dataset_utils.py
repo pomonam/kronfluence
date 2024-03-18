@@ -14,7 +14,7 @@ from tests.utils import prepare_test
 def test_eval_distributed_sampler(
     dataset_size: int,
     num_replicas: int,
-):
+) -> None:
     _, train_dataset, _, _, _ = prepare_test(
         test_name="mlp",
         train_size=dataset_size,
@@ -36,7 +36,7 @@ def test_eval_distributed_sampler(
 def test_eval_distributed_sampler_with_stack(
     dataset_size: int,
     num_replicas: int,
-):
+) -> None:
     dataset_size = 1002
     _, train_dataset, _, _, _ = prepare_test(
         test_name="mlp",
@@ -58,7 +58,7 @@ def test_eval_distributed_sampler_with_stack(
 
 @pytest.mark.parametrize("total_data_examples", [520, 1000, 8129])
 @pytest.mark.parametrize("partition_size", [2, 270, 520])
-def test_make_indices_partition(total_data_examples: int, partition_size: int):
+def test_make_indices_partition(total_data_examples: int, partition_size: int) -> None:
     indices = make_indices_partition(total_data_examples=total_data_examples, partition_size=partition_size)
     assert len(indices) == partition_size
     reconstructions = []

@@ -59,7 +59,7 @@ class Task(ABC):
         raise NotImplementedError("Subclasses must implement the `compute_measurement` method.")
 
     def tracked_modules(self) -> Optional[List[str]]:
-        """Specifies modules for preconditioning factors and influence scores computation.
+        """Specifies modules for influence score computations.
 
         Returns None by default, applying computations to all supported modules (e.g., nn.Linear, nn.Conv2d).
         Subclasses can override this method to return a list of specific module names if influence functions
@@ -72,9 +72,11 @@ class Task(ABC):
         """
 
     def get_attention_mask(self, batch: Any) -> Optional[Union[Dict[str, torch.Tensor], torch.Tensor]]:
-        """Returns masks for data points within a batch that have been padded extra sequences to ensure
+        """Returns masks for data points within a batch that have been padded extra tokens to ensure
         consistent length across the batch. Typically, it returns None for models or datasets not requiring
         masking.
+
+        See https://huggingface.co/docs/transformers/en/glossary#attention-mask.
 
         Args:
             batch (Any):
@@ -83,7 +85,7 @@ class Task(ABC):
         Returns:
             Optional[Union[Dict[str, torch.Tensor], torch.Tensor]]:
                 A binary tensor as the mask for the batch, or None if padding is not used. The mask dimensions should
-                match `batch_size x num_seq`.  For models requiring different masks for various modules
+                match `batch_size x num_seq`. For models requiring different masks for various modules
                 (e.g., encoder-decoder architectures), returns a dictionary mapping module names to their
                 corresponding masks.
         """

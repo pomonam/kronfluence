@@ -4,22 +4,18 @@ import os
 from typing import Tuple
 
 import evaluate
-
 import torch
 import torch.nn.functional as F
-from transformers import default_data_collator
-
-import torch
 from accelerate.utils import set_seed
 from torch import nn
 from torch.utils import data
 from tqdm import tqdm
-
+from transformers import default_data_collator
 
 from examples.glue.pipeline import construct_bert, get_glue_dataset
 
-
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train text classification models on GLUE datasets.")
@@ -132,11 +128,7 @@ def train(
 
 def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> Tuple[float, float]:
     dataloader = data.DataLoader(
-        dataset=dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        drop_last=False,
-        collate_fn=default_data_collator
+        dataset=dataset, batch_size=batch_size, shuffle=False, drop_last=False, collate_fn=default_data_collator
     )
 
     model.eval()
@@ -168,9 +160,7 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
-    train_dataset = get_glue_dataset(data_name=args.dataset_name,
-                                     split="train",
-                                     dataset_dir=args.dataset_dir)
+    train_dataset = get_glue_dataset(data_name=args.dataset_name, split="train", dataset_dir=args.dataset_dir)
     model = train(
         dataset=train_dataset,
         batch_size=args.train_batch_size,
@@ -179,9 +169,7 @@ def main():
         weight_decay=args.weight_decay,
     )
 
-    eval_train_dataset = get_glue_dataset(
-        data_name=args.dataset_name, split="eval_train", dataset_dir=args.dataset_dir
-    )
+    eval_train_dataset = get_glue_dataset(data_name=args.dataset_name, split="eval_train", dataset_dir=args.dataset_dir)
     train_loss, train_acc = evaluate_model(model=model, dataset=eval_train_dataset, batch_size=args.eval_batch_size)
     logger.info(f"Train loss: {train_loss}, Train Accuracy: {train_acc}")
 

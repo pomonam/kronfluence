@@ -162,7 +162,9 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
-    train_dataset = get_cifar10_dataset(split="train", corrupt_percentage=args.corrupt_percentage, dataset_dir=args.dataset_dir)
+    train_dataset = get_cifar10_dataset(
+        split="train", corrupt_percentage=args.corrupt_percentage, dataset_dir=args.dataset_dir
+    )
     model = train(
         dataset=train_dataset,
         batch_size=args.train_batch_size,

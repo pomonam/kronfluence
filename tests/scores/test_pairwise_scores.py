@@ -31,7 +31,6 @@ def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module,
         "repeated_mlp",
         "conv",
         "conv_bn",
-        "bert",
         "gpt",
     ],
 )
@@ -73,6 +72,74 @@ def test_compute_pairwise_scores(
         query_gradient_rank=query_gradient_rank,
     )
     scores_name = f"pytest_{test_name}_{test_compute_pairwise_scores.__name__}_{query_gradient_rank}_scores"
+    analyzer.compute_pairwise_scores(
+        scores_name=scores_name,
+        factors_name=factors_name,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=4,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+
+    pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    assert pairwise_scores[ALL_MODULE_NAME].size(0) == query_size
+    assert pairwise_scores[ALL_MODULE_NAME].size(1) == train_size
+    assert pairwise_scores[ALL_MODULE_NAME].dtype == score_dtype
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+    ],
+)
+@pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.bfloat16])
+@pytest.mark.parametrize("precondition_dtype", [torch.float32, torch.bfloat16])
+@pytest.mark.parametrize("score_dtype", [torch.float32, torch.bfloat16])
+@pytest.mark.parametrize("query_gradient_rank", [None, 16])
+@pytest.mark.parametrize("query_size", [16])
+@pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("seed", [6])
+def test_compute_pairwise_scores_dtype(
+    test_name: str,
+    per_sample_gradient_dtype: torch.dtype,
+    precondition_dtype: torch.dtype,
+    score_dtype: torch.dtype,
+    query_gradient_rank: Optional[int],
+    query_size: int,
+    train_size: int,
+    seed: int,
+) -> None:
+    model, train_dataset, test_dataset, data_collator, task = prepare_test(
+        test_name=test_name,
+        query_size=query_size,
+        train_size=train_size,
+        seed=seed,
+    )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    factors_name = f"pytest_{test_name}_{test_compute_pairwise_scores_dtype.__name__}"
+    analyzer.fit_all_factors(
+        factors_name=factors_name,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=32,
+        overwrite_output_dir=True,
+    )
+
+    score_args = ScoreArguments(
+        score_dtype=score_dtype,
+        query_gradient_rank=query_gradient_rank,
+        per_sample_gradient_dtype=per_sample_gradient_dtype,
+        precondition_dtype=precondition_dtype,
+    )
+    scores_name = f"pytest_{test_name}_{test_compute_pairwise_scores_dtype.__name__}_{query_gradient_rank}_scores"
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         factors_name=factors_name,

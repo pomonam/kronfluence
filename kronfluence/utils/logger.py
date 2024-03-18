@@ -26,7 +26,7 @@ class MultiProcessAdapter(logging.LoggerAdapter):
     """
 
     def log(self, level: int, msg: str, *args, **kwargs) -> None:
-        """Delegates logger call after checking if we should log."""
+        """Delegates logger call after checking if it should log."""
         if self.isEnabledFor(level) and not self.extra["disable_log"]:
             msg, kwargs = self.process(msg, kwargs)
             self.logger.log(level, msg, *args, **kwargs)

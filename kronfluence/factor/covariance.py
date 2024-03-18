@@ -111,9 +111,9 @@ def fit_covariance_matrices_with_loader(
         task (Task):
             The specific task associated with the model.
         loader (data.DataLoader):
-            The data loader that will be used to compute covariance matrices.
+            The data loader that will be used to fit covariance matrices.
         factor_args (FactorArguments):
-            Arguments related to computing covariance matrices.
+            Arguments for computing covariance matrices.
         tracked_module_names (List[str], optional):
             A list of module names that covariance matrices will be computed. If not specified, covariance
             matrices will be computed for all tracked modules.

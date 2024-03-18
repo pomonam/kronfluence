@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -7,7 +8,6 @@ from torch.utils import data
 
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.computer.computer import Computer
-from kronfluence.factor.config import FactorConfig
 from kronfluence.module.constants import FACTOR_TYPE, SCORE_TYPE
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import set_mode
@@ -53,8 +53,7 @@ class ScoreComputer(Computer):
             error_msg = f"Factors with name `{factors_name}` was not found at `{factors_output_dir}`."
             self.logger.error(error_msg)
             raise FactorsNotFoundError(error_msg)
-        factor_args = FactorArguments(**factor_args)
-        self.logger.info(f"Loaded FactorArguments with configuration: {factor_args}.")
+        self.logger.info(f"Loaded `FactorArguments` with configuration: {factor_args}.")
 
         if self.state.is_main_process:
             self._save_arguments(
@@ -86,7 +85,7 @@ class ScoreComputer(Computer):
         scores_output_dir = self.scores_output_dir(scores_name=scores_name)
         if not scores_output_dir.exists():
             error_msg = (
-                f"Scores output directory {scores_output_dir} is not found "
+                f"Scores output directory `{scores_output_dir}` is not found "
                 f"when trying to aggregate partitioned scores."
             )
             self.logger.error(error_msg)
@@ -98,46 +97,44 @@ class ScoreComputer(Computer):
             (i, j) for i in range(score_args.data_partition_size) for j in range(score_args.module_partition_size)
         ]
         all_partition_exists = all(
-            [exists_fnc(output_dir=scores_output_dir, partition=partition) for partition in all_required_partitions]
+            exists_fnc(output_dir=scores_output_dir, partition=partition) for partition in all_required_partitions
         )
         if not all_partition_exists:
             self.logger.info("Influence scores are not aggregated as scores for some partitions are not yet computed.")
             return
 
-        start_time = get_time(state=self.state)
+        start_time = time.time()
         aggregated_scores: SCORE_TYPE = {}
         with self.profiler.profile("Aggregate Score"):
-            if self.state.is_main_process:
-                for data_partition in range(data_partition_size):
-                    aggregated_module_scores = {}
+            for data_partition in range(data_partition_size):
+                aggregated_module_scores = {}
 
-                    for module_partition in range(module_partition_size):
-                        loaded_scores = load_fnc(
-                            output_dir=scores_output_dir,
-                            partition=(data_partition, module_partition),
-                        )
+                for module_partition in range(module_partition_size):
+                    loaded_scores = load_fnc(
+                        output_dir=scores_output_dir,
+                        partition=(data_partition, module_partition),
+                    )
 
-                        for module_name, scores in loaded_scores.items():
-                            if module_name not in aggregated_module_scores:
-                                aggregated_module_scores[module_name] = scores.to(device=self.state.device)
-                            else:
-                                aggregated_module_scores[module_name].add_(scores.to(device=self.state.device))
-                        del loaded_scores
-
-                    for module_name, scores in aggregated_module_scores.items():
-                        if module_name not in aggregated_scores:
-                            aggregated_scores[module_name] = scores
+                    for module_name, scores in loaded_scores.items():
+                        if module_name not in aggregated_module_scores:
+                            aggregated_module_scores[module_name] = scores
                         else:
-                            aggregated_scores[module_name] = torch.cat(
-                                (
-                                    aggregated_scores[module_name],
-                                    scores,
-                                ),
-                                dim=dim,
-                            )
-                save_fnc(output_dir=scores_output_dir, scores=aggregated_scores)
-            self.state.wait_for_everyone()
-        end_time = get_time(state=self.state)
+                            aggregated_module_scores[module_name].add_(scores)
+                    del loaded_scores
+
+                for module_name, scores in aggregated_module_scores.items():
+                    if module_name not in aggregated_scores:
+                        aggregated_scores[module_name] = scores
+                    else:
+                        aggregated_scores[module_name] = torch.cat(
+                            (
+                                aggregated_scores[module_name],
+                                scores,
+                            ),
+                            dim=dim,
+                        )
+            save_fnc(output_dir=scores_output_dir, scores=aggregated_scores)
+        end_time = time.time()
         elapsed_time = end_time - start_time
         self.logger.info(f"Aggregated all partitioned scores in {elapsed_time:.2f} seconds.")
         return aggregated_scores
@@ -148,6 +145,7 @@ class ScoreComputer(Computer):
         query_dataset: data.Dataset,
         per_device_query_batch_size: int,
         train_dataset: data.Dataset,
+        initial_per_device_train_batch_size_attempt: int,
         total_data_examples: int,
         dataloader_params: Dict[str, Any],
         score_args: ScoreArguments,
@@ -155,10 +153,10 @@ class ScoreComputer(Computer):
         tracked_modules_name: Optional[List[str]],
     ) -> int:
         """Automatically finds executable training batch size for computing pairwise influence scores."""
-        if self.state.num_processes > 1:
+        if self.state.use_distributed:
             error_msg = (
                 "Automatic batch size search is currently not supported for multi-GPU training. "
-                "Please manually configure the batch size."
+                "Please manually configure the batch size by passing in `per_device_train_batch_size`."
             )
             self.logger.error(error_msg)
             raise NotImplementedError(error_msg)
@@ -167,7 +165,7 @@ class ScoreComputer(Computer):
         total_query_batch_size = per_device_query_batch_size * self.state.num_processes
         start_batch_size = min(
             [
-                score_args.initial_per_device_batch_size_attempt,
+                initial_per_device_train_batch_size_attempt,
                 total_data_examples,
             ]
         )
@@ -221,6 +219,7 @@ class ScoreComputer(Computer):
         train_dataset: data.Dataset,
         per_device_query_batch_size: int,
         per_device_train_batch_size: Optional[int] = None,
+        initial_per_device_train_batch_size_attempt: int = 4096,
         query_indices: Optional[Sequence[int]] = None,
         train_indices: Optional[Sequence[int]] = None,
         dataloader_kwargs: Optional[DataLoaderKwargs] = None,
@@ -247,6 +246,8 @@ class ScoreComputer(Computer):
             per_device_train_batch_size (int, optional):
                 The per-device batch size used to compute training gradients. If not specified, an executable
                 batch size will be found.
+            initial_per_device_train_batch_size_attempt (int, optional):
+                The initial attempted per-device batch size when the batch size is not provided.
             query_indices (Sequence[int], optional):
                 The specific indices of the query dataset to compute the influence scores for. If not specified,
                 all query data points will be used.
@@ -281,7 +282,6 @@ class ScoreComputer(Computer):
             factors_name=factors_name,
             overwrite_output_dir=overwrite_output_dir,
         )
-        factor_config = FactorConfig.CONFIGS[factor_args.strategy]
 
         dataloader_params = self._configure_dataloader(dataloader_kwargs)
         if self.state.is_main_process:
@@ -305,10 +305,8 @@ class ScoreComputer(Computer):
             train_dataset = data.Subset(dataset=train_dataset, indices=train_indices)
 
         with self.profiler.profile("Load All Factors"):
-            loaded_factors = self._load_all_required_factors(
+            loaded_factors = self.load_all_factors(
                 factors_name=factors_name,
-                strategy=factor_args.strategy,
-                factor_config=factor_config,
             )
 
         no_partition = score_args.data_partition_size == 1 and score_args.module_partition_size == 1
@@ -364,6 +362,7 @@ class ScoreComputer(Computer):
                         query_dataset=query_dataset,
                         per_device_query_batch_size=per_device_query_batch_size,
                         train_dataset=train_dataset,
+                        initial_per_device_train_batch_size_attempt=initial_per_device_train_batch_size_attempt,
                         loaded_factors=loaded_factors,
                         dataloader_params=dataloader_params,
                         total_data_examples=max_partition_examples,
@@ -421,14 +420,24 @@ class ScoreComputer(Computer):
         elapsed_time = all_end_time - all_start_time
         if not no_partition:
             self.logger.info(f"Fitted all partitioned pairwise scores in {elapsed_time:.2f} seconds.")
-            self.aggregate_pairwise_scores(scores_name=scores_name)
-            self.logger.info(f"Saved aggregated pairwise scores at `{scores_output_dir}`.")
+            if self.state.is_main_process:
+                self.aggregate_pairwise_scores(scores_name=scores_name)
+                self.logger.info(f"Saved aggregated pairwise scores at `{scores_output_dir}`.")
+            self.state.wait_for_everyone()
         self._log_profile_summary()
 
     @torch.no_grad()
     def aggregate_pairwise_scores(self, scores_name: str) -> None:
         """Aggregates pairwise scores computed for all data and module partitions."""
-        score_args = self._load_and_configure_score_args(scores_name=scores_name)
+        score_args = self.load_score_args(scores_name=scores_name)
+        if score_args is None:
+            error_msg = (
+                f"Arguments for scores with name `{score_args}` was not found when trying "
+                f"to aggregated pairwise influence scores."
+            )
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
         self._aggregate_scores(
             scores_name=scores_name,
             score_args=score_args,
@@ -443,16 +452,17 @@ class ScoreComputer(Computer):
         loaded_factors: FACTOR_TYPE,
         train_dataset: data.Dataset,
         total_data_examples: int,
+        initial_per_device_train_batch_size_attempt: int,
         dataloader_params: Dict[str, Any],
         score_args: ScoreArguments,
         factor_args: FactorArguments,
         tracked_modules_name: Optional[List[str]],
     ) -> int:
         """Automatically finds executable training batch size for computing self-influence scores."""
-        if self.state.num_processes > 1:
+        if self.state.use_distributed:
             error_msg = (
                 "Automatic batch size search is currently not supported for multi-GPU training. "
-                "Please manually configure the batch size."
+                "Please manually configure the batch size by passing in `per_device_train_batch_size`."
             )
             self.logger.error(error_msg)
             raise NotImplementedError(error_msg)
@@ -460,7 +470,7 @@ class ScoreComputer(Computer):
         self.logger.info("Automatically determining executable batch size.")
         start_batch_size = min(
             [
-                score_args.initial_per_device_batch_size_attempt,
+                initial_per_device_train_batch_size_attempt,
                 total_data_examples,
             ]
         )
@@ -503,6 +513,7 @@ class ScoreComputer(Computer):
         factors_name: str,
         train_dataset: data.Dataset,
         per_device_train_batch_size: Optional[int] = None,
+        initial_per_device_train_batch_size_attempt: int = 4096,
         train_indices: Optional[Sequence[int]] = None,
         dataloader_kwargs: Optional[DataLoaderKwargs] = None,
         score_args: Optional[ScoreArguments] = None,
@@ -523,6 +534,8 @@ class ScoreComputer(Computer):
             per_device_train_batch_size (int, optional):
                 The per-device batch size used to compute training gradients. If not specified, an executable
                 batch size will be found.
+            initial_per_device_train_batch_size_attempt (int, optional):
+                The initial attempted per-device batch size when the batch size is not provided.
             train_indices (Sequence[int], optional):
                 The specific indices of the training dataset to compute the influence scores for. If not
                 specified, all training data points will be used.
@@ -548,13 +561,12 @@ class ScoreComputer(Computer):
             self.logger.info(f"Found existing self-influence scores at {scores_output_dir}. Skipping.")
             return self.load_self_scores(scores_name=scores_name)
 
-        factor_args, scores_args = self._configure_and_save_score_args(
+        factor_args, score_args = self._configure_and_save_score_args(
             score_args=score_args,
             scores_output_dir=scores_output_dir,
             factors_name=factors_name,
             overwrite_output_dir=overwrite_output_dir,
         )
-        factor_config = FactorConfig.CONFIGS[factor_args.strategy]
 
         if score_args.query_gradient_rank is not None:
             warning_msg = (
@@ -576,10 +588,8 @@ class ScoreComputer(Computer):
             train_dataset = data.Subset(dataset=train_dataset, indices=train_indices)
 
         with self.profiler.profile("Load All Factors"):
-            loaded_factors = self._load_all_required_factors(
+            loaded_factors = self.load_all_factors(
                 factors_name=factors_name,
-                strategy=factor_args.strategy,
-                factor_config=factor_config,
             )
 
         no_partition = score_args.data_partition_size == 1 and score_args.module_partition_size == 1
@@ -636,6 +646,7 @@ class ScoreComputer(Computer):
                         loaded_factors=loaded_factors,
                         dataloader_params=dataloader_params,
                         total_data_examples=max_partition_examples,
+                        initial_per_device_train_batch_size_attempt=initial_per_device_train_batch_size_attempt,
                         score_args=score_args,
                         factor_args=factor_args,
                         tracked_modules_name=module_partition_names[module_partition],
@@ -671,24 +682,34 @@ class ScoreComputer(Computer):
                         save_self_scores(
                             output_dir=scores_output_dir,
                             scores=scores,
-                            partition=(data_partition, module_partition),
+                            partition=partition,
                         )
                     self.state.wait_for_everyone()
                 del scores, train_loader
-                self.logger.info(f"Saved self-influence scores at {scores_output_dir}.")
+                self.logger.info(f"Saved self-influence scores at `{scores_output_dir}`.")
 
         all_end_time = get_time(state=self.state)
         elapsed_time = all_end_time - all_start_time
         if not no_partition:
             self.logger.info(f"Fitted all partitioned self-influence scores in {elapsed_time:.2f} seconds.")
-            self.aggregate_self_scores(scores_name=scores_name)
-            self.logger.info(f"Saved aggregated self-influence scores at `{scores_output_dir}`.")
+            if self.state.is_main_process:
+                self.aggregate_self_scores(scores_name=scores_name)
+                self.logger.info(f"Saved aggregated self-influence scores at `{scores_output_dir}`.")
+            self.state.wait_for_everyone()
         self._log_profile_summary()
 
     @torch.no_grad()
     def aggregate_self_scores(self, scores_name: str) -> Optional[SCORE_TYPE]:
         """Aggregates self-influence scores computed for all data and module partitions."""
-        score_args = self._load_and_configure_score_args(scores_name=scores_name)
+        score_args = self.load_score_args(scores_name=scores_name)
+        if score_args is None:
+            error_msg = (
+                f"Arguments for scores with name `{score_args}` was not found when trying "
+                f"to aggregated self-influence scores."
+            )
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
         return self._aggregate_scores(
             scores_name=scores_name,
             score_args=score_args,

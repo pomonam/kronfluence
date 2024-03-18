@@ -113,15 +113,25 @@ def main():
         overwrite_output_dir=True,
     )
 
-    # scores = analyzer.compute_pairwise_scores(
-    #     scores_name="pairwise",
-    #     factors_name=args.factor_strategy,
-    #     query_dataset=eval_dataset,
-    #     train_dataset=train_dataset,
-    #     per_device_query_batch_size=len(eval_dataset),
-    #     per_device_train_batch_size=8,
-    #     overwrite_output_dir=True,
-    # )
+    analyzer.compute_pairwise_scores(
+        scores_name="pairwise",
+        factors_name=args.factor_strategy,
+        query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        per_device_query_batch_size=len(eval_dataset),
+        # per_device_train_batch_size=8,
+        overwrite_output_dir=True,
+    )
+
+    analyzer.compute_self_scores(
+        scores_name="self",
+        factors_name=args.factor_strategy,
+        # query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        # per_device_query_batch_size=len(eval_dataset),
+        # per_device_train_batch_size=8,
+        overwrite_output_dir=True,
+    )
     # logging.info(f"Scores: {scores}")
 
 

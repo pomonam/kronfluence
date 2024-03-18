@@ -222,9 +222,9 @@ def fit_lambda_matrices_with_loader(
     model: nn.Module,
     state: State,
     task: Task,
-    eigen_factors: Optional[FACTOR_TYPE],
     loader: data.DataLoader,
     factor_args: FactorArguments,
+    eigen_factors: Optional[FACTOR_TYPE] = None,
     tracked_module_names: Optional[List[str]] = None,
 ) -> Tuple[torch.Tensor, FACTOR_TYPE]:
     """Computes Lambda matrices for a given model and task.
@@ -236,12 +236,12 @@ def fit_lambda_matrices_with_loader(
             The current process's information (e.g., device being used).
         task (Task):
             The specific task associated with the model.
-        eigen_factors (FACTOR_TYPE, optional):
-            The eigendecomposition results to load from, before computing the Lambda matrices.
         loader (data.DataLoader):
             The data loader that will be used to compute Lambda matrices.
         factor_args (FactorArguments):
-            Arguments related to computing Lambda matrices.
+            Arguments for computing Lambda matrices.
+        eigen_factors (FACTOR_TYPE, optional):
+            The eigendecomposition results to use for computing Lambda matrices.
         tracked_module_names (List[str], optional):
             A list of module names that Lambda matrices will be computed. If not specified, Lambda
             matrices will be computed for all available tracked modules.

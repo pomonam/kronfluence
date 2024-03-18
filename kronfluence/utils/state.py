@@ -112,8 +112,7 @@ def release_memory() -> None:
 @contextlib.contextmanager
 def no_sync(model: nn.Module, state: State) -> Callable:
     """A context manager to avoid DDP synchronization. The code is adapted from
-    https://github.com/huggingface/accelerate/blob/v0.27.2/src/accelerate/accelerator.py#L852.
-    """
+    https://github.com/huggingface/accelerate/blob/v0.27.2/src/accelerate/accelerator.py#L852."""
     context = contextlib.nullcontext
 
     # `no_sync()` for FSDP instance can result in higher memory usage, detailed in:

@@ -78,7 +78,7 @@ class TrackedModule(nn.Module):
             original_module (nn.Module):
                 The original module that will be wrapped with this module.
             factor_args (FactorArguments, optional):
-                Arguments related to computing the preconditioning factors.
+                Arguments related to computing the influence factors.
             score_args (ScoreArguments, optional):
                 Arguments related to computing the influence scores.
         """
@@ -356,6 +356,7 @@ class TrackedModule(nn.Module):
                 dist.reduce(
                     tensor=self._storage[covariance_factor_name].cuda(),
                     op=dist.ReduceOp.SUM,
+                    dst=0,
                 )
 
     ##########################################
@@ -487,6 +488,7 @@ class TrackedModule(nn.Module):
             cached_activation = self._cached_activations.pop()
             if self.factor_args.cached_activation_cpu_offload:
                 cached_activation = cached_activation.to(device=output_gradient.device)
+
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=cached_activation,
                 output_gradient=output_gradient.detach().to(dtype=self.factor_args.lambda_dtype),
@@ -535,6 +537,7 @@ class TrackedModule(nn.Module):
                 torch.distributed.reduce(
                     tensor=self._storage[lambda_factor_name].cuda(),
                     op=dist.ReduceOp.SUM,
+                    dst=0,
                 )
 
     ##################################################
@@ -555,23 +558,17 @@ class TrackedModule(nn.Module):
             List[torch.Tensor, torch.Tensor]:
                 Low-rank matrices that approximate the original preconditioned gradient.
         """
-        original_dtype = preconditioned_gradient.dtype
         U, S, V = torch.linalg.svd(  # pylint: disable=not-callable
-            preconditioned_gradient.to(dtype=self.score_args.query_gradient_svd_dtype)
+            preconditioned_gradient.contiguous().to(dtype=self.score_args.query_gradient_svd_dtype)
         )
         rank = self.score_args.query_gradient_rank
-        U, S, V = (
-            U.to(dtype=original_dtype),
-            S.to(dtype=original_dtype),
-            V.to(dtype=original_dtype),
-        )
         U_k = U[:, :, :rank]
         S_k = S[:, :rank]
         # Avoid holding the full memory of the original tensor before indexing.
         V_k = V[:, :, :rank].clone()
         return [
-            torch.matmul(U_k, torch.diag_embed(S_k)).contiguous(),
-            torch.transpose(V_k, 1, 2).contiguous(),
+            torch.matmul(U_k, torch.diag_embed(S_k)).contiguous().to(dtype=self.score_args.score_dtype),
+            torch.transpose(V_k, 1, 2).contiguous().to(dtype=self.score_args.score_dtype),
         ]
 
     def _register_precondition_gradient_hooks(self) -> None:
@@ -595,6 +592,7 @@ class TrackedModule(nn.Module):
             cached_activation = self._cached_activations.pop()
             if self.score_args.cached_activation_cpu_offload:
                 cached_activation = cached_activation.to(device=output_gradient.device)
+
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=cached_activation,
                 output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
@@ -608,13 +606,12 @@ class TrackedModule(nn.Module):
                 del per_sample_gradient
 
             if len(self._cached_activations) == 0:
-                preconditioned_gradient = (
-                    FactorConfig.CONFIGS[self.factor_args.strategy].precondition_gradient(
-                        gradient=self._cached_per_sample_gradient.to(dtype=self.score_args.precondition_dtype),
-                        storage=self._storage,
-                        damping=self.score_args.damping,
-                    )
-                ).to(dtype=self.score_args.score_dtype)
+                preconditioned_gradient = FactorConfig.CONFIGS[self.factor_args.strategy].precondition_gradient(
+                    gradient=self._cached_per_sample_gradient.to(dtype=self.score_args.precondition_dtype),
+                    storage=self._storage,
+                    damping=self.score_args.damping,
+                )
+                del self._cached_per_sample_gradient
                 self._cached_per_sample_gradient = None
 
                 if (
@@ -625,8 +622,11 @@ class TrackedModule(nn.Module):
                     preconditioned_gradient = self._compute_low_rank_preconditioned_gradient(
                         preconditioned_gradient=preconditioned_gradient
                     )
-
-                self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient
+                    self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient
+                else:
+                    self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient.to(
+                        dtype=self.score_args.score_dtype
+                    )
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
 
@@ -655,6 +655,7 @@ class TrackedModule(nn.Module):
         """Truncates and keeps only the first keep_size dimension for the preconditioned gradient."""
         if self._storage[PRECONDITIONED_GRADIENT_NAME] is not None:
             if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
+                assert len(self._storage[PRECONDITIONED_GRADIENT_NAME]) == 2
                 self._storage[PRECONDITIONED_GRADIENT_NAME] = [
                     self._storage[PRECONDITIONED_GRADIENT_NAME][0][:keep_size].clone(),
                     self._storage[PRECONDITIONED_GRADIENT_NAME][1][:keep_size].clone(),
@@ -669,6 +670,7 @@ class TrackedModule(nn.Module):
         """Stacks preconditioned gradient across multiple devices or nodes in a distributed setting."""
         if dist.is_initialized() and torch.cuda.is_available():
             if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
+                assert len(self._storage[PRECONDITIONED_GRADIENT_NAME]) == 2
                 for i in range(len(self._storage[PRECONDITIONED_GRADIENT_NAME])):
                     size = self._storage[PRECONDITIONED_GRADIENT_NAME][i].size()
                     stacked_matrix = torch.empty(
@@ -722,6 +724,9 @@ class TrackedModule(nn.Module):
             handle = self._cached_hooks.pop()
             handle.remove()
             cached_activation = self._cached_activations.pop()
+            if self.score_args.cached_activation_cpu_offload:
+                cached_activation = cached_activation.to(device=output_gradient.device)
+
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=cached_activation,
                 output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
@@ -752,6 +757,7 @@ class TrackedModule(nn.Module):
                         self._storage[PRECONDITIONED_GRADIENT_NAME],
                         self._cached_per_sample_gradient,
                     )
+                del self._cached_per_sample_gradient
                 self._cached_per_sample_gradient = None
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
@@ -780,6 +786,9 @@ class TrackedModule(nn.Module):
             handle = self._cached_hooks.pop()
             handle.remove()
             cached_activation = self._cached_activations.pop()
+            if self.score_args.cached_activation_cpu_offload:
+                cached_activation = cached_activation.to(device=output_gradient.device)
+
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=cached_activation,
                 output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
@@ -790,11 +799,20 @@ class TrackedModule(nn.Module):
             # used at each iteration.
             if not self._storge_at_current_device:
                 for name, factor in self._storage.items():
-                    if factor is not None and isinstance(factor, torch.Tensor):
-                        self._storage[name] = factor.to(
-                            device=per_sample_gradient.device,
-                            dtype=self.score_args.precondition_dtype,
-                        )
+                    if factor is not None:
+                        if isinstance(factor, torch.Tensor):
+                            self._storage[name] = factor.to(
+                                device=per_sample_gradient.device,
+                                dtype=self.score_args.precondition_dtype,
+                            )
+                        elif isinstance(factor, list):
+                            for i in range(len(self._storage[name])):
+                                self._storage[name][i] = factor[i].to(
+                                    device=per_sample_gradient.device,
+                                    dtype=self.score_args.precondition_dtype,
+                                )
+                        else:
+                            raise RuntimeError(f"`{name}` in `TrackedModule` storage does not have a valid type.")
                 self._storge_at_current_device = True
 
             if self._cached_per_sample_gradient is None:

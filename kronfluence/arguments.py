@@ -1,8 +1,10 @@
 import copy
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import torch
+
+from kronfluence.factor.config import FactorStrategy
 
 
 @dataclass
@@ -12,7 +14,6 @@ class Arguments:
     def to_dict(self) -> Dict[str, Any]:
         """Converts the arguments to a dictionary."""
         config = copy.deepcopy(self.__dict__)
-
         for key, value in config.items():
             if isinstance(value, torch.dtype):
                 config[key] = str(value)
@@ -21,18 +22,16 @@ class Arguments:
     def to_str_dict(self) -> Dict[str, str]:
         """Converts the arguments to a dictionary, where all values are converted to strings."""
         config = copy.deepcopy(self.__dict__)
-
         for key, value in config.items():
             config[key] = str(value)
-
         return config
 
 
 @dataclass
 class FactorArguments(Arguments):
-    """Arguments for computing preconditioning factors."""
+    """Arguments for computing influence factors."""
 
-    strategy: str = field(
+    strategy: Union[FactorStrategy, str] = field(
         default="ekfac",
         metadata={"help": "Strategy for computing preconditioning factors."},
     )
@@ -43,26 +42,18 @@ class FactorArguments(Arguments):
             "true Fisher (using sampled labels)."
         },
     )
-    initial_per_device_batch_size_attempt: int = field(
-        default=4096,
-        metadata={"help": "The initial attempted per-device batch size when the batch size is not provided."},
-    )
     immediate_gradient_removal: bool = field(
         default=False,
         metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
     )
     ignore_bias: bool = field(
         default=False,
-        metadata={
-            "help": "Whether to use empirical fisher (using labels from batch) instead of "
-            "true Fisher (using sampled labels)."
-        },
+        metadata={"help": "Whether to ignore factor computations on bias parameters. Defaults to False."},
     )
     distributed_sync_steps: int = field(
         default=1_000,
         metadata={
-            "help": "Whether to use empirical fisher (using labels from batch) instead of "
-            "true Fisher (using sampled labels)."
+            "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
         },
     )
 
@@ -100,15 +91,13 @@ class FactorArguments(Arguments):
     )
     gradient_covariance_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={
-            "help": "Dtype for computing pseudo-gradient covariance matrices. " "Recommended to use `torch.float32`."
-        },
+        metadata={"help": "Dtype for computing pseudo-gradient covariance matrices."},
     )
 
     # Configuration for performing eigendecomposition. #
     eigendecomposition_dtype: torch.dtype = field(
         default=torch.float64,
-        metadata={"help": "Dtype for performing eigendecomposition. " "Recommended to use `torch.float64."},
+        metadata={"help": "Dtype for performing Eigendecomposition. Recommended to use `torch.float64."},
     )
 
     # Configuration for fitting Lambda matrices. #
@@ -163,10 +152,6 @@ class FactorArguments(Arguments):
 class ScoreArguments(Arguments):
     """Arguments for computing influence scores."""
 
-    initial_per_device_batch_size_attempt: int = field(
-        default=4096,
-        metadata={"help": "The initial attempted per-device batch size when the batch size is not provided."},
-    )
     damping: Optional[float] = field(
         default=None,
         metadata={
@@ -181,25 +166,24 @@ class ScoreArguments(Arguments):
     distributed_sync_steps: int = field(
         default=1_000,
         metadata={
-            "help": "Whether to use empirical fisher (using labels from batch) instead of "
-            "true Fisher (using sampled labels)."
+            "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
         },
     )
 
     data_partition_size: int = field(
         default=1,
         metadata={
-            "help": "Number of data partitions for computing influence scores. "
-            "For example, when `data_partition_size = 2`, the dataset is split "
-            "into 2 chunks and scores are separately computed for each chunk."
+            "help": "Number of data partitions for computing influence scores. For example, when "
+            "`data_partition_size = 2`, the dataset is split into 2 chunks and scores are separately "
+            "computed for each chunk."
         },
     )
     module_partition_size: int = field(
         default=1,
         metadata={
-            "help": "Number of module partitions for computing influence scores. "
-            "For example, when `module_partition_size = 2`, the module is split "
-            "into 2 modules and scores are separately computed for each chunk."
+            "help": "Number of module partitions for computing influence scores. For example, when "
+            "`module_partition_size = 2`, the module is split into 2 modules and scores are separately computed "
+            "for each chunk."
         },
     )
 
@@ -213,7 +197,7 @@ class ScoreArguments(Arguments):
 
     query_gradient_rank: Optional[int] = field(
         default=None,
-        metadata={"help": "Rank for the query gradient. Applies no low-rank approximation if None."},
+        metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
     )
     query_gradient_svd_dtype: torch.dtype = field(
         default=torch.float64,
@@ -237,5 +221,5 @@ class ScoreArguments(Arguments):
     )
     precondition_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing the preconditioned gradient. " "Recommended to use `torch.float32`."},
+        metadata={"help": "Dtype for computing the preconditioned gradient. Recommended to use `torch.float32`."},
     )

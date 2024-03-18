@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import torch
 from accelerate.utils import find_batch_size, send_to_device
@@ -19,7 +19,6 @@ from kronfluence.module.constants import (
 )
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
-    get_tracked_module_names,
     release_scores,
     set_factors,
     set_mode,
@@ -28,7 +27,7 @@ from kronfluence.module.utils import (
 )
 from kronfluence.task import Task
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
-from kronfluence.utils.state import State, no_sync, release_memory
+from kronfluence.utils.state import State, no_sync
 
 
 def self_scores_save_path(
@@ -135,9 +134,6 @@ def compute_self_scores_with_loaders(
                     factor_name=name,
                     factors=loaded_factors[name],
                 )
-        if tracked_module_names is None:
-            tracked_module_names = get_tracked_module_names(model)
-
         set_mode(
             model=model,
             mode=ModuleMode.SELF_SCORE,
@@ -160,16 +156,16 @@ def compute_self_scores_with_loaders(
         bar_format=TQDM_BAR_FORMAT,
         disable=not state.is_main_process,
     ) as pbar:
-        for index, batch in enumerate(train_loader):
-            train_batch = send_to_device(
-                tensor=train_batch,
+        for batch in train_loader:
+            batch = send_to_device(
+                tensor=batch,
                 device=state.device,
             )
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
                 loss = task.compute_train_loss(
-                    batch=train_batch,
+                    batch=batch,
                     model=model,
                     sample=False,
                 )
@@ -185,7 +181,7 @@ def compute_self_scores_with_loaders(
                             )
                 else:
                     # Aggregate the self-influence scores across all modules.
-                    batch_size = find_batch_size(train_batch)
+                    batch_size = find_batch_size(batch)
                     self_scores = torch.zeros(
                         size=(batch_size,),
                         dtype=score_args.score_dtype,
@@ -195,15 +191,10 @@ def compute_self_scores_with_loaders(
                     for module in model.modules():
                         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
                             self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
-                    # `.cpu()` synchronizes the CUDA stream.
                     score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
                 release_scores(model=model)
 
-            if (
-                state.use_distributed
-                and total_steps % score_args.distributed_sync_steps == 0
-                and index not in [len(train_loader) - 1, len(train_loader) - 2]
-            ):
+            if state.use_distributed and total_steps % score_args.distributed_sync_steps == 0:
                 state.wait_for_everyone()
 
             pbar.update(1)

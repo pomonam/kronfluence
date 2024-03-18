@@ -17,7 +17,7 @@ def load_file(path: Path) -> Dict[str, torch.Tensor]:
     load_dict = {}
     with safe_open(path, framework="pt", device="cpu") as f:
         for key in f.keys():
-            load_dict[key] = f.get_tensor(key)
+            load_dict[key] = f.get_tensor(name=key)
     return load_dict
 
 
@@ -39,14 +39,13 @@ def verify_models_equivalence(state_dict1: Dict[str, torch.Tensor], state_dict2:
     if len(state_dict1) != len(state_dict2):
         return False
 
+    if state_dict1.keys() != state_dict2.keys():
+        return False
+
     for name in state_dict1:
-        if name not in state_dict2:
-            return False
-
-        tensor1 = state_dict1[name].cpu()
-        tensor2 = state_dict2[name].cpu()
-
-        if not torch.allclose(tensor1, tensor2):
+        tensor1 = state_dict1[name].to(dtype=torch.float32).cpu()
+        tensor2 = state_dict2[name].to(dtype=torch.float32).cpu()
+        if not torch.allclose(tensor1, tensor2, rtol=1e-3, atol=1e-5):
             return False
 
     return True

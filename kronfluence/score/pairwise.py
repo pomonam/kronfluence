@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 import torch
 from accelerate.utils import send_to_device
@@ -19,7 +19,6 @@ from kronfluence.module.constants import (
 )
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
-    get_tracked_module_names,
     release_scores,
     set_factors,
     set_mode,
@@ -117,7 +116,7 @@ def _compute_dot_products_with_loader(
         bar_format=TQDM_BAR_FORMAT,
         disable=not state.is_main_process,
     ) as pbar:
-        for index, batch in enumerate(train_loader):
+        for batch in train_loader:
             batch = send_to_device(tensor=batch, device=state.device)
 
             with no_sync(model=model, state=state):
@@ -146,16 +145,10 @@ def _compute_dot_products_with_loader(
                                 pairwise_scores = module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME)
                             else:
                                 pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
-
-                    # `.cpu()` synchronizes the CUDA stream.
                     score_chunks[ALL_MODULE_NAME].append(pairwise_scores.cpu())
                 release_scores(model=model)
 
-            if (
-                state.use_distributed
-                and total_steps % score_args.distributed_sync_steps == 0
-                and index not in [len(train_loader) - 1, len(train_loader) - 2]
-            ):
+            if state.use_distributed and total_steps % score_args.distributed_sync_steps == 0:
                 state.wait_for_everyone()
 
             pbar.update(1)
@@ -241,9 +234,6 @@ def compute_pairwise_scores_with_loaders(
                     factor_name=name,
                     factors=loaded_factors[name],
                 )
-        if tracked_module_names is None:
-            tracked_module_names = get_tracked_module_names(model)
-
         set_mode(
             model=model,
             mode=ModuleMode.PRECONDITION_GRADIENT,
@@ -290,13 +280,15 @@ def compute_pairwise_scores_with_loaders(
                 score_args=score_args,
                 tracked_module_names=tracked_module_names,
             )
-            if state.is_main_process:
-                with torch.no_grad():
-                    for module_name, current_scores in scores.items():
-                        if module_name not in total_scores_chunks:
-                            total_scores_chunks[module_name] = []
-                        total_scores_chunks[module_name].append(current_scores)
-            state.wait_for_everyone()
+
+            with torch.no_grad():
+                if state.is_main_process:
+                    with torch.no_grad():
+                        for module_name, current_scores in scores.items():
+                            if module_name not in total_scores_chunks:
+                                total_scores_chunks[module_name] = []
+                            total_scores_chunks[module_name].append(current_scores)
+                state.wait_for_everyone()
             pbar.update(1)
 
     with torch.no_grad():

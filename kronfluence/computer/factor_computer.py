@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 import torch
-from module.constants import FACTOR_TYPE
 from torch.utils import data
 
 from kronfluence.arguments import FactorArguments
@@ -26,6 +25,7 @@ from kronfluence.factor.eigen import (
     save_eigendecomposition,
     save_lambda_matrices,
 )
+from kronfluence.module.constants import FACTOR_TYPE
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import set_mode
 from kronfluence.utils.dataset import DataLoaderKwargs, find_executable_batch_size
@@ -58,11 +58,62 @@ class FactorComputer(Computer):
         self.state.wait_for_everyone()
         return factor_args
 
+    @torch.no_grad()
+    def _aggregate_factors(
+        self,
+        factors_name: str,
+        data_partition_size: int,
+        module_partition_size: int,
+        exists_fnc: Callable,
+        load_fnc: Callable,
+        save_fnc: Callable,
+    ) -> Optional[FACTOR_TYPE]:
+        """Aggregates factors computed for all data and module partitions."""
+        factors_output_dir = self.factors_output_dir(factors_name=factors_name)
+        if not factors_output_dir.exists():
+            error_msg = f"Factors directory `{factors_output_dir}` is not found when trying to aggregate factors."
+            self.logger.error(error_msg)
+            raise FileNotFoundError(error_msg)
+
+        all_required_partitions = [(i, j) for i in range(data_partition_size) for j in range(module_partition_size)]
+        all_partition_exists = all(
+            exists_fnc(output_dir=factors_output_dir, partition=partition) for partition in all_required_partitions
+        )
+        if not all_partition_exists:
+            self.logger.warning("Factors are not aggregated as factors for some partitions are not yet computed.")
+            return
+
+        start_time = time.time()
+        aggregated_factors: FACTOR_TYPE = {}
+        for data_partition in range(data_partition_size):
+            for module_partition in range(module_partition_size):
+                loaded_factors = load_fnc(
+                    output_dir=factors_output_dir,
+                    partition=(data_partition, module_partition),
+                )
+                for factor_name, factors in loaded_factors.items():
+                    if factor_name not in aggregated_factors:
+                        aggregated_factors[factor_name]: Dict[str, torch.Tensor] = {}
+
+                    for module_name in factors:
+                        if module_name not in aggregated_factors[factor_name]:
+                            aggregated_factors[factor_name][module_name] = factors[module_name]
+                        else:
+                            aggregated_factors[factor_name][module_name].add_(factors[module_name])
+                del loaded_factors
+        save_fnc(
+            output_dir=factors_output_dir,
+            factors=aggregated_factors,
+        )
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        self.logger.info(f"Aggregated all factors in {elapsed_time:.2f} seconds.")
+
     def _find_executable_factors_batch_size(
         self,
         func: Callable,
         func_kwargs: Dict[str, Any],
-        factor_args: FactorArguments,
+        initial_per_device_batch_size_attempt: int,
         dataset: data.Dataset,
         dataloader_params: Dict[str, Any],
         total_data_examples: Optional[int] = None,
@@ -81,7 +132,7 @@ class FactorComputer(Computer):
             total_data_examples = len(dataset)
         start_batch_size = min(
             [
-                factor_args.initial_per_device_batch_size_attempt,
+                initial_per_device_batch_size_attempt,
                 total_data_examples,
             ]
         )
@@ -109,67 +160,12 @@ class FactorComputer(Computer):
         self.logger.info(f"Executable batch size determined: {per_device_batch_size}.")
         return per_device_batch_size
 
-    @torch.no_grad()
-    def _aggregate_factors(
-        self,
-        factors_name: str,
-        data_partition_size: int,
-        module_partition_size: int,
-        exists_fnc: Callable,
-        load_fnc: Callable,
-        save_fnc: Callable,
-    ) -> Optional[FACTOR_TYPE]:
-        """Aggregates all factors computed for all data and module partitions."""
-        factors_output_dir = self.factors_output_dir(factors_name=factors_name)
-        if not factors_output_dir.exists():
-            error_msg = (
-                f"Factors output directory {factors_output_dir} is not found when trying to "
-                f"aggregate partitioned factors."
-            )
-            self.logger.error(error_msg)
-            raise FileNotFoundError(error_msg)
-
-        all_required_partitions = [(i, j) for i in range(data_partition_size) for j in range(module_partition_size)]
-        all_partition_exists = all(
-            exists_fnc(output_dir=factors_output_dir, partition=partition) for partition in all_required_partitions
-        )
-        if not all_partition_exists:
-            self.logger.warning("Factors are not aggregated as factors for some partitions are not yet computed.")
-            return
-
-        start_time = get_time(state=self.state)
-        if self.state.is_main_process:
-            aggregated_factors: FACTOR_TYPE = {}
-            for data_partition in range(data_partition_size):
-                for module_partition in range(module_partition_size):
-                    loaded_factors = load_fnc(
-                        output_dir=factors_output_dir,
-                        partition=(data_partition, module_partition),
-                    )
-                    for factor_name, factors in loaded_factors.items():
-                        if factor_name not in aggregated_factors:
-                            aggregated_factors[factor_name]: Dict[str, torch.Tensor] = {}
-
-                        for module_name in factors:
-                            if module_name not in aggregated_factors[factor_name]:
-                                aggregated_factors[factor_name][module_name] = factors[module_name]
-                            else:
-                                aggregated_factors[factor_name][module_name].add_(factors[module_name])
-                    del loaded_factors
-            save_fnc(
-                output_dir=factors_output_dir,
-                factors=aggregated_factors,
-            )
-            self.state.wait_for_everyone()
-        end_time = get_time(state=self.state)
-        elapsed_time = end_time - start_time
-        self.logger.info(f"Aggregated all partitioned factors in {elapsed_time:.2f} seconds.")
-
     def fit_covariance_matrices(
         self,
         factors_name: str,
         dataset: data.Dataset,
         per_device_batch_size: Optional[int] = None,
+        initial_per_device_batch_size_attempt: int = 4096,
         dataloader_kwargs: Optional[DataLoaderKwargs] = None,
         factor_args: Optional[FactorArguments] = None,
         target_data_partitions: Optional[Union[Sequence[int], int]] = None,
@@ -186,6 +182,8 @@ class FactorComputer(Computer):
             per_device_batch_size (int, optional):
                 The per-device batch size used to fit the factors. If not specified, executable
                 batch size is automatically determined.
+            initial_per_device_batch_size_attempt (int, optional):
+                The initial attempted per-device batch size when the batch size is not provided.
             dataloader_kwargs (DataLoaderKwargs, optional):
                 Controls additional arguments for PyTorch's DataLoader.
             factor_args (FactorArguments, optional):
@@ -300,7 +298,7 @@ class FactorComputer(Computer):
                         func=fit_covariance_matrices_with_loader,
                         func_kwargs=kwargs,
                         dataset=dataset,
-                        factor_args=factor_args,
+                        initial_per_device_batch_size_attempt=initial_per_device_batch_size_attempt,
                         dataloader_params=dataloader_params,
                         total_data_examples=max_partition_examples,
                     )
@@ -346,8 +344,10 @@ class FactorComputer(Computer):
         elapsed_time = all_end_time - all_start_time
         if not no_partition:
             self.logger.info(f"Fitted all partitioned covariance matrices in {elapsed_time:.2f} seconds.")
-            self.aggregate_covariance_matrices(factors_name=factors_name)
-            self.logger.info(f"Saved aggregated covariance matrices at `{factors_output_dir}`.")
+            if self.state.is_main_process:
+                self.aggregate_covariance_matrices(factors_name=factors_name)
+                self.logger.info(f"Saved aggregated covariance matrices at `{factors_output_dir}`.")
+            self.state.wait_for_everyone()
         self._log_profile_summary()
 
     @torch.no_grad()
@@ -362,7 +362,15 @@ class FactorComputer(Computer):
             factors_name (str):
                 The unique identifier for the factor, used to organize and retrieve the results.
         """
-        factor_args, _ = self._load_and_configure_factor_args(factors_name=factors_name)
+        factor_args = self.load_factor_args(factors_name=factors_name)
+        if factor_args is None:
+            error_msg = (
+                f"Arguments for factors with name `{factors_name}` was not found when trying to "
+                f"aggregated covariance matrices."
+            )
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
         with self.profiler.profile("Aggregate Covariance"):
             self._aggregate_factors(
                 factors_name=factors_name,
@@ -432,13 +440,14 @@ class FactorComputer(Computer):
             # Save the loaded covariances to the current factor output directory.
             with self.profiler.profile("Save Covariance"):
                 save_covariance_matrices(output_dir=factors_output_dir, factors=covariance_factors)
-            loaded_factor_args, _ = self._load_and_configure_factor_args(factors_name=load_from_factors_name)
+            loaded_factor_args = self.load_factor_args(factors_name=load_from_factors_name)
             self._save_arguments(
                 arguments_name=FACTOR_ARGUMENTS_NAME + "_loaded_covariance",
                 arguments=loaded_factor_args,
                 output_dir=factors_output_dir,
                 overwrite_output_dir=True,
             )
+        self.state.wait_for_everyone()
 
         eigen_factors = None
         if self.state.is_main_process:
@@ -468,6 +477,7 @@ class FactorComputer(Computer):
         factors_name: str,
         dataset: data.Dataset,
         per_device_batch_size: Optional[int] = None,
+        initial_per_device_batch_size_attempt: int = 4096,
         dataloader_kwargs: Optional[DataLoaderKwargs] = None,
         factor_args: Optional[FactorArguments] = None,
         target_data_partitions: Optional[Union[Sequence[int], int]] = None,
@@ -485,6 +495,8 @@ class FactorComputer(Computer):
             per_device_batch_size (int, optional):
                 The per-device batch size used to fit the factors. If not specified, executable
                 batch size is automatically determined.
+            initial_per_device_batch_size_attempt (int, optional):
+                The initial attempted per-device batch size when the batch size is not provided.
             dataloader_kwargs (DataLoaderKwargs, optional):
                 Controls additional arguments for PyTorch's DataLoader.
             factor_args (FactorArguments, optional):
@@ -554,7 +566,7 @@ class FactorComputer(Computer):
             if load_from_factors_name is not None and self.state.is_main_process:
                 with self.profiler.profile("Save Eigendecomposition"):
                     save_eigendecomposition(output_dir=factors_output_dir, factors=eigen_factors)
-                loaded_factor_args, _ = self._load_and_configure_factor_args(factors_name=load_from_factors_name)
+                loaded_factor_args = self.load_factor_args(factors_name=load_from_factors_name)
                 self._save_arguments(
                     arguments_name=FACTOR_ARGUMENTS_NAME + "_loaded_eigendecomposition",
                     arguments=loaded_factor_args,
@@ -635,7 +647,7 @@ class FactorComputer(Computer):
                         func=fit_lambda_matrices_with_loader,
                         func_kwargs=kwargs,
                         dataset=dataset,
-                        factor_args=factor_args,
+                        initial_per_device_batch_size_attempt=initial_per_device_batch_size_attempt,
                         dataloader_params=dataloader_params,
                         total_data_examples=max_partition_examples,
                     )
@@ -682,8 +694,10 @@ class FactorComputer(Computer):
         elapsed_time = all_end_time - all_start_time
         if not no_partition:
             self.logger.info(f"Fitted all partitioned Lambda matrices in {elapsed_time:.2f} seconds.")
-            self.aggregate_lambda_matrices(factors_name=factors_name)
-            self.logger.info(f"Saved aggregated Lambda matrices at `{factors_output_dir}`.")
+            if self.state.is_main_process:
+                self.aggregate_lambda_matrices(factors_name=factors_name)
+                self.logger.info(f"Saved aggregated Lambda matrices at `{factors_output_dir}`.")
+            self.state.wait_for_everyone()
         self._log_profile_summary()
 
     @torch.no_grad()
@@ -698,7 +712,15 @@ class FactorComputer(Computer):
             factors_name (str):
                 The unique identifier for the factor, used to organize and retrieve the results.
         """
-        factor_args, _ = self._load_and_configure_factor_args(factors_name=factors_name)
+        factor_args = self.load_factor_args(factors_name=factors_name)
+        if factor_args is None:
+            error_msg = (
+                f"Arguments for factors with name `{factors_name}` was not found when trying "
+                f"to aggregated Lambda matrices."
+            )
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
         with self.profiler.profile("Aggregate Lambda"):
             self._aggregate_factors(
                 factors_name=factors_name,

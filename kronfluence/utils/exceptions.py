@@ -1,5 +1,5 @@
 class FactorsNotFoundError(ValueError):
-    """Exception raised when preconditioning factors are not found."""
+    """Exception raised when influence factors are not found."""
 
 
 class TrackedModuleNotFoundError(ValueError):

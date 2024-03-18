@@ -26,7 +26,7 @@ class FactorStrategy(str, BaseEnum):
 
 
 class FactorConfig(metaclass=ABCMeta):
-    """Configuration for each available factor strategy."""
+    """Configuration for each supported factor strategy."""
 
     CONFIGS: Dict[FactorStrategy, Any] = {}
 
@@ -92,21 +92,27 @@ class FactorConfig(metaclass=ABCMeta):
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float],
+        damping: Optional[float] = None,
     ) -> torch.Tensor:
         """Preconditions the per-sample-gradient. The per-sample-gradient is a 3-dimensional
-        tensor with the shape `batch_size x input_dim x output_dim`.
+        tensor with the shape `batch_size x output_dim x input_dim`.
 
         Args:
             gradient (torch.Tensor):
                 The per-sample-gradient tensor.
-            storage (Dict[str, Any]):
+            storage (STORAGE_TYPE):
                 A dictionary containing various factors required to compute the preconditioned gradient.
-                See `TrackedModule` for details.
-            damping (float):
-                The damping factor when computing the preconditioned gradient.
+                See `.storage` in `TrackedModule` for details.
+            damping (float, optional):
+                The damping factor when computing the preconditioned gradient. If not provided, sets
+                the damping term with some heuristic.
+
+        Returns:
+            torch.Tensor:
+                The preconditioned per-sample-gradient tensor. The dimension should be the same as the original
+                per-sample-gradient.
         """
-        raise NotImplementedError("Subclasses must implement the `precondition_gradient` property.")
+        raise NotImplementedError("Subclasses must implement the `precondition_gradient` method.")
 
 
 class Identity(FactorConfig, factor_strategy=FactorStrategy.IDENTITY):
@@ -144,7 +150,7 @@ class Identity(FactorConfig, factor_strategy=FactorStrategy.IDENTITY):
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float],
+        damping: Optional[float] = None,
     ) -> torch.Tensor:
         del storage, damping
         return gradient
@@ -185,13 +191,14 @@ class Diagonal(FactorConfig, factor_strategy=FactorStrategy.DIAGONAL):
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float],
+        damping: Optional[float] = None,
     ) -> torch.Tensor:
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=gradient.dtype, device=gradient.device)
         num_lambda_processed = storage[NUM_LAMBDA_PROCESSED].to(device=gradient.device)
+        lambda_matrix = lambda_matrix / num_lambda_processed
         if damping is None:
             damping = 0.1 * torch.mean(lambda_matrix)
-        return num_lambda_processed * gradient / (lambda_matrix + damping)
+        return gradient / (lambda_matrix + damping)
 
 
 class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
@@ -233,7 +240,7 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float],
+        damping: Optional[float] = None,
     ) -> torch.Tensor:
         activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
         gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
@@ -289,13 +296,13 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float],
+        damping: Optional[float] = None,
     ) -> torch.Tensor:
         activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
         gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=gradient.dtype, device=gradient.device)
         num_lambda_processed = storage[NUM_LAMBDA_PROCESSED].to(device=gradient.device)
-
+        lambda_matrix = lambda_matrix / num_lambda_processed
         gradient = torch.matmul(gradient_eigenvectors.t(), torch.matmul(gradient, activation_eigenvectors))
 
         if damping is None:
@@ -303,5 +310,4 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
 
         gradient.div_(lambda_matrix + damping)
         gradient = torch.matmul(gradient_eigenvectors, torch.matmul(gradient, activation_eigenvectors.t()))
-        gradient.mul_(num_lambda_processed)
         return gradient
