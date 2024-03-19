@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
-from kronfluence.module.constants import (
+from kronfluence.utils.constants import (
     LAMBDA_MATRIX_NAME,
     PRECONDITIONED_GRADIENT_NAME,
 )

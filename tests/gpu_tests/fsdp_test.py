@@ -15,7 +15,7 @@ from torch.utils import data
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
-from kronfluence.module.constants import (
+from kronfluence.utils.constants import (
     ALL_MODULE_NAME,
     COVARIANCE_FACTOR_NAMES,
     LAMBDA_FACTOR_NAMES,

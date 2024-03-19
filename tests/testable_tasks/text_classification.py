@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 import torch
 import torch.nn.functional as F
 from datasets import load_dataset
-from task import Task
+from kronfluence.task import Task
 from torch import nn
 from torch.utils import data
 from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer

@@ -8,7 +8,7 @@ from torch import nn
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
-from kronfluence.module.constants import ALL_MODULE_NAME
+from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import prepare_test
 
