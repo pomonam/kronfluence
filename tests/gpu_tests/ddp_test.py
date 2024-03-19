@@ -92,38 +92,38 @@ class DDPTest(unittest.TestCase):
                     rtol=1e-3,
                 )
 
-    # def test_lambda_matrices(self):
-    #     lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
-    #     factor_args = FactorArguments(
-    #         use_empirical_fisher=True,
-    #         activation_covariance_dtype=torch.float64,
-    #         gradient_covariance_dtype=torch.float64,
-    #         lambda_dtype=torch.float64,
-    #     )
-    #     self.analyzer.fit_lambda_matrices(
-    #         factors_name=NEW_FACTOR_NAME,
-    #         dataset=self.train_dataset,
-    #         factor_args=factor_args,
-    #         per_device_batch_size=512,
-    #         overwrite_output_dir=True,
-    #         load_from_factors_name=OLD_FACTOR_NAME,
-    #     )
-    #     new_lambda_factors = self.analyzer.load_lambda_matrices(factors_name=NEW_FACTOR_NAME)
-    #
-    #     for name in LAMBDA_FACTOR_NAMES:
-    #         if LOCAL_RANK == 0:
-    #             for module_name in lambda_factors[name]:
-    #                 print(f"Name: {name, module_name}")
-    #                 print(f"Previous factor: {lambda_factors[name][module_name]}")
-    #                 print(f"New factor: {new_lambda_factors[name][module_name]}")
-    #         if LOCAL_RANK == 0:
-    #             assert check_tensor_dict_equivalence(
-    #                 lambda_factors[name],
-    #                 new_lambda_factors[name],
-    #                 atol=1e-3,
-    #                 rtol=1e-1,
-    #             )
-    #
+    def test_lambda_matrices(self):
+        lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
+        factor_args = FactorArguments(
+            use_empirical_fisher=True,
+            activation_covariance_dtype=torch.float64,
+            gradient_covariance_dtype=torch.float64,
+            lambda_dtype=torch.float64,
+        )
+        self.analyzer.fit_lambda_matrices(
+            factors_name=NEW_FACTOR_NAME,
+            dataset=self.train_dataset,
+            factor_args=factor_args,
+            per_device_batch_size=512,
+            overwrite_output_dir=True,
+            load_from_factors_name=OLD_FACTOR_NAME,
+        )
+        new_lambda_factors = self.analyzer.load_lambda_matrices(factors_name=NEW_FACTOR_NAME)
+
+        for name in LAMBDA_FACTOR_NAMES:
+            if LOCAL_RANK == 0:
+                for module_name in lambda_factors[name]:
+                    print(f"Name: {name, module_name}")
+                    print(f"Previous factor: {lambda_factors[name][module_name]}")
+                    print(f"New factor: {new_lambda_factors[name][module_name]}")
+            if LOCAL_RANK == 0:
+                assert check_tensor_dict_equivalence(
+                    lambda_factors[name],
+                    new_lambda_factors[name],
+                    atol=1e-3,
+                    rtol=1e-1,
+                )
+    
     # def test_pairwise_scores(self) -> None:
     #     pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
     #

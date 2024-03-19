@@ -536,8 +536,9 @@ class TrackedModule(nn.Module):
         if dist.is_initialized() and torch.cuda.is_available() and self._lambda_matrix_available():
             # Note that only the main process holds the aggregated Lambda matrix.
             for lambda_factor_name in LAMBDA_FACTOR_NAMES:
+                self._storage[lambda_factor_name] = self._storage[lambda_factor_name].cuda()
                 torch.distributed.reduce(
-                    tensor=self._storage[lambda_factor_name].cuda(),
+                    tensor=self._storage[lambda_factor_name],
                     op=dist.ReduceOp.SUM,
                     dst=0,
                 )
