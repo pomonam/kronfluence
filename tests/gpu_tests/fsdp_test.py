@@ -55,7 +55,8 @@ class FSDPTest(unittest.TestCase):
         cls.model = cls.model.to(device=device)
         cls.model = DistributedDataParallel(cls.model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
         my_auto_wrap_policy = functools.partial(size_based_auto_wrap_policy, min_num_params=100)
-        cls.model = FSDP(cls.model, use_orig_params=True, auto_wrap_policy=my_auto_wrap_policy)
+        cls.model = FSDP(cls.model, use_orig_params=False, auto_wrap_policy=my_auto_wrap_policy)
+        print(cls.model)
 
         cls.analyzer = Analyzer(
             analysis_name="gpu_test",
