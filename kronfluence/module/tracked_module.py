@@ -353,8 +353,9 @@ class TrackedModule(nn.Module):
         if dist.is_initialized() and torch.cuda.is_available() and self._covariance_matrices_available():
             # Note that only the main process holds the aggregated covariance matrix.
             for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
+                self._storage[covariance_factor_name] = self._storage[covariance_factor_name].cuda()
                 dist.reduce(
-                    tensor=self._storage[covariance_factor_name].cuda(),
+                    tensor=self._storage[covariance_factor_name],
                     op=dist.ReduceOp.SUM,
                     dst=0,
                 )
