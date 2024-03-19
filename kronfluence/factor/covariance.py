@@ -10,11 +10,6 @@ from torch.utils import data
 from tqdm import tqdm
 
 from kronfluence.arguments import FactorArguments
-from kronfluence.module.constants import (
-    COVARIANCE_FACTOR_NAMES,
-    FACTOR_TYPE,
-    PARTITION_TYPE,
-)
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     load_factors,
@@ -25,6 +20,11 @@ from kronfluence.module.utils import (
     update_factor_args,
 )
 from kronfluence.task import Task
+from kronfluence.utils.constants import (
+    COVARIANCE_FACTOR_NAMES,
+    FACTOR_TYPE,
+    PARTITION_TYPE,
+)
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
 from kronfluence.utils.state import State, no_sync
 

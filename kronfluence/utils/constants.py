@@ -1,4 +1,4 @@
-"""A collection of constants for defining `TrackedModule` storage."""
+"""A collection of constants."""
 
 from typing import Dict, Tuple
 

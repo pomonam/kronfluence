@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 import torch
 from accelerate.utils.dataclasses import BaseEnum
 
-from kronfluence.module.constants import (
+from kronfluence.utils.constants import (
     ACTIVATION_EIGENVALUES_NAME,
     ACTIVATION_EIGENVECTORS_NAME,
     GRADIENT_EIGENVALUES_NAME,

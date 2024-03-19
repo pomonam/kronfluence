@@ -2,6 +2,12 @@ import os
 
 from setuptools import find_packages, setup
 
+version = {}
+with open("kronfluence/version.py") as fp:
+    exec(fp.read(), version)
+
+__version__ = version["__version__"]
+
 src_dir = os.path.abspath(os.path.dirname(__file__))
 
 with open("README.md", "r", encoding="utf8") as fh:
@@ -20,7 +26,7 @@ python_requires = ">=3.9.0"
 if __name__ == "__main__":
     setup(
         name="kronfluence",
-        version="0.0.1",
+        version=__version__,
         description="Influence Functions with (Eigenvalue-corrected) Kronecker-factored Approximate Curvature",
         long_description=long_description,
         long_description_content_type="text/markdown",
@@ -29,8 +35,7 @@ if __name__ == "__main__":
         extras_require={
             "dev": dev_required,
         },
-        package_dir={"": "kronfluence"},
-        packages=find_packages("kronfluence"),
+        packages=find_packages(),
         keywords=[
             "PyTorch",
             "Training Data Attribution",

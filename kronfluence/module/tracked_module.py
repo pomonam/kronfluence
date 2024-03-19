@@ -10,7 +10,7 @@ from torch.utils.hooks import RemovableHandle
 
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.factor.config import FactorConfig
-from kronfluence.module.constants import (
+from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     ACTIVATION_EIGENVECTORS_NAME,
     COVARIANCE_FACTOR_NAMES,

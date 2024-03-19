@@ -10,13 +10,6 @@ from tqdm import tqdm
 
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.module import TrackedModule
-from kronfluence.module.constants import (
-    ALL_MODULE_NAME,
-    FACTOR_TYPE,
-    PAIRWISE_SCORE_MATRIX_NAME,
-    PARTITION_TYPE,
-    SCORE_TYPE,
-)
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     get_tracked_module_names,
@@ -29,6 +22,13 @@ from kronfluence.module.utils import (
     update_score_args,
 )
 from kronfluence.task import Task
+from kronfluence.utils.constants import (
+    ALL_MODULE_NAME,
+    FACTOR_TYPE,
+    PAIRWISE_SCORE_MATRIX_NAME,
+    PARTITION_TYPE,
+    SCORE_TYPE,
+)
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
 from kronfluence.utils.state import State, no_sync, release_memory
 

@@ -25,9 +25,9 @@ from kronfluence.factor.eigen import (
     save_eigendecomposition,
     save_lambda_matrices,
 )
-from kronfluence.module.constants import FACTOR_TYPE
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import set_mode
+from kronfluence.utils.constants import FACTOR_TYPE
 from kronfluence.utils.dataset import DataLoaderKwargs, find_executable_batch_size
 from kronfluence.utils.exceptions import FactorsNotFoundError
 from kronfluence.utils.logger import get_time

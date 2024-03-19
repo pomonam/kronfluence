@@ -8,7 +8,6 @@ from torch.utils import data
 
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.computer.computer import Computer
-from kronfluence.module.constants import FACTOR_TYPE, SCORE_TYPE
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import set_mode
 from kronfluence.score.pairwise import (
@@ -23,6 +22,7 @@ from kronfluence.score.self import (
     save_self_scores,
     self_scores_exist,
 )
+from kronfluence.utils.constants import FACTOR_TYPE, SCORE_TYPE
 from kronfluence.utils.dataset import DataLoaderKwargs, find_executable_batch_size
 from kronfluence.utils.exceptions import FactorsNotFoundError
 from kronfluence.utils.logger import get_time

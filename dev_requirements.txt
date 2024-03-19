@@ -1,6 +1,14 @@
+torch
+torchvision
+accelerate
+einops
+einconv
+opt_einsum
+safetensors
+tqdm
+datasets
+transformers
 isort==5.13.2
 pylint==3.0.3
 pytest==8.0.0
 ruff==0.3.0
-datasets>=2.17.0
-transformers>=4.37.2

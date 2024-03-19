@@ -22,11 +22,11 @@ from kronfluence.factor.eigen import (
     load_eigendecomposition,
     load_lambda_matrices,
 )
-from kronfluence.module.constants import FACTOR_TYPE, SCORE_TYPE
 from kronfluence.module.utils import get_tracked_module_names, make_modules_partition
 from kronfluence.score.pairwise import load_pairwise_scores, pairwise_scores_exist
 from kronfluence.score.self import load_self_scores, self_scores_exist
 from kronfluence.task import Task
+from kronfluence.utils.constants import FACTOR_TYPE, SCORE_TYPE
 from kronfluence.utils.dataset import (
     DataLoaderKwargs,
     DistributedEvalSampler,
