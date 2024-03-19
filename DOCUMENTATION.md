@@ -27,8 +27,8 @@ See [UCI Regression example](https://github.com/pomonam/kronfluence/blob/main/ex
 interactive tutorial.
 
 **Prepare Your Model and Dataset.** 
-Before computing influence scores, you need to prepare the trained model and dataset. Note that you can use any platforms to 
-train the model (e.g., [Pytorch Lightning](https://lightning.ai/docs/pytorch/stable/) and [HuggingFace Trainer](https://huggingface.co/docs/transformers/main_classes/trainer)).
+Before computing influence scores, you need to prepare the trained model and dataset. You can use any frameworks to 
+train the model (e.g., [Pytorch Lightning](https://lightning.ai/docs/pytorch/stable/) or [HuggingFace Trainer](https://huggingface.co/docs/transformers/main_classes/trainer)).
 ```python
 ...
 # Get the model with the trained parameters.
@@ -69,16 +69,16 @@ class YourTask(Task):
         # TODO: Complete this method.
 
     def tracked_modules(self) -> Optional[List[str]]:
-        # TODO: Complete this method.
+        # TODO: [Optional] Complete this method.
         return None  # Compute influence scores on all available modules.
 
     def get_attention_mask(self, batch: Any) -> Optional[Union[Dict[str, torch.Tensor], torch.Tensor]]:
-        # TODO: Complete this method.
+        # TODO: [Optional] Complete this method.
         return None  # No attention mask is used.
 ```
 
-**Install TrackedModule into Your Model.**
-Kronfluence wraps supported modules within the model with [`TrackedModule`](https://github.com/pomonam/kronfluence/blob/main/kronfluence/module/tracked_module.py).
+**Prepare Your Model for Influence Computations.**
+Kronfluence wraps all supported modules within the model with [`TrackedModule`](https://github.com/pomonam/kronfluence/blob/main/kronfluence/module/tracked_module.py).
 This wrapper will be used for computing the factors and influence scores. Once your model is ready and the task is defined,
 prepare your model with:
 
@@ -93,7 +93,8 @@ model = prepare_model(model=model, task=task)
 If you have specified specific module names in `Task.tracked_modules`, `TrackedModule` will only be installed for these modules.
 
 **\[Optional\] Create a DDP and FSDP Module.** 
-After calling `prepare_model`, you can create DDP or FSDP module or even use `torch.compile`.
+After calling `prepare_model`, you can create [DistributedDataParallel (DDP)](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html) or 
+[FullyShardedDataParallel (FSDP)](https://pytorch.org/docs/stable/fsdp.html) module or even use `torch.compile`.
 
 **Set up the Analyzer and Fit Factors.** 
 Initialize the `Analyzer` and execute `fit_all_factors` to compute all factors that aim to approximate the Hessian 
@@ -114,8 +115,8 @@ analyzer.fit_all_factors(factors_name="initial_factor", dataset=train_dataset)
 ```
 
 **Compute Influence Scores.** 
-Once the factors have been computed, you can compute either pairwise or self-influence scores. When computing the scores,
-you can specify the factor name you want to use. 
+Once the factors have been computed, you can compute pairwise and self-influence scores. When computing the scores,
+you can specify the factor name you would like to use. 
 ```python
 ...
 scores = analyzer.compute_pairwise_scores(
@@ -134,8 +135,8 @@ You can organize all factors and scores for the specific model with `factor_name
 
 **What should I do if my model does not have any nn.Linear or nn.Conv2d modules?**
 Currently, the implementation does not support influence computations for modules other than `nn.Linear` or `nn.Conv2d`.
-Try rewriting the model so that they use supported modules (as done for the `conv1d` module in [GPT-2](https://github.com/pomonam/kronfluence/tree/documentation/examples/wikitext)).
-Alternatively, you can create a subclass of `TrackedModule` to compute influence scores for your custom modules.
+Try rewriting the model so that it uses supported modules (as done for the `conv1d` module in [GPT-2](https://github.com/pomonam/kronfluence/tree/documentation/examples/wikitext)).
+Alternatively, you can create a subclass of `TrackedModule` to compute influence scores for your custom module.
 If there are specific modules you would like to see supported, please submit an issue.
 
 **How should I write task.tracked_modules?**
@@ -148,7 +149,7 @@ inspect `model.named_modules()` to determine what modules to use. You can specif
 > `task.tracked_modules` to avoid influence computations embedding matrices.
 
 **How should I implement Task.compute_train_loss?**
-Implement the loss function used to train the model. However, the function should return 
+Implement the loss function used to train the model. Note that the function should return 
 the summed loss (over batches and tokens) and should not include regularizations. 
 
 **How should I implement Task.compute_measurement?**
@@ -156,8 +157,8 @@ It depends on the analysis you would like to perform. Influence functions approx
 a data point on the query's measurable quantity](https://arxiv.org/abs/2209.05364). You can use the loss, [margin](https://arxiv.org/abs/2303.14186) (for classification), 
 or [conditional log-likelihood](https://arxiv.org/abs/2308.03296) (for language modeling). 
 
-**I encounter TrackedModuleNotFoundError while using DDP or FSDP.**
-Ensure to call `prepare_model` before wrapping your model with DDP or FSDP. Calling `prepare_model` on DDP modules can
+**I encounter TrackedModuleNotFoundError when using DDP or FSDP.**
+Make sure to call `prepare_model` before wrapping your model with DDP or FSDP. Calling `prepare_model` on DDP modules can
 cause `TrackedModuleNotFoundError`.
 
 **My model uses supported modules, but influence scores are not computed.**
@@ -181,7 +182,6 @@ Please feel free to contact us by [filing an issue](https://github.com/pomonam/k
 
 ## Configuring Factors with FactorArguments
 
-The `FactorArguments` allows configuring settings for computing influence factors.
 
 ```python
 import torch
@@ -220,8 +220,6 @@ You can change:
 - `strategy`:  Selects the preconditioning strategy (`identity`, `diagonal`, `KFAC`, or `EKFAC`).
 - `use_empirical_fisher`: Determines whether to approximate the [empirical Fisher](https://arxiv.org/abs/1905.12558) (using actual labels from batch) 
 instead of the true Fisher (using sampled labels from model's predictions). It is recommended to be `False`.
-However, `use_empirical_fisher = True` does not require implementing the case `sample = True`
-in `Task.compute_train_loss` and can be used as an approximation if you are unsure how to implement when `sample = True`.
 - `immediate_gradient_removal`: Specifies whether to instantly set `param.grad = None` within module hooks. Generally,
 recommended to be `False`, as it requires installing additional hooks. This should not affect the fitted factors, but
 can potentially reduce peak memory.
@@ -257,7 +255,7 @@ or `torch.float16`.
 - `gradient_covariance_dtype`: `dtype` for computing activation covariance matrices. You can also use `torch.bfloat16`
 or `torch.float16`.
 
-**Dealing with OOMs.** Here are some steps to fix Out of memory (OOM) errors.
+**Dealing with OOMs.** Here are some steps to fix Out of Memory (OOM) errors.
 1. Try reducing the `per_device_batch_size` when fitting covariance matrices.
 2. Try using lower precision for `activation_covariance_dtype` and `gradient_covariance_dtype`.
 3. Try setting `immediate_gradient_removal=True`.
@@ -299,10 +297,10 @@ You can set `cached_activation_cpu_offload=True` to cache these activations in C
 - `lambda_iterative_aggregate`: Whether to compute the Lambda matrices with for-loop instead of batched matrix multiplications.
 This is helpful for reducing peak memory, as it avoids holding multiple copies of tensors with the same shape as the per-sample-gradient.
 - `lambda_dtype`: `dtype` for computing Lambda matrices. You can also use `torch.bfloat16`
-or `torch.float16`.
+or `torch.float16`, but `torch.float32` is generally recommended.
 
 
-**Dealing with OOMs.** Here are some steps to fix Out of memory (OOM) errors.
+**Dealing with OOMs.** Here are some steps to fix Out of Memory (OOM) errors.
 1. Try reducing the `per_device_batch_size` when fitting Lambda matrices.
 2. Try setting `lambda_iterative_aggregate=True` or `cached_activation_cpu_offload=True`.
 3. Try using lower precision for `lambda_dtype`. 
@@ -322,9 +320,7 @@ matrices should be smaller than that used for fitting covariance matrices.
 
 ---
 
-### Score Configuration
-
-The `ScoreArguments` allows configuring settings for computing influence scores.
+## Configuring Scores with ScoreArguments
 
 ```python
 import torch
@@ -358,12 +354,11 @@ score_args = ScoreArguments(
 - `per_module_score`: Whether to return a per-module influence scores. Instead of summing over influences across
 all modules, this will keep track of intermediate module-wise scores. 
 
-- `query_gradient_rank`: The rank for the query batching. If `None`, no query batching will be used. The query batching
-is helpful in cases where the number of training examples are large to reduce multiple recomputations.
+- `query_gradient_rank`: The rank for the query batching. If `None`, no query batching will be used.
 - `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can use `torch.float32`,
 but `torch.float64` is recommended.
 
-- `cached_activation_cpu_offload`: Computing the per-sample-gradient requires saving the intermediate activation in memory.
+- `cached_activation_cpu_offload`: Whether to offload cached activations to CPU.
 - `score_dtype`: `dtype` for computing influence scores. You can use `torch.bfloat16` or `torch.float16`.
 - `per_sample_gradient_dtype`: `dtype` for computing per-sample-gradient. You can use `torch.bfloat16` or `torch.float16`.
 - `precondition_dtype`: `dtype` for performing preconditioning. You can use `torch.bfloat16` or `torch.float16`,
@@ -384,27 +379,30 @@ To compute self-influence scores, you can run:
 # Computing pairwise influence scores.
 analyzer.compute_self_scores(scores_name="self", factors_name="ekfac", score_args=score_args)
 # Loading pairwise influence scores.
-scores = analyzer.load_pairwise_scores(scores_name="self")
+scores = analyzer.load_self_scores(scores_name="self")
 ```
 
-**Dealing with OOMs** Here are some steps to fix Out of memory (OOM) errors.
+**Dealing with OOMs** Here are some steps to fix Out of Memory (OOM) errors.
 1. Try reducing the `per_device_query_batch_size` or `per_device_train_batch_size`.
 2. Try setting `cached_activation_cpu_offload=True`.
 3. Try using lower precision for `per_sample_gradient_dtype` and `score_dtype`. 
 4. Try setting `immediate_gradient_removal=True`.
-6. Try setting `query_gradient_rank > 1`. The recommended values are `32`, `64`, `128`, and `256`.
-5. Try setting `module_partition_size > 1`. 
+5. Try setting `query_gradient_rank > 1`. The recommended values are `16`, `32`, `64`, `128`, and `256`.
+6Try setting `module_partition_size > 1`. 
 
 
 ### FAQs
 
-**How should I select the batch size?**
-You can use the largest possible batch size that does not result in OOM.
-
-**Influence scores are very large in magnitude**
+**Influence scores are very large in magnitude.**
 Ideally, influence scores need to be divided by the total number of training data points. However, the code does
-not normalize the scores.
+not normalize the scores. If you would like, you can divide the scores with the total number of data points used to
+train the model.
 
 ## References
 
-1. 
+1. [Studying Large Language Model Generalization with Influence Functions](https://arxiv.org/abs/2308.03296). Roger Grosse, Juhan Bae, Cem Anil, et al. Tech Report, 2023.
+2. [If Influence Functions are the Answer, Then What is the Question?](https://arxiv.org/abs/2209.05364). Juhan Bae, Nathan Ng, Alston Lo, Marzyeh Ghassemi, Roger Grosse. NeurIPS, 2022.
+3. [TRAK: Attributing Model Behavior at Scale](https://arxiv.org/abs/2303.14186). Sung Min Park, Kristian Georgiev, Andrew Ilyas, Guillaume Leclerc, Aleksander Madry. ICML, 2023.
+4. [Understanding Black-box Predictions via Influence Functions](https://arxiv.org/abs/1703.04730). Pang Wei Koh, Percy Liang. ICML, 2017.
+5. [Optimizing Neural Networks with Kronecker-factored Approximate Curvature](https://arxiv.org/abs/1503.05671). James Martens, Roger Grosse. Tech Report, 2015.
+5. [Fast Approximate Natural Gradient Descent in a Kronecker-factored Eigenbasis](https://arxiv.org/abs/1806.03884). Thomas George, César Laurent, Xavier Bouthillier, Nicolas Ballas, Pascal Vincent. NeurIPS, 2018.

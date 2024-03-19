@@ -51,7 +51,7 @@ pip install -e .
 ## Getting Started
 
 Kronfluence supports influence computations on `nn.Linear` and `nn.Conv2d` modules. See the [**Technical Documentation**](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) 
-page for a comprehensive guide on configuring the experiment.
+page for a comprehensive guide,
 
 ### Examples
 
