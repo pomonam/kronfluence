@@ -7,7 +7,7 @@ import unittest
 
 import torch
 import torch.distributed as dist
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP, CPUOffload
 from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils import data
@@ -55,8 +55,9 @@ class FSDPTest(unittest.TestCase):
         cls.model = cls.model.to(device=device)
         cls.model = DistributedDataParallel(cls.model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
         my_auto_wrap_policy = functools.partial(size_based_auto_wrap_policy, min_num_params=100)
-        cls.model = FSDP(cls.model, use_orig_params=False, auto_wrap_policy=my_auto_wrap_policy)
-        print(cls.model)
+        cls.model = FSDP(cls.model, use_orig_params=False, auto_wrap_policy=my_auto_wrap_policy, cpu_offload=CPUOffload(offload_params=True))
+        if LOCAL_RANK == 0:
+            print(cls.model)
 
         cls.analyzer = Analyzer(
             analysis_name="gpu_test",
