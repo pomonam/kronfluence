@@ -387,9 +387,9 @@ scores = analyzer.load_self_scores(scores_name="self")
 2. Try setting `cached_activation_cpu_offload=True`.
 3. Try using lower precision for `per_sample_gradient_dtype` and `score_dtype`. 
 4. Try setting `immediate_gradient_removal=True`.
-5. Try setting `query_gradient_rank > 1`. The recommended values are `16`, `32`, `64`, `128`, and `256`.
-6Try setting `module_partition_size > 1`. 
-
+5. Try setting `query_gradient_rank > 1`. The recommended values are `16`, `32`, `64`, `128`, and `256`. Note that query
+batching is only supported for computing pairwise influence scores.
+6. Try setting `module_partition_size > 1`.
 
 ### FAQs
 

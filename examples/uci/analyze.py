@@ -6,7 +6,7 @@ from typing import Tuple
 
 import torch
 import torch.nn.functional as F
-from arguments import FactorArguments, ScoreArguments
+from arguments import FactorArguments
 from torch import nn
 
 from examples.uci.pipeline import construct_regression_mlp, get_regression_dataset
@@ -94,8 +94,6 @@ def main():
         raise ValueError(f"No checkpoint found at {checkpoint_path}.")
     model.load_state_dict(torch.load(checkpoint_path))
 
-    print(Analyzer.get_module_summary(model))
-
     task = RegressionTask()
     model = prepare_model(model, task)
 
@@ -103,10 +101,10 @@ def main():
         analysis_name=args.dataset_name,
         model=model,
         task=task,
-        profile=True,
         cpu=True,
     )
-    factor_args = FactorArguments(strategy=args.factor_strategy, lambda_iterative_aggregate=True)
+
+    factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
@@ -114,29 +112,16 @@ def main():
         factor_args=factor_args,
         overwrite_output_dir=True,
     )
-
-    score_args = ScoreArguments(query_gradient_rank=16)
     analyzer.compute_pairwise_scores(
         scores_name="pairwise",
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
         train_dataset=train_dataset,
         per_device_query_batch_size=len(eval_dataset),
-        score_args=score_args,
-        # per_device_train_batch_size=8,
         overwrite_output_dir=True,
     )
-
-    analyzer.compute_self_scores(
-        scores_name="self",
-        factors_name=args.factor_strategy,
-        # query_dataset=eval_dataset,
-        train_dataset=train_dataset,
-        # per_device_query_batch_size=len(eval_dataset),
-        # per_device_train_batch_size=8,
-        overwrite_output_dir=True,
-    )
-    # # logging.info(f"Scores: {scores}")
+    scores = analyzer.load_pairwise_scores("pairwise")
+    print(scores)
 
 
 if __name__ == "__main__":
