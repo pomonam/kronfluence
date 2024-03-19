@@ -158,7 +158,6 @@ class DDPTest(unittest.TestCase):
                 rtol=1e-3,
             )
 
-
     def test_self_scores(self) -> None:
         self_scores = self.analyzer.load_self_scores(scores_name=OLD_SCORE_NAME)
 
