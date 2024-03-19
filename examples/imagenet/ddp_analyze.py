@@ -6,14 +6,16 @@ from typing import Tuple
 import torch
 import torch.distributed as dist
 import torch.nn.functional as F
-from analyzer import Analyzer, prepare_model
-from arguments import FactorArguments
-from task import Task
 from torch import nn
 from torch.nn.parallel.distributed import DistributedDataParallel
 
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
+from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.arguments import FactorArguments
+from kronfluence.task import Task
+from kronfluence.utils.dataset import DataLoaderKwargs
 
+torch.backends.cudnn.benchmark = True
 BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
 WORLD_RANK = int(os.environ["RANK"])
@@ -21,7 +23,7 @@ WORLD_SIZE = int(os.environ["WORLD_SIZE"])
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on ImageNet datasets.")
+    parser = argparse.ArgumentParser(description="Influence analysis on ImageNet dataset.")
 
     parser.add_argument(
         "--dataset_dir",
@@ -37,23 +39,28 @@ def parse_args():
         help="Strategy to compute preconditioning factors.",
     )
     parser.add_argument(
-        "--batch_size",
+        "--covariance_batch_size",
         type=int,
-        default=1024,
-        help="Batch size for compute factors and scores.",
+        default=512,
+        help="Batch size for computing covariance matrices.",
     )
     parser.add_argument(
-        "--analysis_name",
-        type=str,
-        default="imagenet",
-        help="Name of the influence analysis.",
+        "--lambda_batch_size",
+        type=int,
+        default=256,
+        help="Batch size for computing Lambda matrices.",
     )
-
     parser.add_argument(
-        "--checkpoint_dir",
-        type=str,
-        default="./checkpoints",
-        help="A path to store the final checkpoint.",
+        "--query_batch_size",
+        type=int,
+        default=64,
+        help="Batch size for computing query gradient.",
+    )
+    parser.add_argument(
+        "--train_batch_size",
+        type=int,
+        default=128,
+        help="Batch size for computing training gradient.",
     )
 
     args = parser.parse_args()
@@ -61,40 +68,39 @@ def parse_args():
 
 
 class ClassificationTask(Task):
-    def compute_model_output(self, batch: BATCH_DTYPE, model: nn.Module) -> torch.Tensor:
-        inputs, _ = batch
-        return model(inputs)
-
     def compute_train_loss(
         self,
         batch: BATCH_DTYPE,
-        outputs: torch.Tensor,
+        model: nn.Module,
         sample: bool = False,
     ) -> torch.Tensor:
-        _, labels = batch
+        inputs, labels = batch
+        logits = model(inputs)
 
         if not sample:
-            return F.cross_entropy(outputs, labels, reduction="sum")
+            return F.cross_entropy(logits, labels, reduction="sum")
         with torch.no_grad():
-            probs = torch.nn.functional.softmax(outputs, dim=-1)
+            probs = torch.nn.functional.softmax(logits, dim=-1)
             sampled_labels = torch.multinomial(
                 probs,
                 num_samples=1,
             ).flatten()
-        return F.cross_entropy(outputs, sampled_labels.detach(), reduction="sum")
+        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
 
     def compute_measurement(
         self,
         batch: BATCH_DTYPE,
-        outputs: torch.Tensor,
+        model: nn.Module,
     ) -> torch.Tensor:
-        _, labels = batch
+        # Copied from https://github.com/MadryLab/trak/blob/main/trak/modelout_functions.py.
+        inputs, labels = batch
+        logits = model(inputs)
 
-        bindex = torch.arange(outputs.shape[0]).to(device=outputs.device, non_blocking=False)
-        logits_correct = outputs[bindex, labels]
+        bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
+        logits_correct = logits[bindex, labels]
 
-        cloned_logits = outputs.clone()
-        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=outputs.device, dtype=outputs.dtype)
+        cloned_logits = logits.clone()
+        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
@@ -102,62 +108,69 @@ class ClassificationTask(Task):
 
 def main():
     args = parse_args()
-
     logging.basicConfig(level=logging.INFO)
 
-    train_dataset = get_imagenet_dataset(split="eval_train", data_path=args.dataset_dir)
-    # eval_dataset = get_imagenet_dataset(split="valid", data_path=args.dataset_dir)
+    train_dataset = get_imagenet_dataset(split="eval_train", dataset_dir=args.dataset_dir)
+    eval_dataset = get_imagenet_dataset(split="valid", dataset_dir=args.dataset_dir)
 
     dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
     device = torch.device("cuda:{}".format(LOCAL_RANK))
     torch.cuda.set_device(LOCAL_RANK)
-    print("device")
-    print(LOCAL_RANK)
 
     model = construct_resnet50()
-
     task = ClassificationTask()
     model = prepare_model(model, task)
-
     model = model.to(device=device)
     model = DistributedDataParallel(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
 
     analyzer = Analyzer(
-        analysis_name=args.analysis_name,
+        analysis_name="ddp",
         model=model,
         task=task,
+        profile=True,
         disable_model_save=True,
+    )
+    dataloader_kwargs = DataLoaderKwargs(
+        num_workers=2,
+        pin_memory=True,
+        prefetch_factor=2,
     )
 
     factor_args = FactorArguments(
         strategy=args.factor_strategy,
-        covariance_data_partition_size=1,
-        covariance_module_partition_size=1,
     )
     analyzer.fit_covariance_matrices(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
         factor_args=factor_args,
-        per_device_batch_size=None,
-        overwrite_output_dir=True,
+        per_device_batch_size=args.covariance_batch_size,
+        dataloader_kwargs=dataloader_kwargs,
+        overwrite_output_dir=False,
     )
-    # analyzer.perform_eigendecomposition(
-    #     factor_name=args.factor_strategy,
-    #     factor_args=factor_args,
-    #     overwrite_output_dir=True,
-    # )
-    # analyzer.fit_lambda(train_dataset, per_device_batch_size=None)
-    #
-    # score_name = "full_pairwise"
-    # analyzer.compute_pairwise_scores(
-    #     score_name=score_name,
-    #     query_dataset=eval_dataset,
-    #     per_device_query_batch_size=len(eval_dataset),
-    #     train_dataset=train_dataset,
-    #     per_device_train_batch_size=len(train_dataset),
-    # )
-    # scores = analyzer.load_pairwise_scores(score_name=score_name)
-    # print(scores.shape)
+    analyzer.perform_eigendecomposition(
+        factors_name=args.factor_strategy,
+        factor_args=factor_args,
+        overwrite_output_dir=False,
+    )
+    analyzer.fit_lambda_matrices(
+        factors_name=args.factor_strategy,
+        dataset=train_dataset,
+        factor_args=factor_args,
+        per_device_batch_size=args.lambda_batch_size,
+        dataloader_kwargs=dataloader_kwargs,
+        overwrite_output_dir=False,
+    )
+    scores = analyzer.compute_pairwise_scores(
+        scores_name="pairwise",
+        factors_name=args.factor_strategy,
+        query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=args.train_batch_size,
+        per_device_query_batch_size=args.query_batch_size,
+        query_indices=list(range(1000)),
+        overwrite_output_dir=False,
+    )
+    logging.info(f"Scores: {scores}")
 
 
 if __name__ == "__main__":

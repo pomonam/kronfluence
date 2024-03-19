@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from typing import Tuple
 
 import pytest
@@ -100,6 +102,7 @@ def test_covariance_matrices_batch_size_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Covariance matrices should be identical regardless of the batch size used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -162,6 +165,7 @@ def test_covariance_matrices_partition_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Covariance matrices should be identical regardless of the partition used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -221,6 +225,8 @@ def test_covariance_matrices_attention_mask(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure the attention mask is correctly implemented by comparing with the results
+    # without any padding (and batch size of 1).
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -298,6 +304,7 @@ def test_covariance_matrices_automatic_batch_size(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure the automatic batch size search feature is working.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -360,6 +367,7 @@ def test_covariance_matrices_max_examples(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure the max covariance data selection is working.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,

@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 import logging
 import unittest
 
@@ -11,11 +13,7 @@ from kronfluence.module.constants import (
     COVARIANCE_FACTOR_NAMES,
     LAMBDA_FACTOR_NAMES,
 )
-from tests.gpu_tests.pipeline import (
-    ClassificationTask,
-    construct_mnist_mlp,
-    get_mnist_dataset,
-)
+from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
 from tests.utils import check_tensor_dict_equivalence
 
@@ -29,7 +27,7 @@ NEW_SCORE_NAME = "compile"
 class CompileTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.model = construct_mnist_mlp()
+        cls.model = construct_test_mlp()
         cls.model.load_state_dict(torch.load("model.pth"))
         cls.model = cls.model.double()
 
@@ -38,7 +36,7 @@ class CompileTest(unittest.TestCase):
         cls.eval_dataset = get_mnist_dataset(split="valid", data_path="data")
         cls.eval_dataset = data.Subset(cls.eval_dataset, indices=list(range(QUERY_INDICES)))
 
-        cls.task = ClassificationTask()
+        cls.task = GpuTestTask()
         cls.model = prepare_model(cls.model, cls.task)
         cls.model = cls.model.cuda()
         cls.model = torch.compile(cls.model)

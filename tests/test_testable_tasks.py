@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from torch.utils.data import DataLoader
 from transformers import default_data_collator
 

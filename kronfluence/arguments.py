@@ -7,22 +7,29 @@ import torch
 
 @dataclass
 class Arguments:
-    """Base class for specifying arguments for computing preconditioning factors and influence scores."""
+    """Base class for specifying arguments for computing factors and influence scores."""
 
     def to_dict(self) -> Dict[str, Any]:
         """Converts the arguments to a dictionary."""
         config = copy.deepcopy(self.__dict__)
-
         for key, value in config.items():
             if isinstance(value, torch.dtype):
                 config[key] = str(value)
         return config
 
+    def to_str_dict(self) -> Dict[str, str]:
+        """Converts the arguments to a dictionary, where all values are converted to strings."""
+        config = copy.deepcopy(self.__dict__)
+        for key, value in config.items():
+            config[key] = str(value)
+        return config
+
 
 @dataclass
 class FactorArguments(Arguments):
-    """Arguments for computing preconditioning factors."""
+    """Arguments for computing influence factors."""
 
+    # General configuration. #
     strategy: str = field(
         default="ekfac",
         metadata={"help": "Strategy for computing preconditioning factors."},
@@ -34,13 +41,19 @@ class FactorArguments(Arguments):
             "true Fisher (using sampled labels)."
         },
     )
-    initial_per_device_batch_size_attempt: int = field(
-        default=4096,
-        metadata={"help": "The initial attempted per-device batch size when the batch size is not provided."},
-    )
     immediate_gradient_removal: bool = field(
         default=False,
         metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
+    )
+    ignore_bias: bool = field(
+        default=False,
+        metadata={"help": "Whether to ignore factor computations on bias parameters. Defaults to False."},
+    )
+    distributed_sync_steps: int = field(
+        default=1_000,
+        metadata={
+            "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
+        },
     )
 
     # Configuration for fitting covariance matrices. #
@@ -77,15 +90,13 @@ class FactorArguments(Arguments):
     )
     gradient_covariance_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={
-            "help": "Dtype for computing pseudo-gradient covariance matrices. " "Recommended to use `torch.float32`."
-        },
+        metadata={"help": "Dtype for computing pseudo-gradient covariance matrices."},
     )
 
     # Configuration for performing eigendecomposition. #
     eigendecomposition_dtype: torch.dtype = field(
         default=torch.float64,
-        metadata={"help": "Dtype for performing eigendecomposition. " "Recommended to use `torch.float64."},
+        metadata={"help": "Dtype for performing Eigendecomposition. Recommended to use `torch.float64."},
     )
 
     # Configuration for fitting Lambda matrices. #
@@ -140,10 +151,7 @@ class FactorArguments(Arguments):
 class ScoreArguments(Arguments):
     """Arguments for computing influence scores."""
 
-    initial_per_device_batch_size_attempt: int = field(
-        default=4096,
-        metadata={"help": "The initial attempted per-device batch size when the batch size is not provided."},
-    )
+    # General configuration. #
     damping: Optional[float] = field(
         default=None,
         metadata={
@@ -155,45 +163,6 @@ class ScoreArguments(Arguments):
         default=False,
         metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
     )
-
-    data_partition_size: int = field(
-        default=1,
-        metadata={
-            "help": "Number of data partitions for computing influence scores. "
-            "For example, when `data_partition_size = 2`, the dataset is split "
-            "into 2 chunks and scores are separately computed for each chunk."
-        },
-    )
-    module_partition_size: int = field(
-        default=1,
-        metadata={
-            "help": "Number of module partitions for computing influence scores. "
-            "For example, when `module_partition_size = 2`, the module is split "
-            "into 2 modules and scores are separately computed for each chunk."
-        },
-    )
-
-    per_module_score: bool = field(
-        default=False,
-        metadata={
-            "help": "Whether to obtain per-module scores instead of the summed scores across all modules. "
-            "This is useful when performing layer-wise influence analysis."
-        },
-    )
-
-    query_gradient_rank: Optional[int] = field(
-        default=None,
-        metadata={"help": "Rank for the query gradient. Applies no low-rank approximation if None."},
-    )
-    query_gradient_svd_dtype: torch.dtype = field(
-        default=torch.float64,
-        metadata={"help": "Dtype for performing singular value decomposition (SVD) on the query gradient."},
-    )
-
-    score_dtype: torch.dtype = field(
-        default=torch.float32,
-        metadata={"help": "Dtype for computing and storing influence scores."},
-    )
     cached_activation_cpu_offload: bool = field(
         default=False,
         metadata={
@@ -201,11 +170,58 @@ class ScoreArguments(Arguments):
             "per-sample-gradient. This is helpful when the available GPU memory is limited."
         },
     )
+    distributed_sync_steps: int = field(
+        default=1_000,
+        metadata={
+            "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
+        },
+    )
+
+    # Partition configuration. #
+    data_partition_size: int = field(
+        default=1,
+        metadata={
+            "help": "Number of data partitions for computing influence scores. For example, when "
+            "`data_partition_size = 2`, the dataset is split into 2 chunks and scores are separately "
+            "computed for each chunk."
+        },
+    )
+    module_partition_size: int = field(
+        default=1,
+        metadata={
+            "help": "Number of module partitions for computing influence scores. For example, when "
+            "`module_partition_size = 2`, the module is split into 2 modules and scores are separately computed "
+            "for each chunk."
+        },
+    )
+
+    # Score configuration. #
+    per_module_score: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to obtain per-module scores instead of the summed scores across all modules. "
+            "This is useful when performing layer-wise influence analysis."
+        },
+    )
+    query_gradient_rank: Optional[int] = field(
+        default=None,
+        metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
+    )
+
+    # Dtype configuration. #
+    query_gradient_svd_dtype: torch.dtype = field(
+        default=torch.float64,
+        metadata={"help": "Dtype for performing singular value decomposition (SVD) on the query gradient."},
+    )
+    score_dtype: torch.dtype = field(
+        default=torch.float32,
+        metadata={"help": "Dtype for computing and storing influence scores."},
+    )
     per_sample_gradient_dtype: torch.dtype = field(
         default=torch.float32,
         metadata={"help": "Dtype for computing per-sample-gradients."},
     )
     precondition_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing the preconditioned gradient. " "Recommended to use `torch.float32`."},
+        metadata={"help": "Dtype for computing the preconditioned gradient. Recommended to use `torch.float32`."},
     )

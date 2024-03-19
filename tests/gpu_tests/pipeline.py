@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from typing import List, Tuple
 
 import torch
@@ -11,7 +13,7 @@ from kronfluence.task import Task
 BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
 
 
-class ClassificationTask(Task):
+class GpuTestTask(Task):
     def compute_train_loss(
         self,
         batch: BATCH_DTYPE,
@@ -48,7 +50,7 @@ class ClassificationTask(Task):
         return -margins.sum()
 
 
-def construct_mnist_mlp() -> nn.Module:
+def construct_test_mlp() -> nn.Module:
     model = torch.nn.Sequential(
         nn.Flatten(),
         nn.Linear(784, 1024, bias=True),

@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 import functools
 import logging
 import os
@@ -5,6 +7,7 @@ import unittest
 
 import torch
 import torch.distributed as dist
+from torch.distributed.fsdp import CPUOffload
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.distributed.fsdp.wrap import size_based_auto_wrap_policy
 from torch.nn.parallel import DistributedDataParallel
@@ -17,11 +20,7 @@ from kronfluence.module.constants import (
     COVARIANCE_FACTOR_NAMES,
     LAMBDA_FACTOR_NAMES,
 )
-from tests.gpu_tests.pipeline import (
-    ClassificationTask,
-    construct_mnist_mlp,
-    get_mnist_dataset,
-)
+from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
 from tests.utils import check_tensor_dict_equivalence
 
@@ -38,7 +37,7 @@ NEW_SCORE_NAME = "fsdp"
 class FSDPTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.model = construct_mnist_mlp()
+        cls.model = construct_test_mlp()
         cls.model.load_state_dict(torch.load("model.pth"))
         cls.model = cls.model.double()
 
@@ -47,7 +46,7 @@ class FSDPTest(unittest.TestCase):
         cls.eval_dataset = get_mnist_dataset(split="valid", data_path="data")
         cls.eval_dataset = data.Subset(cls.eval_dataset, indices=list(range(QUERY_INDICES)))
 
-        cls.task = ClassificationTask()
+        cls.task = GpuTestTask()
         cls.model = prepare_model(cls.model, cls.task)
 
         dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
@@ -57,7 +56,14 @@ class FSDPTest(unittest.TestCase):
         cls.model = cls.model.to(device=device)
         cls.model = DistributedDataParallel(cls.model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
         my_auto_wrap_policy = functools.partial(size_based_auto_wrap_policy, min_num_params=100)
-        cls.model = FSDP(cls.model, use_orig_params=True, auto_wrap_policy=my_auto_wrap_policy)
+        cls.model = FSDP(
+            cls.model,
+            use_orig_params=False,
+            auto_wrap_policy=my_auto_wrap_policy,
+            cpu_offload=CPUOffload(offload_params=True),
+        )
+        if LOCAL_RANK == 0:
+            print(cls.model)
 
         cls.analyzer = Analyzer(
             analysis_name="gpu_test",

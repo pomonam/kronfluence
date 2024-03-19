@@ -14,7 +14,7 @@ def construct_resnet50() -> nn.Module:
 def get_imagenet_dataset(
     split: str,
     indices: List[int] = None,
-    data_path: str = "data/",
+    dataset_dir: str = "data/",
 ) -> Dataset:
     assert split in ["train", "eval_train", "valid"]
 
@@ -40,7 +40,7 @@ def get_imagenet_dataset(
 
     folder = "train" if split in ["train", "eval_train"] else "val"
     dataset = torchvision.datasets.ImageFolder(
-        root=os.path.join(data_path, folder),
+        root=os.path.join(dataset_dir, folder),
         transform=transform_config,
     )
 

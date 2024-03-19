@@ -21,14 +21,13 @@ GLUE_TASK_TO_KEYS = {
 }
 
 
-def construct_bert(data_name) -> nn.Module:
+def construct_bert(data_name: str = "sst2") -> nn.Module:
     config = AutoConfig.from_pretrained(
         "bert-base-cased",
         num_labels=2,
         finetuning_task=data_name,
         trust_remote_code=True,
     )
-
     return AutoModelForSequenceClassification.from_pretrained(
         "bert-base-cased",
         from_tf=False,
@@ -42,14 +41,14 @@ def get_glue_dataset(
     data_name: str,
     split: str,
     indices: List[int] = None,
-    data_path: str = "data/",
+    dataset_dir: str = "data/",
 ) -> Dataset:
     assert split in ["train", "eval_train", "valid"]
 
     raw_datasets = load_dataset(
         path="glue",
         name=data_name,
-        data_dir=data_path,
+        # data_dir=dataset_dir,
     )
     label_list = raw_datasets["train"].features["label"].names
     num_labels = len(label_list)

@@ -7,16 +7,17 @@ import torch
 import torch.distributed as dist
 from accelerate.state import SharedDict
 from torch import nn
+from torch.distributed.fsdp import FullyShardedDataParallel
 
 
 class State:
     """A singleton class to manage the process environment state, such as device and process count.
 
     This class is inspired by Accelerate's `PartialState`:
-    https://github.com/huggingface/accelerate/blob/main/src/accelerate/state.py
+    https://github.com/huggingface/accelerate/blob/main/src/accelerate/state.py.
 
     The direct use of `PartialState` from Accelerate can be problematic, since the analysis
-    (influence computation) environment may be different from training environment.
+    (influence computation) environment may be different from the training environment.
     """
 
     _shared_state: Dict[str, Any] = SharedDict()
@@ -37,8 +38,8 @@ class State:
             if int(os.environ.get("LOCAL_RANK", -1)) != -1 and not cpu and torch.cuda.is_available():
                 if not dist.is_initialized():
                     dist.init_process_group(backend="nccl")
-                self.num_processes = torch.distributed.get_world_size()
-                self.process_index = torch.distributed.get_rank()
+                self.num_processes = dist.get_world_size()
+                self.process_index = dist.get_rank()
                 self.local_process_index = int(os.environ.get("LOCAL_RANK", -1))
                 self.device = torch.device("cuda", self.local_process_index)
                 self.n_gpus = torch.cuda.device_count()
@@ -91,34 +92,32 @@ class State:
         """Will stop the execution of the current process until every other process has reached that point
         (so this does nothing when the script is only run in one process)."""
         if self.use_distributed:
-            torch.distributed.barrier()
+            dist.barrier()
 
     @property
     def default_device(self) -> torch.device:
         """Finds the default device currently available."""
-        if torch.backends.mps.is_available() and torch.backends.mps.is_built():
-            os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-            return torch.device("mps")
         if torch.cuda.is_available():
             return torch.device("cuda")
         return torch.device("cpu")
 
 
 def release_memory() -> None:
-    """Releases the memory."""
+    """Releases the memory by calling `gc.collect()` and `torch.cuda.empty_cache()`."""
+    gc.collect()
     if torch.cuda.is_available():
-        gc.collect()
         torch.cuda.empty_cache()
-        torch.cuda.reset_peak_memory_stats()
 
 
 @contextlib.contextmanager
 def no_sync(model: nn.Module, state: State) -> Callable:
     """A context manager to avoid DDP synchronization. The code is adapted from
-    https://github.com/huggingface/accelerate/blob/v0.27.2/src/accelerate/accelerator.py#L852.
-    """
+    https://github.com/huggingface/accelerate/blob/v0.27.2/src/accelerate/accelerator.py#L852."""
     context = contextlib.nullcontext
-    if state.use_distributed:
+
+    # `no_sync()` for FSDP instance can result in higher memory usage, detailed in:
+    # https://pytorch.org/docs/stable/fsdp.html.
+    if state.use_distributed and not isinstance(model, FullyShardedDataParallel):
         context = getattr(model, "no_sync", context)
 
     with context():

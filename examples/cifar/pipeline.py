@@ -1,7 +1,8 @@
 import copy
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional
 
+import datasets
 import numpy as np
 import torch
 import torchvision
@@ -32,15 +33,15 @@ class Residual(nn.Module):
 
 
 def construct_resnet9() -> nn.Module:
+    # ResNet-9 architecture from: https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb.
     def conv_bn(
         channels_in: int,
         channels_out: int,
         kernel_size: int = 3,
         stride: int = 1,
         padding: int = 1,
-        groups=1,
+        groups: int = 1,
     ) -> nn.Module:
-        assert groups == 1
         return torch.nn.Sequential(
             torch.nn.Conv2d(
                 channels_in,
@@ -73,10 +74,10 @@ def construct_resnet9() -> nn.Module:
 
 def get_cifar10_dataset(
     split: str,
-    do_corrupt: bool,
     indices: List[int] = None,
-    data_dir: str = "data/",
-):
+    corrupt_percentage: Optional[float] = None,
+    dataset_dir: str = "data/",
+) -> datasets.Dataset:
     assert split in ["train", "eval_train", "valid"]
 
     normalize = torchvision.transforms.Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.261))
@@ -98,16 +99,17 @@ def get_cifar10_dataset(
         )
 
     dataset = torchvision.datasets.CIFAR10(
-        root=data_dir,
+        root=dataset_dir,
         download=True,
-        train=split in ["train", "eval_train", "eval_train_with_aug"],
+        train=split in ["train", "eval_train"],
         transform=transform_config,
     )
 
-    if do_corrupt:
+    if corrupt_percentage is not None:
         if split == "valid":
             raise NotImplementedError("Performing corruption on the validation dataset is not supported.")
-        num_corrupt = math.ceil(len(dataset) * 0.1)
+        assert 0.0 < corrupt_percentage <= 1.0
+        num_corrupt = math.ceil(len(dataset) * corrupt_percentage)
         original_targets = np.array(copy.deepcopy(dataset.targets[:num_corrupt]))
         new_targets = torch.randint(
             0,

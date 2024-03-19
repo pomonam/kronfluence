@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from typing import Tuple
 
 import pytest
@@ -152,6 +154,7 @@ def test_lambda_matrices_batch_size_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Lambda matrices should be identical regardless of the batch size used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -216,6 +219,7 @@ def test_lambda_matrices_partition_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Covariance matrices should be identical regardless of the partition used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -275,13 +279,14 @@ def test_lambda_matrices_partition_equivalence(
         "gpt",
     ],
 )
-@pytest.mark.parametrize("train_size", [50])
+@pytest.mark.parametrize("train_size", [63])
 @pytest.mark.parametrize("seed", [3])
 def test_lambda_matrices_iterative_aggregate(
     test_name: str,
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure aggregated lambda computation is working and the results are identical.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -318,7 +323,7 @@ def test_lambda_matrices_iterative_aggregate(
         factors_name=factors_name + "_iterative",
         dataset=train_dataset,
         factor_args=factor_args,
-        per_device_batch_size=8,
+        per_device_batch_size=4,
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
     )
@@ -345,6 +350,7 @@ def test_lambda_matrices_max_examples(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure the max Lambda data selection is working.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -357,7 +363,9 @@ def test_lambda_matrices_max_examples(
     )
 
     MAX_EXAMPLES = 28
-    factor_args = FactorArguments(use_empirical_fisher=True, lambda_max_examples=MAX_EXAMPLES)
+    factor_args = FactorArguments(
+        use_empirical_fisher=True, lambda_max_examples=MAX_EXAMPLES, lambda_data_partition_size=data_partition_size
+    )
     factors_name = f"pytest_{test_name}_{test_lambda_matrices_max_examples.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,

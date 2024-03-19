@@ -3,65 +3,65 @@ import logging
 import os
 from typing import Tuple
 
-import evaluate
+import numpy as np
 import torch
 import torch.nn.functional as F
 from accelerate.utils import set_seed
 from torch import nn
+from torch.optim import lr_scheduler
 from torch.utils import data
 from tqdm import tqdm
-from transformers import default_data_collator
 
-from examples.glue.pipeline import construct_bert, get_glue_dataset
+from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train text classification models on GLUE datasets.")
+    parser = argparse.ArgumentParser(description="Train ResNet-9 model on CIFAR-10 dataset.")
 
     parser.add_argument(
-        "--dataset_name",
-        type=str,
-        default="sst2",
-        help="A name of GLUE dataset.",
+        "--corrupt_percentage",
+        type=float,
+        default=None,
+        help="Percentage of the training dataset to corrupt.",
     )
     parser.add_argument(
         "--dataset_dir",
         type=str,
         default="./data",
-        help="A folder to download or load GLUE dataset.",
+        help="A folder to download or load CIFAR-10 dataset.",
     )
 
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=32,
+        default=512,
         help="Batch size for the training dataloader.",
     )
     parser.add_argument(
         "--eval_batch_size",
         type=int,
-        default=32,
+        default=1024,
         help="Batch size for the evaluation dataloader.",
     )
 
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=3e-05,
-        help="Fixed learning rate to train the model.",
+        default=0.4,
+        help="Initial learning rate to train the model.",
     )
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=0.01,
+        default=0.001,
         help="Weight decay to train the model.",
     )
     parser.add_argument(
         "--num_train_epochs",
         type=int,
-        default=3,
+        default=25,
         help="Total number of epochs to train the model.",
     )
 
@@ -82,8 +82,6 @@ def parse_args():
 
     if args.checkpoint_dir is not None:
         os.makedirs(args.checkpoint_dir, exist_ok=True)
-        args.checkpoint_dir = os.path.join(args.checkpoint_dir, args.dataset_name)
-        os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     return args
 
@@ -101,10 +99,19 @@ def train(
         batch_size=batch_size,
         shuffle=True,
         drop_last=True,
-        collate_fn=default_data_collator,
     )
-    model = construct_bert().to(DEVICE)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+
+    model = construct_resnet9().to(DEVICE)
+    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+
+    iters_per_epoch = len(train_dataloader)
+    lr_peak_epoch = num_train_epochs // 4
+    lr_schedule = np.interp(
+        np.arange((num_train_epochs + 1) * iters_per_epoch),
+        [0, lr_peak_epoch * iters_per_epoch, num_train_epochs * iters_per_epoch],
+        [0, 1, 0],
+    )
+    scheduler = lr_scheduler.LambdaLR(optimizer, lr_schedule.__getitem__)
 
     model.train()
     for epoch in range(num_train_epochs):
@@ -113,43 +120,38 @@ def train(
             for batch in tepoch:
                 tepoch.set_description(f"Epoch {epoch}")
                 model.zero_grad()
-                outputs = model(
-                    input_ids=batch["input_ids"].to(device=DEVICE),
-                    attention_mask=batch["attention_mask"].to(device=DEVICE),
-                    token_type_ids=batch["token_type_ids"].to(device=DEVICE),
-                ).logits
-                loss = F.cross_entropy(outputs, batch["labels"].to(device=DEVICE))
-                total_loss += loss.detach().float()
+                inputs, labels = batch
+                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+                outputs = model(inputs)
+                loss = F.cross_entropy(outputs, labels)
                 loss.backward()
                 optimizer.step()
+                scheduler.step()
+                total_loss += loss.detach().float()
                 tepoch.set_postfix(loss=total_loss.item() / len(train_dataloader))
     return model
 
 
-def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> Tuple[float, float]:
+def evaluate(model: nn.Module, dataset: data.Dataset, batch_size: int) -> Tuple[float, float]:
     dataloader = data.DataLoader(
-        dataset=dataset, batch_size=batch_size, shuffle=False, drop_last=False, collate_fn=default_data_collator
+        dataset=dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False,
     )
 
     model.eval()
-    metric = evaluate.load("glue", "sst2")
-    total_loss = 0.0
+    total_loss, total_correct = 0.0, 0
     for batch in dataloader:
         with torch.no_grad():
-            outputs = model(
-                batch["input_ids"].to(device=DEVICE),
-                batch["token_type_ids"].to(device=DEVICE),
-                batch["attention_mask"].to(device=DEVICE),
-            )
-            labels = batch["labels"].to(device=DEVICE)
-            total_loss += F.cross_entropy(outputs, labels, reduction="sum").detach().item()
-            predictions = outputs.argmax(dim=-1)
-            metric.add_batch(
-                predictions=predictions,
-                references=labels,
-            )
-    eval_metric = metric.compute()
-    return total_loss.item() / len(dataloader.dataset), eval_metric["accuracy"]
+            inputs, labels = batch
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            outputs = model(inputs)
+            loss = F.cross_entropy(outputs, labels, reduction="sum")
+            total_loss += loss.detach().float()
+            total_correct += outputs.detach().argmax(1).eq(labels).sum()
+
+    return total_loss.item() / len(dataloader.dataset), total_correct.item() / len(dataloader.dataset)
 
 
 def main():
@@ -160,7 +162,9 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
-    train_dataset = get_glue_dataset(data_name=args.dataset_name, split="train", dataset_dir=args.dataset_dir)
+    train_dataset = get_cifar10_dataset(
+        split="train", corrupt_percentage=args.corrupt_percentage, dataset_dir=args.dataset_dir
+    )
     model = train(
         dataset=train_dataset,
         batch_size=args.train_batch_size,
@@ -169,16 +173,19 @@ def main():
         weight_decay=args.weight_decay,
     )
 
-    eval_train_dataset = get_glue_dataset(data_name=args.dataset_name, split="eval_train", dataset_dir=args.dataset_dir)
-    train_loss, train_acc = evaluate_model(model=model, dataset=eval_train_dataset, batch_size=args.eval_batch_size)
+    eval_train_dataset = get_cifar10_dataset(split="eval_train", dataset_dir=args.dataset_dir)
+    train_loss, train_acc = evaluate(model=model, dataset=eval_train_dataset, batch_size=args.eval_batch_size)
     logger.info(f"Train loss: {train_loss}, Train Accuracy: {train_acc}")
 
-    eval_dataset = get_glue_dataset(data_name=args.dataset_name, split="valid", dataset_dir=args.dataset_dir)
-    eval_loss, eval_acc = evaluate_model(model=model, dataset=eval_dataset, batch_size=args.eval_batch_size)
+    eval_dataset = get_cifar10_dataset(split="valid", dataset_dir=args.dataset_dir)
+    eval_loss, eval_acc = evaluate(model=model, dataset=eval_dataset, batch_size=args.eval_batch_size)
     logger.info(f"Evaluation loss: {eval_loss}, Evaluation Accuracy: {eval_acc}")
 
     if args.checkpoint_dir is not None:
-        torch.save(model.state_dict(), os.path.join(args.checkpoint_dir, "model.pth"))
+        model_name = "model"
+        if args.corrupt_percentage is not None:
+            model_name += "_corrupt_" + str(args.corrupt_percentage)
+        torch.save(model.state_dict(), os.path.join(args.checkpoint_dir, f"{model_name}.pth"))
 
 
 if __name__ == "__main__":

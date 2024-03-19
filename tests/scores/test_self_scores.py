@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from typing import Tuple
 
 import pytest
@@ -77,6 +79,66 @@ def test_compute_self_scores(
         overwrite_output_dir=True,
     )
 
+    self_scores = analyzer.load_self_scores(scores_name=scores_name)
+    assert self_scores[ALL_MODULE_NAME].size(0) == train_size
+    assert len(self_scores[ALL_MODULE_NAME].shape) == 1
+    assert self_scores[ALL_MODULE_NAME].dtype == score_dtype
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+    ],
+)
+@pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.bfloat16])
+@pytest.mark.parametrize("precondition_dtype", [torch.float32, torch.bfloat16])
+@pytest.mark.parametrize("score_dtype", [torch.float32, torch.bfloat16])
+@pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("seed", [6])
+def test_compute_self_scores_dtype(
+    test_name: str,
+    per_sample_gradient_dtype: torch.dtype,
+    precondition_dtype: torch.dtype,
+    score_dtype: torch.dtype,
+    train_size: int,
+    seed: int,
+) -> None:
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name=test_name,
+        query_size=10,
+        train_size=train_size,
+        seed=seed,
+    )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    factors_name = f"pytest_{test_name}_{test_compute_self_scores_dtype.__name__}"
+    analyzer.fit_all_factors(
+        factors_name=factors_name,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=32,
+        overwrite_output_dir=True,
+    )
+
+    score_args = ScoreArguments(
+        score_dtype=score_dtype,
+        per_sample_gradient_dtype=per_sample_gradient_dtype,
+        precondition_dtype=precondition_dtype,
+    )
+    scores_name = f"pytest_{test_name}_{test_compute_self_scores_dtype.__name__}_scores"
+    analyzer.compute_self_scores(
+        scores_name=scores_name,
+        factors_name=factors_name,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
     self_scores = analyzer.load_self_scores(scores_name=scores_name)
     assert self_scores[ALL_MODULE_NAME].size(0) == train_size
     assert len(self_scores[ALL_MODULE_NAME].shape) == 1

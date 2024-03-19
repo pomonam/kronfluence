@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from typing import Callable, Dict, Optional, Tuple
 
 import torch
