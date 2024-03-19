@@ -682,7 +682,6 @@ class TrackedModule(nn.Module):
                 assert len(self._storage[PRECONDITIONED_GRADIENT_NAME]) == 2
                 for i in range(len(self._storage[PRECONDITIONED_GRADIENT_NAME])):
                     size = self._storage[PRECONDITIONED_GRADIENT_NAME][i].size()
-                    print(f"Size: {size}")
                     stacked_matrix = torch.empty(
                         size=(num_processes, size[0], size[1], size[2]),
                         dtype=self._storage[PRECONDITIONED_GRADIENT_NAME][i].dtype,
@@ -695,7 +694,6 @@ class TrackedModule(nn.Module):
                     self._storage[PRECONDITIONED_GRADIENT_NAME][i] = (
                         stacked_matrix.transpose(0, 1).reshape(num_processes * size[0], size[1], size[2]).contiguous()
                     )
-                    print(f"After size: {self._storage[PRECONDITIONED_GRADIENT_NAME][i].size()}")
             else:
                 size = self._storage[PRECONDITIONED_GRADIENT_NAME].size()
                 stacked_preconditioned_gradient = torch.empty(
