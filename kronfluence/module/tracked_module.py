@@ -350,7 +350,7 @@ class TrackedModule(nn.Module):
     @torch.no_grad()
     def synchronize_covariance_matrices(self) -> None:
         """Aggregates covariance matrices across multiple devices or nodes in a distributed setting."""
-        if dist.is_initialized() and torch.cuda.is_available():
+        if dist.is_initialized() and torch.cuda.is_available() and self._covariance_matrices_available():
             # Note that only the main process holds the aggregated covariance matrix.
             for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
                 dist.reduce(
@@ -519,6 +519,7 @@ class TrackedModule(nn.Module):
             del self._storage[lambda_factor_name]
             self._storage[lambda_factor_name] = None
         self._cached_activations = []
+        del self._cached_per_sample_gradient
         self._cached_per_sample_gradient = None
 
     def _lambda_matrix_available(self) -> bool:
@@ -531,7 +532,7 @@ class TrackedModule(nn.Module):
     @torch.no_grad()
     def synchronize_lambda_matrices(self) -> None:
         """Aggregates Lambda matrices across multiple devices or nodes in a distributed setting."""
-        if dist.is_initialized() and torch.cuda.is_available():
+        if dist.is_initialized() and torch.cuda.is_available() and self._lambda_matrix_available():
             # Note that only the main process holds the aggregated Lambda matrix.
             for lambda_factor_name in LAMBDA_FACTOR_NAMES:
                 torch.distributed.reduce(
@@ -559,16 +560,17 @@ class TrackedModule(nn.Module):
                 Low-rank matrices that approximate the original preconditioned gradient.
         """
         U, S, V = torch.linalg.svd(  # pylint: disable=not-callable
-            preconditioned_gradient.contiguous().to(dtype=self.score_args.query_gradient_svd_dtype)
+            preconditioned_gradient.contiguous().to(dtype=self.score_args.query_gradient_svd_dtype),
+            full_matrices=False,
         )
         rank = self.score_args.query_gradient_rank
         U_k = U[:, :, :rank]
         S_k = S[:, :rank]
         # Avoid holding the full memory of the original tensor before indexing.
-        V_k = V[:, :, :rank].clone()
+        V_k = V[:, :rank, :].clone()
         return [
-            torch.matmul(U_k, torch.diag_embed(S_k)).contiguous().to(dtype=self.score_args.score_dtype),
-            torch.transpose(V_k, 1, 2).contiguous().to(dtype=self.score_args.score_dtype),
+            torch.matmul(U_k, torch.diag_embed(S_k)).to(dtype=self.score_args.score_dtype).contiguous(),
+            V_k.to(dtype=self.score_args.score_dtype).contiguous(),
         ]
 
     def _register_precondition_gradient_hooks(self) -> None:
@@ -640,6 +642,7 @@ class TrackedModule(nn.Module):
         del self._storage[PRECONDITIONED_GRADIENT_NAME]
         self._storage[PRECONDITIONED_GRADIENT_NAME] = None
         self._cached_activations = []
+        del self._cached_per_sample_gradient
         self._cached_per_sample_gradient = None
 
     def get_preconditioned_gradient_batch_size(self) -> Optional[int]:
@@ -665,10 +668,14 @@ class TrackedModule(nn.Module):
                     :keep_size
                 ].clone()
 
+    def _preconditioned_gradient_available(self) -> bool:
+        """Checks if the preconditioned matrices are currently stored in the storage."""
+        return self._storage[PRECONDITIONED_GRADIENT_NAME] is not None
+
     @torch.no_grad()
     def synchronize_preconditioned_gradient(self, num_processes: int) -> None:
         """Stacks preconditioned gradient across multiple devices or nodes in a distributed setting."""
-        if dist.is_initialized() and torch.cuda.is_available():
+        if dist.is_initialized() and torch.cuda.is_available() and self._preconditioned_gradient_available():
             if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
                 assert len(self._storage[PRECONDITIONED_GRADIENT_NAME]) == 2
                 for i in range(len(self._storage[PRECONDITIONED_GRADIENT_NAME])):
@@ -746,7 +753,7 @@ class TrackedModule(nn.Module):
                     # The preconditioned gradient is stored as a low-rank approximation.
                     left_mat, right_mat = self._storage[PRECONDITIONED_GRADIENT_NAME]
                     self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
-                        "qki,toi,qok->qt",
+                        "qci,toi,qok->qt",
                         right_mat,
                         self._cached_per_sample_gradient,
                         left_mat,
@@ -854,5 +861,6 @@ class TrackedModule(nn.Module):
         del self._storage[SELF_SCORE_VECTOR_NAME]
         self._storage[SELF_SCORE_VECTOR_NAME] = None
         self._cached_activations = []
+        del self._cached_per_sample_gradient
         self._cached_per_sample_gradient = None
         self._storge_at_current_device = False

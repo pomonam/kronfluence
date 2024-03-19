@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from typing import Optional, Tuple
 
 import pytest
@@ -275,6 +277,7 @@ def test_pairwise_scores_batch_size_equivalence(
 )
 @pytest.mark.parametrize("data_partition_size", [1, 4])
 @pytest.mark.parametrize("module_partition_size", [1, 3])
+@pytest.mark.parametrize("per_module_score", [True, False])
 @pytest.mark.parametrize("query_size", [32])
 @pytest.mark.parametrize("train_size", [64])
 @pytest.mark.parametrize("seed", [2])
@@ -282,6 +285,7 @@ def test_pairwise_scores_partition_equivalence(
     test_name: str,
     data_partition_size: int,
     module_partition_size: int,
+    per_module_score: bool,
     query_size: int,
     train_size: int,
     seed: int,
@@ -308,6 +312,9 @@ def test_pairwise_scores_partition_equivalence(
     )
 
     scores_name = f"pytest_{test_name}_{test_pairwise_scores_partition_equivalence.__name__}_scores"
+    score_args = ScoreArguments(
+        per_module_score=per_module_score,
+    )
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         factors_name=factors_name,
@@ -316,6 +323,7 @@ def test_pairwise_scores_partition_equivalence(
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
+        score_args=score_args,
         overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores(scores_name=scores_name)
@@ -323,6 +331,7 @@ def test_pairwise_scores_partition_equivalence(
     score_args = ScoreArguments(
         data_partition_size=data_partition_size,
         module_partition_size=module_partition_size,
+        per_module_score=per_module_score,
     )
     analyzer.compute_pairwise_scores(
         scores_name=f"pytest_{test_name}_partition_{data_partition_size}_{module_partition_size}",

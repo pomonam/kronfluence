@@ -19,6 +19,7 @@ from kronfluence.module.constants import (
 )
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
+    get_tracked_module_names,
     release_scores,
     set_factors,
     set_mode,
@@ -164,6 +165,7 @@ def _compute_dot_products_with_loader(
         for module_name, chunks in score_chunks.items():
             total_scores[module_name] = torch.cat(chunks, dim=1)
             if state.use_distributed:
+                release_memory()
                 total_scores[module_name] = total_scores[module_name].to(device=state.device)
                 gather_list = None
                 if state.is_main_process:
@@ -234,6 +236,9 @@ def compute_pairwise_scores_with_loaders(
                     factor_name=name,
                     factors=loaded_factors[name],
                 )
+
+        if tracked_module_names is None:
+            tracked_module_names = get_tracked_module_names(model=model)
         set_mode(
             model=model,
             mode=ModuleMode.PRECONDITION_GRADIENT,

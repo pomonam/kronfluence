@@ -34,6 +34,7 @@ def load_json(path: Path) -> Dict[str, Any]:
     return obj
 
 
+@torch.no_grad()
 def verify_models_equivalence(state_dict1: Dict[str, torch.Tensor], state_dict2: Dict[str, torch.Tensor]) -> bool:
     """Checks if two models are equivalent given their `state_dict`."""
     if len(state_dict1) != len(state_dict2):

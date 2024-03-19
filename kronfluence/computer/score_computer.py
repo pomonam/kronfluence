@@ -133,7 +133,7 @@ class ScoreComputer(Computer):
                             ),
                             dim=dim,
                         )
-            save_fnc(output_dir=scores_output_dir, scores=aggregated_scores)
+            save_fnc(output_dir=scores_output_dir, scores=aggregated_scores, metadata=score_args.to_str_dict())
         end_time = time.time()
         elapsed_time = end_time - start_time
         self.logger.info(f"Aggregated all partitioned scores in {elapsed_time:.2f} seconds.")
@@ -324,7 +324,7 @@ class ScoreComputer(Computer):
             data_partition_size=score_args.data_partition_size,
             target_data_partitions=target_data_partitions,
         )
-        max_partition_examples = len(train_dataset) // factor_args.covariance_data_partition_size
+        max_partition_examples = len(train_dataset) // score_args.data_partition_size
         module_partition_names, target_module_partitions = self._get_module_partition(
             module_partition_size=score_args.module_partition_size,
             target_module_partitions=target_module_partitions,
@@ -428,7 +428,13 @@ class ScoreComputer(Computer):
 
     @torch.no_grad()
     def aggregate_pairwise_scores(self, scores_name: str) -> None:
-        """Aggregates pairwise scores computed for all data and module partitions."""
+        """Aggregates all partitioned pairwise scores. The scores will not be aggregated if scores
+        for some data or module partitions are missing.
+
+        Args:
+            scores_name (str):
+                The unique identifier for the score, used to organize and retrieve the results.
+        """
         score_args = self.load_score_args(scores_name=scores_name)
         if score_args is None:
             error_msg = (
@@ -607,7 +613,7 @@ class ScoreComputer(Computer):
             data_partition_size=score_args.data_partition_size,
             target_data_partitions=target_data_partitions,
         )
-        max_partition_examples = len(train_dataset) // factor_args.covariance_data_partition_size
+        max_partition_examples = len(train_dataset) // score_args.data_partition_size
         module_partition_names, target_module_partitions = self._get_module_partition(
             module_partition_size=score_args.module_partition_size,
             target_module_partitions=target_module_partitions,
@@ -683,6 +689,7 @@ class ScoreComputer(Computer):
                             output_dir=scores_output_dir,
                             scores=scores,
                             partition=partition,
+                            metadata=score_args.to_str_dict(),
                         )
                     self.state.wait_for_everyone()
                 del scores, train_loader
@@ -699,8 +706,14 @@ class ScoreComputer(Computer):
         self._log_profile_summary()
 
     @torch.no_grad()
-    def aggregate_self_scores(self, scores_name: str) -> Optional[SCORE_TYPE]:
-        """Aggregates self-influence scores computed for all data and module partitions."""
+    def aggregate_self_scores(self, scores_name: str) -> None:
+        """Aggregates all partitioned self-influence scores. The scores will not be aggregated if scores
+        for some data or module partitions are missing.
+
+        Args:
+            scores_name (str):
+                The unique identifier for the score, used to organize and retrieve the results.
+        """
         score_args = self.load_score_args(scores_name=scores_name)
         if score_args is None:
             error_msg = (
@@ -710,7 +723,7 @@ class ScoreComputer(Computer):
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
-        return self._aggregate_scores(
+        self._aggregate_scores(
             scores_name=scores_name,
             score_args=score_args,
             exists_fnc=self_scores_exist,

@@ -1,10 +1,8 @@
 import copy
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 import torch
-
-from kronfluence.factor.config import FactorStrategy
 
 
 @dataclass
@@ -31,7 +29,8 @@ class Arguments:
 class FactorArguments(Arguments):
     """Arguments for computing influence factors."""
 
-    strategy: Union[FactorStrategy, str] = field(
+    # General configuration. #
+    strategy: str = field(
         default="ekfac",
         metadata={"help": "Strategy for computing preconditioning factors."},
     )
@@ -152,6 +151,7 @@ class FactorArguments(Arguments):
 class ScoreArguments(Arguments):
     """Arguments for computing influence scores."""
 
+    # General configuration. #
     damping: Optional[float] = field(
         default=None,
         metadata={
@@ -163,6 +163,13 @@ class ScoreArguments(Arguments):
         default=False,
         metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
     )
+    cached_activation_cpu_offload: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to offload cached activation to CPU for computing the "
+            "per-sample-gradient. This is helpful when the available GPU memory is limited."
+        },
+    )
     distributed_sync_steps: int = field(
         default=1_000,
         metadata={
@@ -170,6 +177,7 @@ class ScoreArguments(Arguments):
         },
     )
 
+    # Partition configuration. #
     data_partition_size: int = field(
         default=1,
         metadata={
@@ -187,6 +195,7 @@ class ScoreArguments(Arguments):
         },
     )
 
+    # Score configuration. #
     per_module_score: bool = field(
         default=False,
         metadata={
@@ -194,26 +203,19 @@ class ScoreArguments(Arguments):
             "This is useful when performing layer-wise influence analysis."
         },
     )
-
     query_gradient_rank: Optional[int] = field(
         default=None,
         metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
     )
+
+    # Dtype configuration. #
     query_gradient_svd_dtype: torch.dtype = field(
         default=torch.float64,
         metadata={"help": "Dtype for performing singular value decomposition (SVD) on the query gradient."},
     )
-
     score_dtype: torch.dtype = field(
         default=torch.float32,
         metadata={"help": "Dtype for computing and storing influence scores."},
-    )
-    cached_activation_cpu_offload: bool = field(
-        default=False,
-        metadata={
-            "help": "Whether to offload cached activation to CPU for computing the "
-            "per-sample-gradient. This is helpful when the available GPU memory is limited."
-        },
     )
     per_sample_gradient_dtype: torch.dtype = field(
         default=torch.float32,

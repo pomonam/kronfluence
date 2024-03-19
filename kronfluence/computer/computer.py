@@ -12,7 +12,6 @@ from torch.utils import data
 from torch.utils.data import DistributedSampler, SequentialSampler
 
 from kronfluence.arguments import Arguments, FactorArguments, ScoreArguments
-from kronfluence.factor.config import FactorConfig
 from kronfluence.factor.covariance import (
     covariance_matrices_exist,
     load_covariance_matrices,
@@ -24,10 +23,7 @@ from kronfluence.factor.eigen import (
     load_lambda_matrices,
 )
 from kronfluence.module.constants import FACTOR_TYPE, SCORE_TYPE
-from kronfluence.module.utils import (
-    get_tracked_module_names,
-    make_modules_partition,
-)
+from kronfluence.module.utils import get_tracked_module_names, make_modules_partition
 from kronfluence.score.pairwise import load_pairwise_scores, pairwise_scores_exist
 from kronfluence.score.self import load_self_scores, self_scores_exist
 from kronfluence.task import Task
@@ -379,6 +375,10 @@ class Computer(ABC):
 
     def load_all_factors(self, factors_name: str) -> FACTOR_TYPE:
         """Loads factors from disk."""
+        from kronfluence.factor.config import (
+            FactorConfig,  # pylint: disable=import-outside-toplevel
+        )
+
         factor_args = self.load_factor_args(factors_name)
         factors_output_dir = self.factors_output_dir(factors_name=factors_name)
         if factor_args is None:

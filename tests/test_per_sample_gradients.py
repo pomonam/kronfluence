@@ -1,7 +1,10 @@
+# pylint: skip-file
+
 import copy
 import time
 from typing import Any, Dict, List
 
+import opt_einsum
 import pytest
 import torch
 from accelerate.utils import find_batch_size, set_seed
@@ -324,3 +327,121 @@ def test_precondition_gradient(
     print(f"Took {time.time() - start_time} seconds.")
 
     assert torch.allclose(raw_results, results, atol=1e-5, rtol=1e-3)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_query_gradient_svd(
+    seed: int,
+) -> None:
+    input_dim = 1024
+    output_dim = 2048
+    batch_dim = 8
+    set_seed(seed)
+
+    gradient = torch.rand(size=(batch_dim, output_dim, input_dim), dtype=torch.float64)
+
+    U, S, V = torch.linalg.svd(
+        gradient.contiguous(),
+        full_matrices=False,
+    )
+    assert torch.allclose(gradient, U @ torch.diag_embed(S) @ V, atol=1e-5, rtol=1e-3)
+
+    rank = 32
+    U_k = U[:, :, :rank]
+    S_k = S[:, :rank]
+    V_k = V[:, :rank, :].clone()
+    left, right = torch.matmul(U_k, torch.diag_embed(S_k)).contiguous(), V_k.contiguous()
+    assert torch.bmm(left, right).shape == gradient.shape
+
+    rank = input_dim
+    U, S, V = torch.linalg.svd(
+        gradient.contiguous(),
+        full_matrices=False,
+    )
+    U_k = U[:, :, :rank]
+    S_k = S[:, :rank]
+    V_k = V[:, :rank, :].clone()
+    left, right = torch.matmul(U_k, torch.diag_embed(S_k)).contiguous(), V_k.contiguous()
+    assert torch.allclose(torch.bmm(left, right), gradient, atol=1e-5, rtol=1e-3)
+
+    rank = 32
+    lr_gradient1 = torch.rand(size=(batch_dim, output_dim, rank), dtype=torch.float64)
+    lr_gradient2 = torch.rand(size=(batch_dim, rank, input_dim), dtype=torch.float64)
+    gradient = torch.bmm(lr_gradient1, lr_gradient2)
+    U, S, V = torch.linalg.svd(
+        gradient.contiguous(),
+        full_matrices=False,
+    )
+    U_k = U[:, :, :rank]
+    S_k = S[:, :rank]
+    V_k = V[:, :rank, :].clone()
+    left_mat, right_mat = torch.matmul(U_k, torch.diag_embed(S_k)).contiguous(), V_k.contiguous()
+    assert torch.allclose(torch.bmm(left_mat, right_mat), gradient, atol=1e-5, rtol=1e-3)
+
+    query_batch_dim = 16
+    new_gradient = torch.rand(size=(query_batch_dim, output_dim, input_dim), dtype=torch.float64)
+    score = opt_einsum.contract("toi,qoi->tq", gradient, new_gradient)
+
+    lr_score = opt_einsum.contract("qci,toi,qok->qt", right_mat, new_gradient, left_mat)
+    torch.allclose(score, lr_score)
+
+    lr_score_reconst_matmul = torch.matmul(
+        torch.matmul(left_mat, right_mat).view(left_mat.size(0), -1), new_gradient.view(new_gradient.shape[0], -1).t()
+    )
+    torch.allclose(score, lr_score_reconst_matmul)
+
+    path = opt_einsum.contract_path("qki,toi,qok->qt", right_mat, new_gradient, left_mat)
+    print(path)
+
+    # This avoids storing large intermediate tensor.
+    path = opt_einsum.contract_path("qci,toi,qok->qt", right_mat, new_gradient, left_mat)
+    print(path)
+
+
+@pytest.mark.parametrize("seed", [0])
+def test_compute_score_matmul(
+    seed: int,
+) -> None:
+    input_dim = 1024
+    output_dim = 2048
+    batch_dim = 8
+    query_batch_dim = 16
+    set_seed(seed)
+
+    gradient = torch.rand(size=(batch_dim, output_dim, input_dim), dtype=torch.float64)
+    new_gradient = torch.rand(size=(query_batch_dim, output_dim, input_dim), dtype=torch.float64)
+
+    score = opt_einsum.contract("toi,qoi->tq", gradient, new_gradient)
+    path = opt_einsum.contract_path("toi,qoi->tq", gradient, new_gradient)
+    print(path)
+
+    unsqueeze_score = opt_einsum.contract("t...,q...->tq", gradient, new_gradient)
+    assert torch.allclose(score, unsqueeze_score)
+    path = opt_einsum.contract_path("t...,q...->tq", gradient, new_gradient)
+    print(path)
+
+
+@pytest.mark.parametrize("seed", [0])
+def test_compute_score_fast_matmul(
+    seed: int,
+) -> None:
+    input_dim = 512
+    output_dim = 1024
+    seq_len = 32
+    batch_dim = 8
+    query_batch_dim = 16
+
+    set_seed(seed)
+
+    input_activation = torch.rand(size=(batch_dim, seq_len, input_dim), dtype=torch.float64)
+    output_gradient = torch.rand(size=(batch_dim, seq_len, output_dim), dtype=torch.float64)
+    per_sample_gradient = opt_einsum.contract("b...i,b...o->bio", output_gradient, input_activation)
+    gradient = torch.rand(size=(query_batch_dim, output_dim, input_dim), dtype=torch.float64)
+    score = opt_einsum.contract("toi,qoi->tq", per_sample_gradient, gradient)
+    print(score)
+
+    all_score = opt_einsum.contract("tco,tci,qoi->tq", output_gradient, input_activation, gradient)
+    assert torch.allclose(score, all_score)
+
+    path = opt_einsum.contract_path("tco,tci,qoi->tq", output_gradient, input_activation, gradient, optimize="optimal")
+    print(path)

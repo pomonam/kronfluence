@@ -3,13 +3,13 @@ from typing import Dict, Optional
 
 import torch
 from accelerate.utils import extract_model_from_parallel
-from computer.factor_computer import FactorComputer
-from computer.score_computer import ScoreComputer
 from safetensors.torch import save_file
 from torch import nn
 from torch.utils import data
 
 from kronfluence.arguments import FactorArguments
+from kronfluence.computer.factor_computer import FactorComputer
+from kronfluence.computer.score_computer import ScoreComputer
 from kronfluence.module.utils import wrap_tracked_modules
 from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
@@ -29,6 +29,11 @@ def prepare_model(
             The PyTorch model to be analyzed.
         task (Task):
             The specific task associated with the model.
+
+    Returns:
+        nn.Module:
+            The same PyTorch model with `param.requires_grad = False` on all modules that does not require influence
+            computations and with `TrackedModule` installed.
     """
     model.eval()
     for params in model.parameters():
@@ -79,7 +84,8 @@ class Analyzer(FactorComputer, ScoreComputer):
                 The file path to the directory, where analysis results will be stored. If the directory
                 does not exist, it will be created. Defaults to './analyses'.
             disable_model_save (bool, optional):
-                If set to True, prevents the saving of the model state. Defaults to True.
+                If set to True, prevents the saving of the model's state_dict. When the provided model is different
+                from the previously saved model, it will raise an Exception. Defaults to True.
         """
         super().__init__(
             name=analysis_name,
@@ -108,10 +114,11 @@ class Analyzer(FactorComputer, ScoreComputer):
         """
         self._dataloader_params = dataloader_kwargs
 
+    @torch.no_grad()
     def _save_model(self) -> None:
         """Saves the model to the output directory."""
         model_save_path = self.output_dir / "model.safetensors"
-        extracted_model = extract_model_from_parallel(self.model)
+        extracted_model = extract_model_from_parallel(model=self.model, keep_fp32_wrapper=True)
 
         if model_save_path.exists():
             self.logger.info(f"Found existing saved model at `{model_save_path}`.")
@@ -120,13 +127,13 @@ class Analyzer(FactorComputer, ScoreComputer):
             if not verify_models_equivalence(loaded_state_dict, extracted_model.state_dict()):
                 error_msg = (
                     "Detected a difference between the current model and the one saved at "
-                    f"{model_save_path}. Consider using a different `analysis_name` to "
+                    f"`{model_save_path}`. Consider using a different `analysis_name` to "
                     f"avoid conflicts."
                 )
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
         else:
-            self.logger.info(f"No existing model found at {model_save_path}.")
+            self.logger.info(f"No existing model found at `{model_save_path}`.")
             state_dict = extracted_model.state_dict()
             state_dict = {k: v.clone().contiguous() for k, v in state_dict.items()}
             save_file(state_dict, model_save_path)
@@ -189,12 +196,41 @@ class Analyzer(FactorComputer, ScoreComputer):
         )
 
     @staticmethod
-    def load_file(path: Path) -> Optional[Dict[str, torch.Tensor]]:
-        """Loads the `.safetensor` file at the given path from disk."""
+    def load_file(path: Path) -> Dict[str, torch.Tensor]:
+        """Loads the `.safetensors` file at the given path from disk.
+
+        See https://github.com/huggingface/safetensors.
+
+        Args:
+            path (Path):
+                The path to the `.safetensors` file.
+
+        Returns:
+            Dict[str, torch.Tensor]:
+                The contents of the file, which is the dictionary mapping string to tensors.
+        """
         if not path.exists():
             raise FileNotFoundError(f"File does not exists at `{path}`.")
         return load_file(path)
 
     @staticmethod
     def get_module_summary(model: nn.Module) -> str:
-        pass
+        """Returns the formatted summary of the modules in model. Useful identifying which modules to
+        compute influence scores.
+
+        Args:
+            model (nn.Module):
+                The PyTorch model to be investigated.
+
+        Returns:
+            str:
+                The formatted string summary of the model.
+        """
+        format_str = "==Model Summary=="
+        for module_name, module in model.named_modules():
+            if len(list(module.children())) > 0:
+                continue
+            if len(list(module.parameters())) == 0:
+                continue
+            format_str += f"\nModule Name: `{module_name}`, Module: {repr(module)}"
+        return format_str

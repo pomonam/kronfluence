@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 from typing import Tuple
 
 import pytest
@@ -361,7 +363,9 @@ def test_lambda_matrices_max_examples(
     )
 
     MAX_EXAMPLES = 28
-    factor_args = FactorArguments(use_empirical_fisher=True, lambda_max_examples=MAX_EXAMPLES)
+    factor_args = FactorArguments(
+        use_empirical_fisher=True, lambda_max_examples=MAX_EXAMPLES, lambda_data_partition_size=data_partition_size
+    )
     factors_name = f"pytest_{test_name}_{test_lambda_matrices_max_examples.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,

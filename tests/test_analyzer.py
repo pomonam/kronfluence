@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 import pytest
 import torch
 
@@ -49,11 +51,13 @@ def test_analyzer(
         cpu=True,
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    factor_args = FactorArguments(strategy=strategy)
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_name}",
         dataset=train_dataset,
         per_device_batch_size=16,
         dataloader_kwargs=kwargs,
+        factor_args=factor_args,
         overwrite_output_dir=True,
     )
     analyzer.compute_pairwise_scores(
@@ -82,13 +86,13 @@ def test_default_factor_arguments() -> None:
     assert factor_args.strategy == "ekfac"
     assert factor_args.use_empirical_fisher is False
     assert factor_args.immediate_gradient_removal is False
+    assert factor_args.ignore_bias is False
 
     assert factor_args.covariance_max_examples == 100_000
     assert factor_args.covariance_data_partition_size == 1
     assert factor_args.covariance_module_partition_size == 1
     assert factor_args.activation_covariance_dtype == torch.float32
     assert factor_args.gradient_covariance_dtype == torch.float32
-
     assert factor_args.eigendecomposition_dtype == torch.float64
 
     assert factor_args.lambda_max_examples == 100_000
@@ -104,6 +108,7 @@ def test_default_score_arguments() -> None:
 
     assert factor_args.damping is None
     assert factor_args.immediate_gradient_removal is False
+    assert factor_args.cached_activation_cpu_offload is False
 
     assert factor_args.data_partition_size == 1
     assert factor_args.module_partition_size == 1
@@ -113,6 +118,5 @@ def test_default_score_arguments() -> None:
     assert factor_args.query_gradient_svd_dtype == torch.float64
 
     assert factor_args.score_dtype == torch.float32
-    assert factor_args.cached_activation_cpu_offload is False
     assert factor_args.per_sample_gradient_dtype == torch.float32
     assert factor_args.precondition_dtype == torch.float32
