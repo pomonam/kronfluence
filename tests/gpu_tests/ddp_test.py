@@ -16,11 +16,7 @@ from kronfluence.module.constants import (
     COVARIANCE_FACTOR_NAMES,
     LAMBDA_FACTOR_NAMES,
 )
-from tests.gpu_tests.pipeline import (
-    GpuTestTask,
-    construct_test_mlp,
-    get_mnist_dataset,
-)
+from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
 from tests.utils import check_tensor_dict_equivalence
 
@@ -161,6 +157,7 @@ class DDPTest(unittest.TestCase):
                 atol=1e-5,
                 rtol=1e-3,
             )
+
     #
     # def test_self_scores(self) -> None:
     #     self_scores = self.analyzer.load_self_scores(scores_name=OLD_SCORE_NAME)
@@ -200,7 +197,7 @@ class DDPTest(unittest.TestCase):
             score_dtype=torch.float64,
             per_sample_gradient_dtype=torch.float64,
             precondition_dtype=torch.float64,
-            query_gradient_rank=32
+            query_gradient_rank=32,
         )
         self.analyzer.compute_pairwise_scores(
             scores_name="ddp_qb",

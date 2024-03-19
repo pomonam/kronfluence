@@ -6,19 +6,15 @@ import unittest
 
 import torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel
 import torch.nn.functional as F
+from torch import nn
+from torch.nn.parallel import DistributedDataParallel
+
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
-
 from kronfluence.task import Task
-from torch import nn
-
 from tests.gpu_tests.ddp_test import OLD_FACTOR_NAME
-from tests.gpu_tests.pipeline import (
-    construct_test_mlp,
-    get_mnist_dataset, BATCH_DTYPE,
-)
+from tests.gpu_tests.pipeline import BATCH_DTYPE, construct_test_mlp, get_mnist_dataset
 
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
 WORLD_RANK = int(os.environ["RANK"])
@@ -100,7 +96,7 @@ class DDPVariationTest(unittest.TestCase):
                     factor_args = FactorArguments(
                         covariance_data_partition_size=dp,
                         covariance_module_partition_size=mp,
-                        cached_activation_cpu_offload=ca
+                        cached_activation_cpu_offload=ca,
                     )
                     self.analyzer.fit_covariance_matrices(
                         factors_name=NEW_FACTOR_NAME,
@@ -121,7 +117,7 @@ class DDPVariationTest(unittest.TestCase):
                     factor_args = FactorArguments(
                         covariance_data_partition_size=dp,
                         covariance_module_partition_size=mp,
-                        cached_activation_cpu_offload=ca
+                        cached_activation_cpu_offload=ca,
                     )
                     self.analyzer.fit_lambda_matrices(
                         factors_name=NEW_FACTOR_NAME,
@@ -129,7 +125,7 @@ class DDPVariationTest(unittest.TestCase):
                         factor_args=factor_args,
                         per_device_batch_size=512,
                         overwrite_output_dir=True,
-                        load_from_factors_name=OLD_FACTOR_NAME
+                        load_from_factors_name=OLD_FACTOR_NAME,
                     )
 
     def test_pairwise_scores(self) -> None:

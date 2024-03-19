@@ -375,8 +375,8 @@ class Computer(ABC):
 
     def load_all_factors(self, factors_name: str) -> FACTOR_TYPE:
         """Loads factors from disk."""
-        from kronfluence.factor.config import (
-            FactorConfig,  # pylint: disable=import-outside-toplevel
+        from kronfluence.factor.config import (  # pylint: disable=import-outside-toplevel
+            FactorConfig,
         )
 
         factor_args = self.load_factor_args(factors_name)

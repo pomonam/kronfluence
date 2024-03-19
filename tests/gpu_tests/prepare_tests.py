@@ -7,11 +7,7 @@ from tqdm import tqdm
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
-from tests.gpu_tests.pipeline import (
-    GpuTestTask,
-    construct_test_mlp,
-    get_mnist_dataset,
-)
+from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 
 # Pick difficult cases where the dataset is not perfectly divisible by batch size.
 TRAIN_INDICES = 5_003

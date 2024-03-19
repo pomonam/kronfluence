@@ -756,12 +756,30 @@ class TrackedModule(nn.Module):
                 if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
                     # The preconditioned gradient is stored as a low-rank approximation.
                     left_mat, right_mat = self._storage[PRECONDITIONED_GRADIENT_NAME]
-                    self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
-                        "qki,toi,qok->qt",
-                        right_mat,
-                        self._cached_per_sample_gradient,
-                        left_mat,
-                    )
+
+                    input_dim = right_mat.size(2)
+                    output_dim = left_mat.size(1)
+                    query_batch_size = left_mat.size(0)
+                    train_batch_size = self._cached_per_sample_gradient.size(0)
+                    rank = self.score_args.query_gradient_rank
+                    if (
+                        train_batch_size * query_batch_size * rank * min((input_dim, output_dim))
+                        > query_batch_size * input_dim * output_dim
+                    ):
+                        # If reconstructing the gradient is more memory efficient, reconstruct and compute the score.
+                        self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
+                            "qki,toi,qok->qt",
+                            right_mat,
+                            self._cached_per_sample_gradient,
+                            left_mat,
+                        )
+                    # Otherwise, try to avoid reconstructing the full per-sample-gradient.
+                    elif output_dim >= input_dim:
+                        intermediate = contract("toi,qok->qtik", self._cached_per_sample_gradient, left_mat)
+                        self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract("qki,qtik->qt", right_mat, intermediate)
+                    else:
+                        intermediate = contract("qki,toi->qtko", right_mat, self._cached_per_sample_gradient)
+                        self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract("qtko,qok->qt", intermediate, left_mat)
                 else:
                     self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
                         "qio,tio->qt",
