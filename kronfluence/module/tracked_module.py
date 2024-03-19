@@ -757,7 +757,7 @@ class TrackedModule(nn.Module):
                     # The preconditioned gradient is stored as a low-rank approximation.
                     left_mat, right_mat = self._storage[PRECONDITIONED_GRADIENT_NAME]
                     self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
-                        "qci,toi,qok->qt",
+                        "qki,toi,qok->qt",
                         right_mat,
                         self._cached_per_sample_gradient,
                         left_mat,
