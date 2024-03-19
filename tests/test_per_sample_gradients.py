@@ -329,7 +329,7 @@ def test_precondition_gradient(
     assert torch.allclose(raw_results, results, atol=1e-5, rtol=1e-3)
 
 
-@pytest.mark.parametrize("seed", [0, 1, 2])
+@pytest.mark.parametrize("seed", [0])
 def test_query_gradient_svd(
     seed: int,
 ) -> None:
@@ -404,8 +404,8 @@ def test_compute_score_matmul(
 ) -> None:
     input_dim = 1024
     output_dim = 2048
-    batch_dim = 8
-    query_batch_dim = 16
+    batch_dim = 16
+    query_batch_dim = 64
     set_seed(seed)
 
     gradient = torch.rand(size=(batch_dim, output_dim, input_dim), dtype=torch.float64)

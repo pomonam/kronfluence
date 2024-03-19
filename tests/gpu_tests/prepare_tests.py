@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
@@ -6,8 +8,8 @@ from tqdm import tqdm
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from tests.gpu_tests.pipeline import (
-    ClassificationTask,
-    construct_mnist_mlp,
+    GpuTestTask,
+    construct_test_mlp,
     get_mnist_dataset,
 )
 
@@ -26,7 +28,7 @@ def train() -> None:
         shuffle=True,
         drop_last=True,
     )
-    model = construct_mnist_mlp().to(device=device)
+    model = construct_test_mlp().to(device=device)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.03)
 
     model.train()
@@ -76,7 +78,7 @@ def train() -> None:
 def run_analysis() -> None:
     assert torch.cuda.is_available()
     device = torch.device("cuda")
-    model = construct_mnist_mlp().to(device=device)
+    model = construct_test_mlp().to(device=device)
     model.load_state_dict(torch.load("model.pth"))
 
     train_dataset = get_mnist_dataset(split="train", data_path="data")
@@ -84,7 +86,7 @@ def run_analysis() -> None:
     train_dataset = Subset(train_dataset, indices=list(range(TRAIN_INDICES)))
     eval_dataset = Subset(eval_dataset, indices=list(range(QUERY_INDICES)))
 
-    task = ClassificationTask()
+    task = GpuTestTask()
     model = model.double()
     model = prepare_model(model, task)
 
@@ -127,6 +129,20 @@ def run_analysis() -> None:
         scores_name="single_gpu",
         factors_name="single_gpu",
         train_dataset=train_dataset,
+        per_device_train_batch_size=512,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+
+    score_args = ScoreArguments(
+        query_gradient_rank=32
+    )
+    analyzer.compute_pairwise_scores(
+        scores_name="single_gpu_qb",
+        factors_name="single_gpu",
+        query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        per_device_query_batch_size=12,
         per_device_train_batch_size=512,
         score_args=score_args,
         overwrite_output_dir=True,
