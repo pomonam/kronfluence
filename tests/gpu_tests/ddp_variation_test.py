@@ -138,7 +138,7 @@ class DDPVariationTest(unittest.TestCase):
             factors_name=OLD_FACTOR_NAME,
             query_dataset=self.eval_dataset,
             train_dataset=self.train_dataset,
-            per_device_query_batch_size=12,
+            per_device_query_batch_size=256,
             per_device_train_batch_size=512,
             score_args=score_args,
             overwrite_output_dir=True,
