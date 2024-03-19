@@ -210,7 +210,7 @@ class DDPTest(unittest.TestCase):
             score_args=score_args,
             overwrite_output_dir=True,
         )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
+        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb")
 
         if LOCAL_RANK == 0:
             print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
