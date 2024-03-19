@@ -135,7 +135,10 @@ def run_analysis() -> None:
     )
 
     score_args = ScoreArguments(
-        query_gradient_rank=32
+        query_gradient_rank=32,
+        score_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+        precondition_dtype=torch.float64,
     )
     analyzer.compute_pairwise_scores(
         scores_name="single_gpu_qb",
