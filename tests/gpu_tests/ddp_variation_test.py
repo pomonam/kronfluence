@@ -115,8 +115,8 @@ class DDPVariationTest(unittest.TestCase):
             for mp in module_partition_lst:
                 for ca in cached_activation_cpu_offload:
                     factor_args = FactorArguments(
-                        covariance_data_partition_size=dp,
-                        covariance_module_partition_size=mp,
+                        lambda_data_partition_size=dp,
+                        lambda_module_partition_size=mp,
                         cached_activation_cpu_offload=ca,
                     )
                     self.analyzer.fit_lambda_matrices(
