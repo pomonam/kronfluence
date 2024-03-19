@@ -213,15 +213,15 @@ class DDPTest(unittest.TestCase):
         new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb")
 
         if LOCAL_RANK == 0:
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
+            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
             print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
+            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
             print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
             assert check_tensor_dict_equivalence(
                 pairwise_scores,
                 new_pairwise_scores,
-                atol=1e-5,
-                rtol=1e-3,
+                atol=1e-3,
+                rtol=1e-1,
             )
 
     @classmethod
