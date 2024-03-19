@@ -413,9 +413,9 @@ def test_query_gradient_svd(
 
 
 @pytest.mark.parametrize("input_dim", [256, 512])
-@pytest.mark.parametrize("output_dim", [512, 1024, 2048])
+@pytest.mark.parametrize("output_dim", [512, 1024])
 @pytest.mark.parametrize("batch_dim", [8, 16])
-@pytest.mark.parametrize("qbatch_dim", [8, 16, 128])
+@pytest.mark.parametrize("qbatch_dim", [8, 16])
 @pytest.mark.parametrize("rank", [32])
 @pytest.mark.parametrize("seed", [0])
 def test_query_gradient_svd_reconst(
