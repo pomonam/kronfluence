@@ -220,6 +220,6 @@ def compute_self_scores_with_loaders(
                     gather_list = [torch.zeros_like(total_scores[module_name]) for _ in range(state.num_processes)]
                 torch.distributed.gather(total_scores[module_name], gather_list)
                 if state.is_main_process:
-                    total_scores[module_name] = torch.cat(gather_list, dim=0)[:, :dataset_size].cpu()
+                    total_scores[module_name] = torch.cat(gather_list, dim=0)[:dataset_size].cpu()
     state.wait_for_everyone()
     return total_scores
