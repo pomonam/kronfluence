@@ -1,3 +1,5 @@
+# pylint: skip-file
+
 import functools
 import logging
 import os
@@ -18,8 +20,8 @@ from kronfluence.module.constants import (
     LAMBDA_FACTOR_NAMES,
 )
 from tests.gpu_tests.pipeline import (
-    ClassificationTask,
-    construct_mnist_mlp,
+    GpuTestTask,
+    construct_test_mlp,
     get_mnist_dataset,
 )
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
@@ -38,7 +40,7 @@ NEW_SCORE_NAME = "fsdp"
 class FSDPTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.model = construct_mnist_mlp()
+        cls.model = construct_test_mlp()
         cls.model.load_state_dict(torch.load("model.pth"))
         cls.model = cls.model.double()
 
@@ -47,7 +49,7 @@ class FSDPTest(unittest.TestCase):
         cls.eval_dataset = get_mnist_dataset(split="valid", data_path="data")
         cls.eval_dataset = data.Subset(cls.eval_dataset, indices=list(range(QUERY_INDICES)))
 
-        cls.task = ClassificationTask()
+        cls.task = GpuTestTask()
         cls.model = prepare_model(cls.model, cls.task)
 
         dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
