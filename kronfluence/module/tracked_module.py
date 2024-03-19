@@ -679,11 +679,9 @@ class TrackedModule(nn.Module):
         """Stacks preconditioned gradient across multiple devices or nodes in a distributed setting."""
         if dist.is_initialized() and torch.cuda.is_available() and self._preconditioned_gradient_available():
             if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
-                print("1")
                 assert len(self._storage[PRECONDITIONED_GRADIENT_NAME]) == 2
                 for i in range(len(self._storage[PRECONDITIONED_GRADIENT_NAME])):
                     size = self._storage[PRECONDITIONED_GRADIENT_NAME][i].size()
-                    print(f"Size: {size}")
                     stacked_matrix = torch.empty(
                         size=(num_processes, size[0], size[1], size[2]),
                         dtype=self._storage[PRECONDITIONED_GRADIENT_NAME][i].dtype,
