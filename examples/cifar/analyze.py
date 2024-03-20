@@ -115,7 +115,7 @@ def main():
         analysis_name=args.dataset_name,
         model=model,
         task=task,
-        cpu=True,
+        cpu=False,
     )
 
     factor_args = FactorArguments(strategy=args.factor_strategy)
