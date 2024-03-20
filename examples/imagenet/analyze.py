@@ -123,7 +123,7 @@ def main():
     )
 
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
-    score_args = ScoreArguments(query_gradient_rank=rank)
+    score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
     scores_name = "pairwise"
     if rank is not None:
         scores_name += f"_qlr{rank}"

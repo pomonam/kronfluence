@@ -92,7 +92,6 @@ def train(
     num_train_epochs: int,
     learning_rate: float,
     weight_decay: float,
-    disable_tqdm: bool = False,
 ) -> nn.Module:
     train_dataloader = data.DataLoader(
         dataset=dataset,
@@ -116,19 +115,16 @@ def train(
     model.train()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
-        with tqdm(train_dataloader, unit="batch", disable=disable_tqdm) as tepoch:
-            for batch in tepoch:
-                tepoch.set_description(f"Epoch {epoch}")
-                model.zero_grad()
-                inputs, labels = batch
-                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-                outputs = model(inputs)
-                loss = F.cross_entropy(outputs, labels)
-                loss.backward()
-                optimizer.step()
-                scheduler.step()
-                total_loss += loss.detach().float()
-                tepoch.set_postfix(loss=total_loss.item() / len(train_dataloader))
+        for batch in train_dataloader:
+            model.zero_grad()
+            inputs, labels = batch
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            outputs = model(inputs)
+            loss = F.cross_entropy(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+            total_loss += loss.detach().float()
     return model
 
 

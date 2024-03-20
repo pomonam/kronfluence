@@ -105,12 +105,12 @@ def train(
         total_loss = 0.0
         for batch in train_dataloader:
             model.zero_grad()
-            outputs = model(
+            loss = model(
                 input_ids=batch["input_ids"].to(device=DEVICE),
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
                 token_type_ids=batch["token_type_ids"].to(device=DEVICE),
-            ).logits
-            loss = F.cross_entropy(outputs, batch["labels"].to(device=DEVICE))
+                labels=batch["labels"].to(device=DEVICE)
+            )
             loss.backward()
             optimizer.step()
             total_loss += loss.detach().float()
@@ -127,14 +127,14 @@ def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> 
     total_loss = 0.0
     for batch in dataloader:
         with torch.no_grad():
-            outputs = model(
+            logits = model(
                 batch["input_ids"].to(device=DEVICE),
                 batch["token_type_ids"].to(device=DEVICE),
                 batch["attention_mask"].to(device=DEVICE),
             ).logits
             labels = batch["labels"].to(device=DEVICE)
-            total_loss += F.cross_entropy(outputs, labels, reduction="sum").detach()
-            predictions = outputs.argmax(dim=-1)
+            total_loss += F.cross_entropy(logits, labels, reduction="sum").detach()
+            predictions = logits.argmax(dim=-1)
             metric.add_batch(
                 predictions=predictions,
                 references=labels,

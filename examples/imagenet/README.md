@@ -16,11 +16,21 @@ python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
     --train_batch_size 256 \
     --factor_strategy ekfac
 ```
-On A100 (80GB), it takes roughly 1.5 minutes to compute the pairwise scores (including computing EKFAC factors).
+On A100 (80GB), it takes roughly 10 hours to compute the pairwise scores (including computing EKFAC factors).
+
+We can also use query batching to compute influence scores with larger query batch size.
+```bash
+python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
+    --query_gradient_rank 32 \
+    --query_batch_size 500 \
+    --train_batch_size 512 \
+    --factor_strategy ekfac
+```
 
 
 ## Computing Pairwise Influence Scores with DDP
 
+You can also use DistributedDataParallel to speed up influence computations.
 ```bash
 torchrun --standalone --nnodes=1 --nproc-per-node=4 ddp_analyze.py
 ```
