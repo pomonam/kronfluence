@@ -1,10 +1,11 @@
 from typing import List
 
-import torch.nn as nn
 from datasets import load_dataset
+from torch import nn
 from torch.utils.data import Dataset
 from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer
 
+# Copied from https://github.com/huggingface/transformers/blob/main/examples/pytorch/text-classification/run_glue.py.
 GLUE_TASK_TO_KEYS = {
     "cola": ("sentence", None),
     "mnli": ("premise", "hypothesis"),
@@ -70,7 +71,7 @@ def get_glue_dataset(
         load_from_cache_file=(not False),
     )
 
-    if split == "train" or split == "eval_train":
+    if split in ["train", "eval_train"]:
         train_dataset = raw_datasets["train"]
         ds = train_dataset
     else:

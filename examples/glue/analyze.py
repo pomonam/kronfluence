@@ -165,7 +165,7 @@ def main():
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
-        overwrite_output_dir=False,
+        overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
     print(scores["all_modules"].shape)
