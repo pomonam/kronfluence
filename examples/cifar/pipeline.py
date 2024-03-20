@@ -81,7 +81,7 @@ def get_cifar10_dataset(
     assert split in ["train", "eval_train", "valid"]
 
     normalize = torchvision.transforms.Normalize(mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.261))
-    if split in ["train", "eval_train"]:
+    if split == "train":
         transform_config = torchvision.transforms.Compose(
             [
                 torchvision.transforms.RandomCrop(32, padding=4),
