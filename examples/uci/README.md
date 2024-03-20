@@ -11,7 +11,8 @@ pip install -r requirements.txt
 
 To train a regression model on the Concrete dataset, run the following command:
 ```bash
-python train.py --dataset_name concrete --dataset_dir ./data \
+python train.py --dataset_name concrete \
+    --dataset_dir ./data \
     --output_dir ./checkpoints \
     --train_batch_size 32 \
     --eval_batch_size 1024 \
@@ -25,7 +26,7 @@ python train.py --dataset_name concrete --dataset_dir ./data \
 
 To obtain a pairwise influence scores using `ekfac`, run the following command:
 ```bash
-python analyze.py --dataset_name concrete \ 
+python analyze.py --dataset_name concrete \
     --dataset_dir ./data \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac

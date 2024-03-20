@@ -31,6 +31,13 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--query_batch_size",
+        type=int,
+        default=1000,
+        help="Batch size for computing query gradients.",
+    )
+
+    parser.add_argument(
         "--checkpoint_dir",
         type=str,
         default="./checkpoints",
@@ -132,7 +139,7 @@ def main():
         query_dataset=eval_dataset,
         query_indices=list(range(2000)),
         train_dataset=train_dataset,
-        per_device_query_batch_size=1000,
+        per_device_query_batch_size=args.query_batch_size,
         overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
