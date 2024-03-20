@@ -27,7 +27,7 @@ def parse_args():
     parser.add_argument(
         "--query_gradient_rank",
         type=int,
-        default=None,
+        default=-1,
         help="Rank for the low-rank query gradient approximation.",
     )
     parser.add_argument(
@@ -123,10 +123,12 @@ def main():
         factor_args=factor_args,
         overwrite_output_dir=False,
     )
-    score_args = ScoreArguments(query_gradient_rank=args.query_gradient_rank)
+
+    rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
+    score_args = ScoreArguments(query_gradient_rank=rank)
     scores_name = "pairwise"
-    if args.query_gradient_rank is not None:
-        scores_name += f"_qlr{args.query_gradient_rank}"
+    if rank is not None:
+        scores_name += f"_qlr{rank}"
     analyzer.compute_pairwise_scores(
         score_args=score_args,
         scores_name=scores_name,
