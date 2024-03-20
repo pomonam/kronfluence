@@ -17,7 +17,7 @@ BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on UCI datasets.")
+    parser = argparse.ArgumentParser(description="Influence analysis on CIFAR-10 dataset.")
 
     parser.add_argument(
         "--corrupt_percentage",

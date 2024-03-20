@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-from typing import Tuple
 
 import torch
 from arguments import FactorArguments
@@ -10,9 +9,8 @@ from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 
 
-
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on UCI datasets.")
+    parser = argparse.ArgumentParser(description="Detecting mislabeled CIFAR-10 dataset.")
 
     parser.add_argument(
         "--corrupt_percentage",
@@ -25,13 +23,6 @@ def parse_args():
         type=str,
         default="./data",
         help="A folder to download or load CIFAR-10 dataset.",
-    )
-
-    parser.add_argument(
-        "--query_batch_size",
-        type=int,
-        default=1000,
-        help="Batch size for computing query gradients.",
     )
 
     parser.add_argument(
@@ -63,7 +54,6 @@ def main():
     train_dataset = get_cifar10_dataset(
         split="eval_train", corrupt_percentage=args.corrupt_percentage, dataset_dir=args.dataset_dir
     )
-    eval_dataset = get_cifar10_dataset(split="valid", dataset_dir=args.dataset_dir)
 
     model = construct_resnet9()
     model_name = "model"
@@ -90,18 +80,15 @@ def main():
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
-    analyzer.compute_pairwise_scores(
-        scores_name="pairwise",
+    analyzer.compute_self_scores(
+        scores_name="self",
         factors_name=args.factor_strategy,
-        query_dataset=eval_dataset,
-        query_indices=list(range(2000)),
         train_dataset=train_dataset,
-        per_device_query_batch_size=args.query_batch_size,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_pairwise_scores("pairwise")
+    scores = analyzer.load_pairwise_scores("self")
     print(scores)
 
 
