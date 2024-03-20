@@ -1,4 +1,4 @@
-# GLUE & BERT Example
+# WikiText & GPT-2 Example
 
 This directory contains scripts for fine-tuning BERT on GLUE benchmark. The pipeline is motivated from [HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/text-classification).
 Please begin by installing necessary packages.
@@ -32,3 +32,4 @@ python analyze.py --query_batch_size 1000 \
 You can also use `identity`, `diagonal`, and `kfac`. On A100 (80GB), it takes roughly 1.5 minutes to compute the 
 pairwise scores (including computing EKFAC factors).
 
+## Computing Linear Datamodeling Score
