@@ -49,10 +49,5 @@ Then, compute self-influence scores with the following command:
 python detect_mislabeled_dataset.py --dataset_dir ./data \
     --corrupt_percentage 0.1 \
     --checkpoint_dir ./checkpoints \
-    --train_batch_size 512 \
-    --eval_batch_size 1024 \
-    --learning_rate 0.4 \
-    --weight_decay 0.0001 \
-    --num_train_epochs 25 \
-    --seed 1004
+    --factor_strategy ekfac
 ```

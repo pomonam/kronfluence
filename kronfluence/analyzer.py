@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 import torch
 from accelerate.utils import extract_model_from_parallel
@@ -196,7 +196,7 @@ class Analyzer(FactorComputer, ScoreComputer):
         )
 
     @staticmethod
-    def load_file(path: Path) -> Dict[str, torch.Tensor]:
+    def load_file(path: Union[str, Path]) -> Dict[str, torch.Tensor]:
         """Loads the `.safetensors` file at the given path from disk.
 
         See https://github.com/huggingface/safetensors.
@@ -209,6 +209,8 @@ class Analyzer(FactorComputer, ScoreComputer):
             Dict[str, torch.Tensor]:
                 The contents of the file, which is the dictionary mapping string to tensors.
         """
+        if isinstance(path, str):
+            path = Path(path).resolve()
         if not path.exists():
             raise FileNotFoundError(f"File does not exists at `{path}`.")
         return load_file(path)

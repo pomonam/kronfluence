@@ -3,10 +3,12 @@ import logging
 import os
 
 import torch
-from arguments import FactorArguments
+from kronfluence.arguments import FactorArguments
 from examples.cifar.analyze import ClassificationTask
 from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
+
+from kronfluence.utils.dataset import DataLoaderKwargs
 
 
 def parse_args():
@@ -74,6 +76,9 @@ def main():
         cpu=False,
     )
 
+    dataloader_kwargs = DataLoaderKwargs(num_workers=4)
+    analyzer.set_dataloader_kwargs(dataloader_kwargs)
+
     factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
@@ -88,8 +93,21 @@ def main():
         train_dataset=train_dataset,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_pairwise_scores("self")
-    print(scores)
+    scores = analyzer.load_pairwise_scores("self")["all_modules"]
+
+    total_corrupt_size = int(args.corrupt_percentage * len(train_dataset))
+    corrupted_indices = list(range(int(args.corrupt_percentage * len(train_dataset))))
+    intervals = torch.arange(0.1, 1, 0.1)
+
+    accuracies = []
+    for interval in intervals:
+        interval = interval.item()
+        predicted_indices = torch.argsort(scores, descending=True)[:int(interval * len(train_dataset))]
+        predicted_indices = list(predicted_indices.numpy())
+        accuracies.append(len(set(predicted_indices) & set(corrupted_indices)) / total_corrupt_size)
+
+    logging.info(f"Inspect interval: {list(intervals.numpy())}")
+    logging.info(f"Accuracies: {accuracies}")
 
 
 if __name__ == "__main__":
