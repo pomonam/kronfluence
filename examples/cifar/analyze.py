@@ -132,7 +132,7 @@ def main():
         query_dataset=eval_dataset,
         query_indices=list(range(2000)),
         train_dataset=train_dataset,
-        per_device_query_batch_size=500,
+        per_device_query_batch_size=1000,
         overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
