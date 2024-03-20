@@ -3,11 +3,11 @@ import logging
 import os
 
 import torch
-from kronfluence.arguments import FactorArguments
+
 from examples.cifar.analyze import ClassificationTask
 from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
-
+from kronfluence.arguments import FactorArguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 
@@ -102,7 +102,7 @@ def main():
     accuracies = []
     for interval in intervals:
         interval = interval.item()
-        predicted_indices = torch.argsort(scores, descending=True)[:int(interval * len(train_dataset))]
+        predicted_indices = torch.argsort(scores, descending=True)[: int(interval * len(train_dataset))]
         predicted_indices = list(predicted_indices.numpy())
         accuracies.append(len(set(predicted_indices) & set(corrupted_indices)) / total_corrupt_size)
 

@@ -1,11 +1,14 @@
 # CIFAR-10 & ResNet-9 Example
 
-This directory contains scripts designed for training ResNet-9 on CIFAR-10. The pipeline is motivated from 
-[TRAK repository](https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb).
+This directory contains scripts for training ResNet-9 on CIFAR-10. The pipeline is motivated from 
+[TRAK repository](https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb). Please begin by installing necessary packages.
+```bash
+pip install -r requirements.txt
+```
 
 ## Training
 
-To train the model on the CIFAR-10 dataset, run the following command:
+To train ResNet-9 on CIFAR-10 dataset, run the following command:
 ```bash
 python train.py --dataset_dir ./data \
     --checkpoint_dir ./checkpoints \

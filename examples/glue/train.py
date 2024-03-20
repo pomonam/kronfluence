@@ -26,12 +26,6 @@ def parse_args():
         default="sst2",
         help="A name of GLUE dataset.",
     )
-    parser.add_argument(
-        "--dataset_dir",
-        type=str,
-        default="./data",
-        help="A folder to download or load GLUE dataset.",
-    )
 
     parser.add_argument(
         "--train_batch_size",
@@ -103,6 +97,7 @@ def train(
         drop_last=True,
         collate_fn=default_data_collator,
     )
+
     model = construct_bert().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
@@ -140,7 +135,7 @@ def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> 
                 batch["input_ids"].to(device=DEVICE),
                 batch["token_type_ids"].to(device=DEVICE),
                 batch["attention_mask"].to(device=DEVICE),
-            )
+            ).logits
             labels = batch["labels"].to(device=DEVICE)
             total_loss += F.cross_entropy(outputs, labels, reduction="sum").detach().item()
             predictions = outputs.argmax(dim=-1)
@@ -160,7 +155,7 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
-    train_dataset = get_glue_dataset(data_name=args.dataset_name, split="train", dataset_dir=args.dataset_dir)
+    train_dataset = get_glue_dataset(data_name=args.dataset_name, split="train")
     model = train(
         dataset=train_dataset,
         batch_size=args.train_batch_size,
@@ -169,11 +164,11 @@ def main():
         weight_decay=args.weight_decay,
     )
 
-    eval_train_dataset = get_glue_dataset(data_name=args.dataset_name, split="eval_train", dataset_dir=args.dataset_dir)
+    eval_train_dataset = get_glue_dataset(data_name=args.dataset_name, split="eval_train")
     train_loss, train_acc = evaluate_model(model=model, dataset=eval_train_dataset, batch_size=args.eval_batch_size)
     logger.info(f"Train loss: {train_loss}, Train Accuracy: {train_acc}")
 
-    eval_dataset = get_glue_dataset(data_name=args.dataset_name, split="valid", dataset_dir=args.dataset_dir)
+    eval_dataset = get_glue_dataset(data_name=args.dataset_name, split="valid")
     eval_loss, eval_acc = evaluate_model(model=model, dataset=eval_dataset, batch_size=args.eval_batch_size)
     logger.info(f"Evaluation loss: {eval_loss}, Evaluation Accuracy: {eval_acc}")
 

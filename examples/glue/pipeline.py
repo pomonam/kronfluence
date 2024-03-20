@@ -1,9 +1,6 @@
-import os
 from typing import List
 
-import torch
 import torch.nn as nn
-import torchvision
 from datasets import load_dataset
 from torch.utils.data import Dataset
 from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer
@@ -41,14 +38,12 @@ def get_glue_dataset(
     data_name: str,
     split: str,
     indices: List[int] = None,
-    dataset_dir: str = "data/",
 ) -> Dataset:
     assert split in ["train", "eval_train", "valid"]
 
     raw_datasets = load_dataset(
         path="glue",
         name=data_name,
-        # data_dir=dataset_dir,
     )
     label_list = raw_datasets["train"].features["label"].names
     num_labels = len(label_list)
@@ -86,3 +81,10 @@ def get_glue_dataset(
         ds = ds.select(indices)
 
     return ds
+
+
+if __name__ == "__main__":
+    from kronfluence import Analyzer
+
+    model = construct_bert()
+    print(Analyzer.get_module_summary(model))

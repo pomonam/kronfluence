@@ -8,8 +8,9 @@ from analyzer import Analyzer, prepare_model
 from arguments import FactorArguments, ScoreArguments
 from task import Task
 from torch import nn
-from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
 from utils.dataset import DataLoaderKwargs
+
+from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
 
 BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 
@@ -93,14 +94,12 @@ class ClassificationTask(Task):
 
 def main():
     args = parse_args()
-
     logging.basicConfig(level=logging.INFO)
 
     train_dataset = get_imagenet_dataset(split="eval_train", dataset_dir=args.dataset_dir)
     eval_dataset = get_imagenet_dataset(split="valid", dataset_dir=args.dataset_dir)
 
     model = construct_resnet50()
-
     task = ClassificationTask()
     model = prepare_model(model, task)
 
@@ -109,7 +108,6 @@ def main():
         model=model,
         task=task,
     )
-
     dataloader_kwargs = DataLoaderKwargs(
         num_workers=4,
     )

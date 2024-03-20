@@ -1,41 +1,35 @@
 import argparse
 import logging
 import os
-from typing import Tuple
+from typing import Tuple, Dict
 
 import torch
 import torch.nn.functional as F
 from torch import nn
 
-from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
+from examples.glue.pipeline import construct_bert, get_glue_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
 from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
 
-BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
+BATCH_TYPE = Dict[str, torch.Tensor]
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Influence analysis on CIFAR-10 dataset.")
 
     parser.add_argument(
-        "--corrupt_percentage",
-        type=float,
-        default=None,
-        help="Percentage of the training dataset to corrupt.",
-    )
-    parser.add_argument(
-        "--dataset_dir",
+        "--dataset_name",
         type=str,
-        default="./data",
-        help="A folder to download or load CIFAR-10 dataset.",
+        default="sst2",
+        help="A name of GLUE dataset.",
     )
 
     parser.add_argument(
         "--query_batch_size",
         type=int,
-        default=1000,
+        default=32,
         help="Batch size for computing query gradients.",
     )
 
@@ -57,28 +51,37 @@ def parse_args():
 
     if args.checkpoint_dir is not None:
         os.makedirs(args.checkpoint_dir, exist_ok=True)
+        args.checkpoint_dir = os.path.join(args.checkpoint_dir, args.dataset_name)
+        os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     return args
 
 
-class ClassificationTask(Task):
+class TextClassificationTask(Task):
     def compute_train_loss(
         self,
         batch: BATCH_TYPE,
         model: nn.Module,
         sample: bool = False,
     ) -> torch.Tensor:
-        inputs, labels = batch
-        logits = model(inputs)
+        logits = model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            token_type_ids=batch["token_type_ids"],
+        ).logits
+
         if not sample:
-            return F.cross_entropy(logits, labels, reduction="sum")
+            return F.cross_entropy(
+                logits, batch["labels"], reduction="sum"
+            )
         with torch.no_grad():
             probs = torch.nn.functional.softmax(logits, dim=-1)
             sampled_labels = torch.multinomial(
-                probs,
-                num_samples=1,
+                probs, num_samples=1,
             ).flatten()
-        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
+        return F.cross_entropy(
+            logits, sampled_labels.detach(), reduction="sum"
+        )
 
     def compute_measurement(
         self,
@@ -86,14 +89,22 @@ class ClassificationTask(Task):
         model: nn.Module,
     ) -> torch.Tensor:
         # Copied from: https://github.com/MadryLab/trak/blob/main/trak/modelout_functions.py.
-        inputs, labels = batch
-        logits = model(inputs)
+        logits = model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            token_type_ids=batch["token_type_ids"],
+        ).logits
 
-        bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
+        labels = batch["labels"]
+        bindex = torch.arange(logits.shape[0]).to(
+            device=logits.device, non_blocking=False
+        )
         logits_correct = logits[bindex, labels]
 
         cloned_logits = logits.clone()
-        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
+        cloned_logits[bindex, labels] = torch.tensor(
+            -torch.inf, device=logits.device, dtype=logits.dtype
+        )
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
@@ -103,12 +114,14 @@ def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
 
-    train_dataset = get_cifar10_dataset(
-        split="eval_train", corrupt_percentage=args.corrupt_percentage, dataset_dir=args.dataset_dir
+    train_dataset = get_glue_dataset(
+        data_name=args.data_name, split="eval_train",
     )
-    eval_dataset = get_cifar10_dataset(split="valid", dataset_dir=args.dataset_dir)
+    eval_dataset = get_glue_dataset(
+        data_name=args.data_name, split="valid",
+    )
 
-    model = construct_resnet9()
+    model = construct_bert()
     model_name = "model"
     if args.corrupt_percentage is not None:
         model_name += "_corrupt_" + str(args.corrupt_percentage)
@@ -117,7 +130,7 @@ def main():
         raise ValueError(f"No checkpoint found at {checkpoint_path}.")
     model.load_state_dict(torch.load(checkpoint_path))
 
-    task = ClassificationTask()
+    task = TextClassificationTask()
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
