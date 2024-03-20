@@ -117,11 +117,11 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     train_dataset = get_glue_dataset(
-        data_name=args.data_name,
+        data_name=args.dataset_name,
         split="eval_train",
     )
     eval_dataset = get_glue_dataset(
-        data_name=args.data_name,
+        data_name=args.dataset_name,
         split="valid",
     )
 
