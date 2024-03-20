@@ -126,7 +126,6 @@ def main():
         task=task,
         cpu=False,
     )
-
     dataloader_kwargs = DataLoaderKwargs(num_workers=4)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 

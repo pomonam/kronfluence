@@ -6,6 +6,7 @@ from typing import Dict, Tuple, List, Optional
 import torch
 import torch.nn.functional as F
 from torch import nn
+from transformers import default_data_collator
 
 from examples.glue.pipeline import construct_bert, get_glue_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
@@ -109,7 +110,6 @@ class TextClassificationTask(Task):
         return -margins.sum()
 
     def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
-        print(type(batch["attention_mask"]))
         return batch["attention_mask"]
 
 
@@ -141,6 +141,8 @@ def main():
         task=task,
         cpu=False,
     )
+    dataloader_kwargs = DataLoaderKwargs(collate_fn=default_data_collator)
+    analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(
