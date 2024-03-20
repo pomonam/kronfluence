@@ -112,7 +112,7 @@ def main():
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
-        analysis_name=args.dataset_name,
+        analysis_name="cifar10",
         model=model,
         task=task,
         cpu=False,
@@ -130,8 +130,9 @@ def main():
         scores_name="pairwise",
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
+        query_indices=list(range(2000)),
         train_dataset=train_dataset,
-        per_device_query_batch_size=len(eval_dataset),
+        per_device_query_batch_size=500,
         overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
