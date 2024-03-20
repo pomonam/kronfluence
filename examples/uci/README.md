@@ -35,3 +35,7 @@ You can also use `identity`, `diagonal`, and `kfac`.
 ## Counterfactual Evaluation
 
 You can check the notebook `tutorial.ipynb` to run the counterfactual evaluation.
+
+<p align="center">
+<a href="#"><img width="380" img src="figure/counterfactual.png" alt="Counterfactual"/></a>
+</p>

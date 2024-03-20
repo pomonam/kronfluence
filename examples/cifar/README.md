@@ -1,10 +1,7 @@
 # CIFAR-10 & ResNet-9 Example
 
 This directory contains scripts for training ResNet-9 on CIFAR-10. The pipeline is motivated from 
-[TRAK repository](https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb). Please begin by installing necessary packages.
-```bash
-pip install -r requirements.txt
-```
+[TRAK repository](https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb). 
 
 ## Training
 
@@ -22,7 +19,7 @@ python train.py --dataset_dir ./data \
 
 ## Computing Pairwise Influence Scores
 
-To obtain a pairwise influence scores on 2000 query data points using `ekfac`, run the following command:
+To obtain pairwise influence scores on 2000 query data points using `ekfac`, run the following command:
 ```bash
 python analyze.py --query_batch_size 1000 \
     --dataset_dir ./data \
@@ -34,7 +31,7 @@ pairwise scores (including computing EKFAC factors).
 
 ## Mislabeled Data Detection
 
-First, train the model with 10% of training dataset mislabeled by running the following command:
+We can use self-influence scores to detect mislabeled data points. First, train the model with 10% of training dataset mislabeled by running the following command:
 ```bash
 python train.py --dataset_dir ./data \
     --corrupt_percentage 0.1 \
