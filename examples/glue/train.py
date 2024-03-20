@@ -109,7 +109,7 @@ def train(
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
                 token_type_ids=batch["token_type_ids"].to(device=DEVICE),
                 labels=batch["labels"].to(device=DEVICE)
-            )
+            ).loss
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
