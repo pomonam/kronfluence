@@ -10,7 +10,7 @@ from transformers import default_data_collator
 
 from examples.glue.pipeline import construct_bert, get_glue_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments
+from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
 
@@ -33,6 +33,12 @@ def parse_args():
         help="A path that is storing the final checkpoint of the model.",
     )
 
+    parser.add_argument(
+        "--query_gradient_rank",
+        type=int,
+        default=-1,
+        help="Rank for the low-rank query gradient approximation.",
+    )
     parser.add_argument(
         "--query_batch_size",
         type=int,
@@ -157,15 +163,21 @@ def main():
         initial_per_device_batch_size_attempt=512,
     )
     # Compute pairwise scores.
+    rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
+    score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
+    scores_name = "pairwise"
+    if rank is not None:
+        scores_name += f"_qlr{rank}"
     analyzer.compute_pairwise_scores(
-        scores_name="pairwise",
+        score_args=score_args,
+        scores_name=scores_name,
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
         query_indices=list(range(min([len(eval_dataset), 2000]))),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
     print(scores["all_modules"].shape)

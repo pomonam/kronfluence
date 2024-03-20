@@ -33,6 +33,14 @@ python analyze.py --dataset_name sst2 \
 On A100 (80GB), it takes roughly 80 minutes to compute the pairwise scores for SST2 with around 900 query data points 
 (including computing EKFAC factors).
 
+```bash
+python analyze.py --dataset_name sst2 \
+    --query_gradient_rank 32 \
+    --query_batch_size 400 \
+    --train_batch_size 256 \
+    --checkpoint_dir ./checkpoints \
+    --factor_strategy ekfac
+```
 
 # Counterfactual Evaluation
 
