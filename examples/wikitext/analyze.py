@@ -21,9 +21,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Influence analysis on GPT-2 dataset.")
 
     parser.add_argument(
-        "--dataset_name",
+        "--analyses_name",
         type=str,
-        default="sst2",
+        default="default",
         help="A name of GLUE dataset.",
     )
 
@@ -137,7 +137,7 @@ def main():
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
-        analysis_name=args.dataset_name,
+        analysis_name=args.analyses_name,
         model=model,
         task=task,
     )
