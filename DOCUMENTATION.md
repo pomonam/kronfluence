@@ -355,8 +355,7 @@ score_args = ScoreArguments(
 all modules, this will keep track of intermediate module-wise scores. 
 
 - `query_gradient_rank`: The rank for the query batching. If `None`, no query batching will be used.
-- `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can use `torch.float32`,
-but `torch.float64` is recommended.
+- `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can also use `torch.float32`.
 
 - `cached_activation_cpu_offload`: Whether to offload cached activations to CPU.
 - `score_dtype`: `dtype` for computing influence scores. You can use `torch.bfloat16` or `torch.float16`.

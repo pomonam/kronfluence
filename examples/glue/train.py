@@ -104,16 +104,17 @@ def train(
     for epoch in range(num_train_epochs):
         total_loss = 0.0
         for batch in train_dataloader:
-            model.zero_grad()
             loss = model(
                 input_ids=batch["input_ids"].to(device=DEVICE),
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
                 token_type_ids=batch["token_type_ids"].to(device=DEVICE),
                 labels=batch["labels"].to(device=DEVICE)
             )
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             total_loss += loss.detach().float()
+        logging.info(f"Epoch {epoch + 1} - Averaged Loss: {total_loss / len(dataset)}")
     return model
 
 
