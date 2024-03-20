@@ -137,7 +137,7 @@ def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> 
                 batch["attention_mask"].to(device=DEVICE),
             ).logits
             labels = batch["labels"].to(device=DEVICE)
-            total_loss += F.cross_entropy(outputs, labels, reduction="sum").detach().item()
+            total_loss += F.cross_entropy(outputs, labels, reduction="sum").detach()
             predictions = outputs.argmax(dim=-1)
             metric.add_batch(
                 predictions=predictions,
