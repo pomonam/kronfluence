@@ -37,7 +37,7 @@ def parse_args():
         help="Rank for the low-rank query gradient approximation.",
     )
     parser.add_argument(
-        "--covariance_batch_size",
+        "--factor_batch_size",
         type=int,
         default=512,
         help="Batch size for computing query gradients.",
@@ -104,7 +104,7 @@ def main():
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
-        per_device_batch_size=None,
+        per_device_batch_size=args.factor_batch_size,
         factor_args=factor_args,
         overwrite_output_dir=False,
     )

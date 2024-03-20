@@ -30,7 +30,7 @@ On A100 (80GB), it takes less than 4 hours to compute the pairwise scores with q
 
 ## Computing Pairwise Influence Scores with DDP
 
-You can also use DistributedDataParallel to speed up influence computations.
+You can also use DistributedDataParallel to speed up influence computations. You can run:
 ```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=4 ddp_analyze.py
+torchrun --standalone --nnodes=1 --nproc-per-node=2 ddp_analyze.py
 ```
