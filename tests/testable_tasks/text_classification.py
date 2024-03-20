@@ -5,10 +5,11 @@ from typing import Any, Dict, Optional
 import torch
 import torch.nn.functional as F
 from datasets import load_dataset
-from kronfluence.task import Task
 from torch import nn
 from torch.utils import data
 from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer
+
+from kronfluence.task import Task
 
 BATCH_TYPE = Dict[str, torch.Tensor]
 

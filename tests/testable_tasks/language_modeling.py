@@ -6,10 +6,11 @@ from typing import Any, Dict, List, Optional
 import torch
 import torch.nn.functional as F
 from datasets import load_dataset
-from kronfluence.task import Task
 from torch import nn
 from torch.utils import data
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, Conv1D
+
+from kronfluence.task import Task
 
 BATCH_TYPE = Dict[str, torch.Tensor]
 
