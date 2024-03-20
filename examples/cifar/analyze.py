@@ -31,6 +31,12 @@ def parse_args():
         default="./data",
         help="A folder to download or load CIFAR-10 dataset.",
     )
+    parser.add_argument(
+        "--checkpoint_dir",
+        type=str,
+        default="./checkpoints",
+        help="A path that is storing the final checkpoint of the model.",
+    )
 
     parser.add_argument(
         "--query_batch_size",
@@ -38,19 +44,11 @@ def parse_args():
         default=1000,
         help="Batch size for computing query gradients.",
     )
-
-    parser.add_argument(
-        "--checkpoint_dir",
-        type=str,
-        default="./checkpoints",
-        help="A path to store the final checkpoint.",
-    )
-
     parser.add_argument(
         "--factor_strategy",
         type=str,
         default="ekfac",
-        help="Strategy to compute preconditioning factors.",
+        help="Strategy to compute influence factors.",
     )
 
     args = parser.parse_args()
@@ -103,11 +101,13 @@ def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
 
+    # Prepare the dataset.
     train_dataset = get_cifar10_dataset(
         split="eval_train", corrupt_percentage=args.corrupt_percentage, dataset_dir=args.dataset_dir
     )
     eval_dataset = get_cifar10_dataset(split="valid", dataset_dir=args.dataset_dir)
 
+    # Prepare the trained model.
     model = construct_resnet9()
     model_name = "model"
     if args.corrupt_percentage is not None:
@@ -117,6 +117,7 @@ def main():
         raise ValueError(f"No checkpoint found at {checkpoint_path}.")
     model.load_state_dict(torch.load(checkpoint_path))
 
+    # Define task and prepare model.
     task = ClassificationTask()
     model = prepare_model(model, task)
 
@@ -124,19 +125,21 @@ def main():
         analysis_name="cifar10",
         model=model,
         task=task,
-        cpu=False,
     )
+    # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(num_workers=4)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
+    # Compute influence factors.
     factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
+    # Compute pairwise scores.
     analyzer.compute_pairwise_scores(
         scores_name="pairwise",
         factors_name=args.factor_strategy,
@@ -144,10 +147,10 @@ def main():
         query_indices=list(range(2000)),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
-    print(scores)
+    print(scores["all_modules"].shape)
 
 
 if __name__ == "__main__":

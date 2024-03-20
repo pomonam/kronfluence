@@ -6,7 +6,7 @@ from typing import Tuple
 
 import torch
 import torch.nn.functional as F
-from arguments import FactorArguments
+from kronfluence.arguments import FactorArguments
 from torch import nn
 
 from examples.uci.pipeline import construct_regression_mlp, get_regression_dataset
@@ -35,16 +35,15 @@ def parse_args():
         "--checkpoint_dir",
         type=str,
         default="./checkpoints",
-        help="A path to store the final checkpoint.",
+        help="A path that is storing the final checkpoint of the model.",
     )
 
     parser.add_argument(
         "--factor_strategy",
         type=str,
         default="ekfac",
-        help="Strategy to compute preconditioning factors.",
+        help="Strategy to compute influence factors.",
     )
-
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -83,17 +82,20 @@ def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
 
+    # Prepare the dataset.
     train_dataset = get_regression_dataset(
         data_name=args.dataset_name, split="eval_train", dataset_dir=args.dataset_dir
     )
     eval_dataset = get_regression_dataset(data_name=args.dataset_name, split="valid", dataset_dir=args.dataset_dir)
 
+    # Prepare the trained model.
     model = construct_regression_mlp()
     checkpoint_path = os.path.join(args.checkpoint_dir, "model.pth")
     if not os.path.isfile(checkpoint_path):
         raise ValueError(f"No checkpoint found at {checkpoint_path}.")
     model.load_state_dict(torch.load(checkpoint_path))
 
+    # Define task and prepare model.
     task = RegressionTask()
     model = prepare_model(model, task)
 
@@ -103,25 +105,27 @@ def main():
         task=task,
         cpu=True,
     )
-
+    # Compute influence factors.
     factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
+    # Compute pairwise scores.
     analyzer.compute_pairwise_scores(
         scores_name="pairwise",
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
         train_dataset=train_dataset,
+        # Use full batch for computing query gradient.
         per_device_query_batch_size=len(eval_dataset),
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
-    print(scores)
+    print(scores["all_modules"].shape)
 
 
 if __name__ == "__main__":

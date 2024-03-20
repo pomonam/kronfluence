@@ -2,7 +2,7 @@ import argparse
 import logging
 import os
 from typing import Tuple
-
+import time
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -10,7 +10,6 @@ from accelerate.utils import set_seed
 from torch import nn
 from torch.optim import lr_scheduler
 from torch.utils import data
-from tqdm import tqdm
 
 from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
 
@@ -112,6 +111,7 @@ def train(
     )
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_schedule.__getitem__)
 
+    start_time = time.time()
     model.train()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
@@ -125,6 +125,10 @@ def train(
             optimizer.step()
             scheduler.step()
             total_loss += loss.detach().float()
+        logging.info(f"Epoch {epoch + 1} - Averaged Loss: {total_loss / len(dataset)}")
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    logging.info(f"Completed training in {elapsed_time:.2f} seconds.")
     return model
 
 

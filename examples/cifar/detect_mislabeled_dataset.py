@@ -12,7 +12,7 @@ from kronfluence.utils.dataset import DataLoaderKwargs
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Detecting mislabeled CIFAR-10 dataset.")
+    parser = argparse.ArgumentParser(description="Detecting mislabeled CIFAR-10 data points.")
 
     parser.add_argument(
         "--corrupt_percentage",
@@ -26,19 +26,18 @@ def parse_args():
         default="./data",
         help="A folder to download or load CIFAR-10 dataset.",
     )
-
     parser.add_argument(
         "--checkpoint_dir",
         type=str,
         default="./checkpoints",
-        help="A path to store the final checkpoint.",
+        help="A path that is storing the final checkpoint of the model.",
     )
 
     parser.add_argument(
         "--factor_strategy",
         type=str,
         default="ekfac",
-        help="Strategy to compute preconditioning factors.",
+        help="Strategy to compute influence factors.",
     )
 
     args = parser.parse_args()
@@ -53,10 +52,12 @@ def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
 
+    # Prepare the dataset.
     train_dataset = get_cifar10_dataset(
         split="eval_train", corrupt_percentage=args.corrupt_percentage, dataset_dir=args.dataset_dir
     )
 
+    # Prepare the trained model.
     model = construct_resnet9()
     model_name = "model"
     if args.corrupt_percentage is not None:
@@ -66,19 +67,20 @@ def main():
         raise ValueError(f"No checkpoint found at {checkpoint_path}.")
     model.load_state_dict(torch.load(checkpoint_path))
 
+    # Define task and prepare model.
     task = ClassificationTask()
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
-        analysis_name="cifar10",
+        analysis_name="mislabeled",
         model=model,
         task=task,
-        cpu=False,
     )
-
+    # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(num_workers=4)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
+    # Compute influence factors.
     factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
@@ -87,6 +89,7 @@ def main():
         factor_args=factor_args,
         overwrite_output_dir=False,
     )
+    # Compute self-influence scores.
     analyzer.compute_self_scores(
         scores_name="self",
         factors_name=args.factor_strategy,

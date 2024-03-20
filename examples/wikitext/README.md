@@ -26,6 +26,8 @@ To obtain a pairwise influence scores on maximum of 2000 query data points using
 ```bash
 python analyze.py --analyses_name default \
     --analyses_name default \
+    --query_batch_size 128 \
+    --train_batch_size 256 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```

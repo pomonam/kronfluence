@@ -8,16 +8,15 @@ import torch.nn.functional as F
 from accelerate.utils import set_seed
 from torch import nn
 from torch.utils import data
-from tqdm import tqdm
 from transformers import default_data_collator
-
+import time
 from examples.wikitext.pipeline import construct_gpt2, get_wikitext_dataset
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train text classification models on GLUE datasets.")
+    parser = argparse.ArgumentParser(description="Fine-tune GPT-2 on WikiText dataset.")
 
     parser.add_argument(
         "--train_batch_size",
@@ -78,7 +77,6 @@ def train(
     num_train_epochs: int,
     learning_rate: float,
     weight_decay: float,
-    disable_tqdm: bool = False,
 ) -> nn.Module:
     train_dataloader = data.DataLoader(
         dataset=dataset,
@@ -91,25 +89,27 @@ def train(
     model = construct_gpt2().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
+    start_time = time.time()
     model.eval()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
-        with tqdm(train_dataloader, unit="batch", disable=disable_tqdm) as tepoch:
-            for batch in tepoch:
-                tepoch.set_description(f"Epoch {epoch}")
-                model.zero_grad()
-                lm_logits = model(
-                    input_ids=batch["input_ids"].to(device=DEVICE),
-                    attention_mask=batch["attention_mask"].to(device=DEVICE),
-                ).logits
-                labels = batch["labels"].to(device=DEVICE)
-                shift_logits = lm_logits[..., :-1, :].contiguous()
-                shift_labels = labels[..., 1:].contiguous()
-                loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-                total_loss += loss.detach().float()
-                loss.backward()
-                optimizer.step()
-                tepoch.set_postfix(loss=total_loss.item() / len(train_dataloader))
+        for batch in train_dataloader:
+            model.zero_grad()
+            lm_logits = model(
+                input_ids=batch["input_ids"].to(device=DEVICE),
+                attention_mask=batch["attention_mask"].to(device=DEVICE),
+            ).logits
+            labels = batch["labels"].to(device=DEVICE)
+            shift_logits = lm_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+            total_loss += loss.detach().float()
+            loss.backward()
+            optimizer.step()
+        logging.info(f"Epoch {epoch + 1} - Averaged Loss: {total_loss / len(dataset)}")
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    logging.info(f"Completed training in {elapsed_time:.2f} seconds.")
     return model
 
 
