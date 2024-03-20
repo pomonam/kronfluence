@@ -150,18 +150,18 @@ def main():
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
         initial_per_device_batch_size_attempt=512,
     )
     analyzer.compute_pairwise_scores(
         scores_name="pairwise",
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
-        query_indices=list(range(2000)),
+        query_indices=list(range(min([len(eval_dataset), 2000]))),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
     print(scores)

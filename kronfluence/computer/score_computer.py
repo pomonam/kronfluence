@@ -300,22 +300,12 @@ class ScoreComputer(Computer):
                 overwrite_output_dir=overwrite_output_dir,
             )
         if query_indices is not None:
-            new_query_indices = []
-            for query_idx in query_indices:
-                if query_idx < len(query_dataset):
-                    new_query_indices.append(query_idx)
-            if len(new_query_indices) != len(query_indices):
-                self.logger.warning("Some elements from `query_indices` were removed.")
-            query_dataset = data.Subset(dataset=query_dataset, indices=new_query_indices)
+            query_dataset = data.Subset(dataset=query_dataset, indices=query_indices)
+            del query_indices
 
         if train_indices is not None:
-            new_train_indices = []
-            for train_idx in train_indices:
-                if train_idx < len(train_dataset):
-                    new_train_indices.append(train_idx)
-            if len(new_train_indices) != len(train_indices):
-                self.logger.warning("Some elements from `train_indices` were removed.")
-            train_dataset = data.Subset(dataset=train_dataset, indices=new_train_indices)
+            train_dataset = data.Subset(dataset=train_dataset, indices=train_indices)
+            del train_indices
 
         with self.profiler.profile("Load All Factors"):
             loaded_factors = self.load_all_factors(
@@ -604,13 +594,8 @@ class ScoreComputer(Computer):
                 overwrite_output_dir=overwrite_output_dir,
             )
         if train_indices is not None:
-            new_train_indices = []
-            for train_idx in train_indices:
-                if train_idx < len(train_dataset):
-                    new_train_indices.append(train_idx)
-            if len(new_train_indices) != len(train_indices):
-                self.logger.warning("Some elements from `train_indices` were removed.")
-            train_dataset = data.Subset(dataset=train_dataset, indices=new_train_indices)
+            train_dataset = data.Subset(dataset=train_dataset, indices=train_indices)
+            del train_indices
 
         with self.profiler.profile("Load All Factors"):
             loaded_factors = self.load_all_factors(
