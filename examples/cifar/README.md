@@ -17,7 +17,7 @@ python train.py --dataset_dir ./data \
     --seed 1004
 ```
 
-# Computing Pairwise Influence Scores
+## Computing Pairwise Influence Scores
 
 To obtain a pairwise influence scores on 2000 query data points using `ekfac`, run the following command:
 ```bash
@@ -26,8 +26,20 @@ python analyze.py --query_batch_size 1000 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
-You can also use `identity`, `diagonal`, and `kfac`. On A100 (80GB), it takes roughly 2 minutes to compute the pairwise scores.
+You can also use `identity`, `diagonal`, and `kfac`. On A100 (80GB), it takes roughly 2 minutes to compute the 
+pairwise scores (including computing EKFAC factors).
 
-# Counterfactual Evaluation
+## Mislabeled Data Detection
 
-You can check the notebook `tutorial.ipynb` for running the counterfactual evaluation.
+First, train the model with 10% of training dataset mislabeled by running the following command:
+```bash
+python train.py --dataset_dir ./data \
+    --corrupt_percentage 0.1 \
+    --checkpoint_dir ./checkpoints \
+    --train_batch_size 512 \
+    --eval_batch_size 1024 \
+    --learning_rate 0.4 \
+    --weight_decay 0.0001 \
+    --num_train_epochs 25 \
+    --seed 1004
+```

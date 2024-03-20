@@ -5,11 +5,13 @@ from typing import Tuple
 
 import torch
 import torch.nn.functional as F
-from arguments import FactorArguments
+from kronfluence.arguments import FactorArguments
 from torch import nn
+
 from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.task import Task
+from kronfluence.utils.dataset import DataLoaderKwargs
 
 BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 
@@ -124,6 +126,9 @@ def main():
         task=task,
         cpu=False,
     )
+
+    dataloader_kwargs = DataLoaderKwargs(num_workers=4)
+    analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(

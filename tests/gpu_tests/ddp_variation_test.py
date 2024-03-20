@@ -14,7 +14,7 @@ from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
 from tests.gpu_tests.ddp_test import OLD_FACTOR_NAME
-from tests.gpu_tests.pipeline import BATCH_DTYPE, construct_test_mlp, get_mnist_dataset
+from tests.gpu_tests.pipeline import BATCH_TYPE, construct_test_mlp, get_mnist_dataset
 
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
 WORLD_RANK = int(os.environ["RANK"])
@@ -27,7 +27,7 @@ NEW_SCORE_NAME = "ddp_variation"
 class GpuVariationTask(Task):
     def compute_train_loss(
         self,
-        batch: BATCH_DTYPE,
+        batch: BATCH_TYPE,
         model: nn.Module,
         sample: bool = False,
     ) -> torch.Tensor:
@@ -45,7 +45,7 @@ class GpuVariationTask(Task):
 
     def compute_measurement(
         self,
-        batch: BATCH_DTYPE,
+        batch: BATCH_TYPE,
         model: nn.Module,
     ) -> torch.Tensor:
         inputs, labels = batch

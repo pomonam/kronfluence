@@ -36,7 +36,6 @@ from kronfluence.utils.dataset import (
 from kronfluence.utils.exceptions import (
     FactorsNotFoundError,
     TrackedModuleNotFoundError,
-    UnsupportableModuleError,
 )
 from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger
 from kronfluence.utils.save import (
@@ -82,7 +81,7 @@ class Computer(ABC):
                 f"Analyzer."
             )
             self.logger.error(error_msg)
-            raise UnsupportableModuleError(error_msg)
+            raise TrackedModuleNotFoundError(error_msg)
         self.logger.info(f"Tracking modules with names: {tracked_module_names}.")
 
         if self.state.use_distributed and not isinstance(model, (DDP, FSDP)):

@@ -13,7 +13,7 @@ from examples.uci.pipeline import construct_regression_mlp, get_regression_datas
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.task import Task
 
-BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
+BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 
 
 def parse_args():
@@ -58,7 +58,7 @@ def parse_args():
 class RegressionTask(Task):
     def compute_train_loss(
         self,
-        batch: BATCH_DTYPE,
+        batch: BATCH_TYPE,
         model: nn.Module,
         sample: bool = False,
     ) -> torch.Tensor:
@@ -72,7 +72,7 @@ class RegressionTask(Task):
 
     def compute_measurement(
         self,
-        batch: BATCH_DTYPE,
+        batch: BATCH_TYPE,
         model: nn.Module,
     ) -> torch.Tensor:
         # The measurement function is set as a training loss.

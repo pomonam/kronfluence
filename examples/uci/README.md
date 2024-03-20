@@ -1,7 +1,7 @@
 # UCI Regression Example
 
 This directory contains scripts designed for training a regression model and conducting influence analysis with 
-datasets from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/datasets). Install all necessary packages:
+datasets from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/datasets). Please begin by installing necessary packages.
 
 ```bash
 pip install -r requirements.txt
@@ -22,7 +22,7 @@ python train.py --dataset_name concrete \
     --seed 1004
 ```
 
-# Computing Pairwise Influence Scores
+## Computing Pairwise Influence Scores
 
 To obtain a pairwise influence scores using `ekfac`, run the following command:
 ```bash
@@ -33,6 +33,6 @@ python analyze.py --dataset_name concrete \
 ```
 You can also use `identity`, `diagonal`, and `kfac`.
 
-# Counterfactual Evaluation
+## Counterfactual Evaluation
 
-You can check the notebook `tutorial.ipynb` for running the counterfactual evaluation.
+You can check the notebook `tutorial.ipynb` to run the counterfactual evaluation.
