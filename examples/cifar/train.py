@@ -55,7 +55,7 @@ def parse_args():
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=0.001,
+        default=0.0001,
         help="Weight decay to train the model.",
     )
     parser.add_argument(
@@ -105,7 +105,7 @@ def train(
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     iters_per_epoch = len(train_dataloader)
-    lr_peak_epoch = num_train_epochs // 4
+    lr_peak_epoch = num_train_epochs // 5
     lr_schedule = np.interp(
         np.arange((num_train_epochs + 1) * iters_per_epoch),
         [0, lr_peak_epoch * iters_per_epoch, num_train_epochs * iters_per_epoch],
