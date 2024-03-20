@@ -25,11 +25,9 @@ python train.py --dataset_name sst2 \
 To obtain a pairwise influence scores on maximum of 2000 query data points using `ekfac`, run the following command:
 ```bash
 python analyze.py --dataset_name sst2 \
-    --query_batch_size 100 \
+    --query_batch_size 200 \
     --train_batch_size 256 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
-You can also use `identity`, `diagonal`, and `kfac`. On A100 (80GB), it takes roughly 1.5 minutes to compute the 
-pairwise scores (including computing EKFAC factors).
-
+On A100 (80GB), it takes roughly 100 minutes to compute the pairwise scores (including computing EKFAC factors).

@@ -24,7 +24,7 @@ larger query batch size.
 python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
     --query_gradient_rank 32 \
     --query_batch_size 500 \
-    --train_batch_size 1024 \
+    --train_batch_size 512 \
     --factor_strategy ekfac
 ```
 On A100 (80GB), it takes less than 4 hours to compute the pairwise scores with query batching (including computing EKFAC factors).

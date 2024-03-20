@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -150,14 +150,14 @@ def main():
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
-        overwrite_output_dir=False,
+        overwrite_output_dir=True,
         initial_per_device_batch_size_attempt=512,
     )
     analyzer.compute_pairwise_scores(
         scores_name="pairwise",
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
-        # query_indices=list(range(2000)),
+        query_indices=list(range(2000)),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,

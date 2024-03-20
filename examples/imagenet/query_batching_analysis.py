@@ -1,8 +1,9 @@
 import logging
-from scipy.stats import spearmanr
-from analyzer import Analyzer
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
+from analyzer import Analyzer
+from scipy.stats import spearmanr
 from tueplots import markers
 
 
@@ -15,7 +16,7 @@ def main():
     # Only plot first 1000 points to avoid clutter.
     plt.rcParams.update({"figure.dpi": 150})
     plt.rcParams.update(markers.with_edge())
-    plt.rcParams['axes.axisbelow'] = True
+    plt.rcParams["axes.axisbelow"] = True
     plt.scatter(lr_scores[0][:1000], full_scores[0][:1000], edgecolor="k")
     plt.grid()
     plt.xlabel("Full Rank Score")

@@ -1,7 +1,8 @@
 import argparse
 import logging
-import os
 import math
+import os
+
 import torch
 import torch.nn.functional as F
 from accelerate.utils import set_seed
@@ -104,9 +105,7 @@ def train(
                 labels = batch["labels"].to(device=DEVICE)
                 shift_logits = lm_logits[..., :-1, :].contiguous()
                 shift_labels = labels[..., 1:].contiguous()
-                loss = F.cross_entropy(
-                    shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
-                )
+                loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
                 total_loss += loss.detach().float()
                 loss.backward()
                 optimizer.step()
@@ -132,9 +131,7 @@ def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> 
             shift_logits = lm_logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
-            loss = (
-                F.cross_entropy(reshaped_shift_logits, shift_labels.view(-1), reduction="sum").detach().float()
-            )
+            loss = F.cross_entropy(reshaped_shift_logits, shift_labels.view(-1), reduction="sum").detach().float()
             total_loss += loss
             total_num += reshaped_shift_logits.shape[0]
     return total_loss.item() / total_num
