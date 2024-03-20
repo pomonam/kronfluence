@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import torch
 import torch.nn.functional as F
@@ -29,7 +29,13 @@ def parse_args():
     parser.add_argument(
         "--query_batch_size",
         type=int,
-        default=32,
+        default=8,
+        help="Batch size for computing query gradients.",
+    )
+    parser.add_argument(
+        "--train_batch_size",
+        type=int,
+        default=8,
         help="Batch size for computing query gradients.",
     )
 
@@ -102,6 +108,9 @@ class TextClassificationTask(Task):
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
 
+    def get_attention_mask(self, batch: BATCH_TYPE) -> torch.Tensor:
+        return batch["attention_mask"]
+
 
 def main():
     args = parse_args()
@@ -117,10 +126,7 @@ def main():
     )
 
     model = construct_bert()
-    model_name = "model"
-    if args.corrupt_percentage is not None:
-        model_name += "_corrupt_" + str(args.corrupt_percentage)
-    checkpoint_path = os.path.join(args.checkpoint_dir, f"{model_name}.pth")
+    checkpoint_path = os.path.join(args.checkpoint_dir, "model.pth")
     if not os.path.isfile(checkpoint_path):
         raise ValueError(f"No checkpoint found at {checkpoint_path}.")
     model.load_state_dict(torch.load(checkpoint_path))
@@ -129,14 +135,11 @@ def main():
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
-        analysis_name="cifar10",
+        analysis_name=args.dataset_name,
         model=model,
         task=task,
         cpu=False,
     )
-
-    dataloader_kwargs = DataLoaderKwargs(num_workers=4)
-    analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(
@@ -145,6 +148,7 @@ def main():
         per_device_batch_size=None,
         factor_args=factor_args,
         overwrite_output_dir=True,
+        initial_per_device_batch_size_attempt=64,
     )
     analyzer.compute_pairwise_scores(
         scores_name="pairwise",
@@ -153,6 +157,7 @@ def main():
         query_indices=list(range(2000)),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
+        per_device_train_batch_size=args.train_batch_size,
         overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
