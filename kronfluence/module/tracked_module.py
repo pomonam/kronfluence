@@ -736,6 +736,9 @@ class TrackedModule(nn.Module):
             if self.score_args.cached_activation_cpu_offload:
                 cached_activation = cached_activation.to(device=output_gradient.device)
 
+            print(self._storage[ACTIVATION_EIGENVECTORS_NAME].device)
+            print(self._storage[LAMBDA_MATRIX_NAME].device)
+
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=cached_activation,
                 output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
