@@ -24,7 +24,7 @@ larger query batch size.
 python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
     --query_gradient_rank 32 \
     --query_batch_size 500 \
-    --train_batch_size 512 \
+    --train_batch_size 1024 \
     --factor_strategy ekfac
 ```
 On A100 (80GB), it takes less than 4 hours to compute the pairwise scores with query batching (including computing EKFAC factors).
@@ -35,8 +35,7 @@ contains code the compute the correlations between the full rank prediction and 
 <p align="center">
 <a href="#"><img width="380" img src="figure/query_batching.png" alt="Counterfactual"/></a>
 </p>
-The averaged correlations between the low-rank and full rank for 100 data points is 0.95.
-
+The averaged correlations between the low-rank and full rank scores for 100 data points is 0.95.
 
 ## Computing Pairwise Influence Scores with DDP
 

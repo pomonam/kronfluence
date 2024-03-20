@@ -25,8 +25,8 @@ python train.py --dataset_name sst2 \
 To obtain a pairwise influence scores on maximum of 2000 query data points using `ekfac`, run the following command:
 ```bash
 python analyze.py --dataset_name sst2 \
-    --query_batch_size 8 \
-    --train_batch_size 32 \
+    --query_batch_size 100 \
+    --train_batch_size 512 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
