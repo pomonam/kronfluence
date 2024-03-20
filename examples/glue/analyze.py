@@ -157,7 +157,7 @@ def main():
         scores_name="pairwise",
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
-        query_indices=list(range(2000)),
+        # query_indices=list(range(2000)),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
