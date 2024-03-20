@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import time
 from typing import Tuple
 
 import evaluate
@@ -99,6 +100,7 @@ def train(
     model = construct_bert().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
+    start_time = time.time()
     model.train()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
@@ -114,6 +116,9 @@ def train(
             optimizer.step()
             total_loss += loss.detach().float()
         logging.info(f"Epoch {epoch + 1} - Averaged Loss: {total_loss / len(dataset)}")
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    logging.info(f"Completed training in {elapsed_time:.2f} seconds.")
     return model
 
 
