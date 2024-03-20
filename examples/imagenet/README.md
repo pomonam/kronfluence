@@ -26,7 +26,7 @@ python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
     --train_batch_size 512 \
     --factor_strategy ekfac
 ```
-
+On A100 (80GB), it takes less than 4 hours to compute the pairwise scores with query batching.
 
 ## Computing Pairwise Influence Scores with DDP
 

@@ -126,8 +126,8 @@ def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> 
     for batch in dataloader:
         with torch.no_grad():
             lm_logits = model(
-                batch["input_ids"].to(device=DEVICE),
-                batch["attention_mask"].to(device=DEVICE),
+                input_ids=batch["input_ids"].to(device=DEVICE),
+                attention_mask=batch["attention_mask"].to(device=DEVICE),
             ).logits
             labels = batch["labels"].to(device=DEVICE)
             shift_logits = lm_logits[..., :-1, :].contiguous()
