@@ -151,7 +151,7 @@ def main():
         per_device_batch_size=None,
         factor_args=factor_args,
         overwrite_output_dir=True,
-        initial_per_device_batch_size_attempt=256,
+        initial_per_device_batch_size_attempt=512,
     )
     analyzer.compute_pairwise_scores(
         scores_name="pairwise",

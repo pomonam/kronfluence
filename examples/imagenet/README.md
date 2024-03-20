@@ -4,7 +4,7 @@ This directory contains scripts for training ResNet-50 on ImageNet.
 
 ## Training
 
-We will use the pre-trained dataset from `torchvision.models.resnet50`.
+We will use the pre-trained model from `torchvision.models.resnet50`.
 
 ## Computing Pairwise Influence Scores
 
@@ -18,7 +18,8 @@ python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
 ```
 On A100 (80GB), it takes approximately 12 hours to compute the pairwise scores (including computing EKFAC factors).
 
-We can also use query batching to compute influence scores with larger query batch size.
+We can also use query batching (low-rank approximation to the query gradient) to compute influence scores with a 
+larger query batch size.
 ```bash
 python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
     --query_gradient_rank 32 \
@@ -28,9 +29,12 @@ python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
 ```
 On A100 (80GB), it takes less than 4 hours to compute the pairwise scores with query batching.
 
+But how much did we
+
 ## Computing Pairwise Influence Scores with DDP
 
 You can also use DistributedDataParallel to speed up influence computations. You can run:
 ```bash
 torchrun --standalone --nnodes=1 --nproc-per-node=2 ddp_analyze.py
 ```
+On 2 A100 (80GB), it takes approximately 
