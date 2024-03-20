@@ -125,6 +125,7 @@ def main():
         per_device_batch_size=None,
         factor_args=factor_args,
         overwrite_output_dir=True,
+        initial_per_device_batch_size_attempt=8192,
     )
     analyzer.compute_pairwise_scores(
         scores_name="pairwise",
@@ -134,6 +135,7 @@ def main():
         train_dataset=train_dataset,
         per_device_query_batch_size=500,
         overwrite_output_dir=True,
+        initial_per_device_train_batch_size_attempt=8192,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
     print(scores)
