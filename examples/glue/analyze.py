@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import Tuple, Dict
+from typing import Dict, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -71,17 +71,14 @@ class TextClassificationTask(Task):
         ).logits
 
         if not sample:
-            return F.cross_entropy(
-                logits, batch["labels"], reduction="sum"
-            )
+            return F.cross_entropy(logits, batch["labels"], reduction="sum")
         with torch.no_grad():
             probs = torch.nn.functional.softmax(logits, dim=-1)
             sampled_labels = torch.multinomial(
-                probs, num_samples=1,
+                probs,
+                num_samples=1,
             ).flatten()
-        return F.cross_entropy(
-            logits, sampled_labels.detach(), reduction="sum"
-        )
+        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
 
     def compute_measurement(
         self,
@@ -96,15 +93,11 @@ class TextClassificationTask(Task):
         ).logits
 
         labels = batch["labels"]
-        bindex = torch.arange(logits.shape[0]).to(
-            device=logits.device, non_blocking=False
-        )
+        bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
         logits_correct = logits[bindex, labels]
 
         cloned_logits = logits.clone()
-        cloned_logits[bindex, labels] = torch.tensor(
-            -torch.inf, device=logits.device, dtype=logits.dtype
-        )
+        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
@@ -115,10 +108,12 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     train_dataset = get_glue_dataset(
-        data_name=args.data_name, split="eval_train",
+        data_name=args.data_name,
+        split="eval_train",
     )
     eval_dataset = get_glue_dataset(
-        data_name=args.data_name, split="valid",
+        data_name=args.data_name,
+        split="valid",
     )
 
     model = construct_bert()

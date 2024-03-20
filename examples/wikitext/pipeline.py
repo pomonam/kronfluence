@@ -5,11 +5,7 @@ import torch
 import torch.nn as nn
 from datasets import load_dataset
 from torch.utils.data import DataLoader
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    AutoTokenizer,
-)
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from transformers.pytorch_utils import Conv1D
 
 
@@ -21,9 +17,7 @@ def replace_conv1d_modules(model: nn.Module) -> None:
             replace_conv1d_modules(module)
 
         if isinstance(module, Conv1D):
-            new_module = nn.Linear(
-                in_features=module.weight.shape[0], out_features=module.weight.shape[1]
-            )
+            new_module = nn.Linear(in_features=module.weight.shape[0], out_features=module.weight.shape[1])
             new_module.weight.data.copy_(module.weight.data.t())
             new_module.bias.data.copy_(module.bias.data)
             setattr(model, name, new_module)
@@ -52,9 +46,7 @@ def get_wikitext_dataset(
     assert split in ["train", "eval_train", "valid"]
 
     raw_datasets = load_dataset("wikitext", "wikitext-2-raw-v1")
-    tokenizer = AutoTokenizer.from_pretrained(
-        "gpt2", use_fast=True, trust_remote_code=True
-    )
+    tokenizer = AutoTokenizer.from_pretrained("gpt2", use_fast=True, trust_remote_code=True)
     column_names = raw_datasets["train"].column_names
     text_column_name = "text" if "text" in column_names else column_names[0]
 

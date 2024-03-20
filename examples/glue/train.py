@@ -88,7 +88,6 @@ def train(
     num_train_epochs: int,
     learning_rate: float,
     weight_decay: float,
-    disable_tqdm: bool = False,
 ) -> nn.Module:
     train_dataloader = data.DataLoader(
         dataset=dataset,
@@ -104,20 +103,17 @@ def train(
     model.train()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
-        with tqdm(train_dataloader, unit="batch", disable=disable_tqdm) as tepoch:
-            for batch in tepoch:
-                tepoch.set_description(f"Epoch {epoch}")
-                model.zero_grad()
-                outputs = model(
-                    input_ids=batch["input_ids"].to(device=DEVICE),
-                    attention_mask=batch["attention_mask"].to(device=DEVICE),
-                    token_type_ids=batch["token_type_ids"].to(device=DEVICE),
-                ).logits
-                loss = F.cross_entropy(outputs, batch["labels"].to(device=DEVICE))
-                total_loss += loss.detach().float()
-                loss.backward()
-                optimizer.step()
-                tepoch.set_postfix(loss=total_loss.item() / len(train_dataloader))
+        for batch in train_dataloader:
+            model.zero_grad()
+            outputs = model(
+                input_ids=batch["input_ids"].to(device=DEVICE),
+                attention_mask=batch["attention_mask"].to(device=DEVICE),
+                token_type_ids=batch["token_type_ids"].to(device=DEVICE),
+            ).logits
+            loss = F.cross_entropy(outputs, batch["labels"].to(device=DEVICE))
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.detach().float()
     return model
 
 
