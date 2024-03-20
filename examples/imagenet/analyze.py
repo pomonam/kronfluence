@@ -5,17 +5,17 @@ from typing import Tuple
 import torch
 import torch.nn.functional as F
 from analyzer import Analyzer, prepare_model
-from arguments import FactorArguments
+from arguments import FactorArguments, ScoreArguments
 from task import Task
 from torch import nn
-
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
+from utils.dataset import DataLoaderKwargs
 
-BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
+BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on ImageNet datasets.")
+    parser = argparse.ArgumentParser(description="Influence analysis on ImageNet dataset.")
 
     parser.add_argument(
         "--dataset_dir",
@@ -25,29 +25,28 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--query_gradient_rank",
+        type=int,
+        default=None,
+        help="Rank for the low-rank query gradient approximation.",
+    )
+    parser.add_argument(
+        "--query_batch_size",
+        type=int,
+        default=100,
+        help="Batch size for computing query gradients.",
+    )
+    parser.add_argument(
+        "--train_batch_size",
+        type=int,
+        default=128,
+        help="Batch size for computing training gradient.",
+    )
+    parser.add_argument(
         "--factor_strategy",
         type=str,
         default="ekfac",
         help="Strategy to compute preconditioning factors.",
-    )
-    parser.add_argument(
-        "--batch_size",
-        type=int,
-        default=512,
-        help="Batch size for compute factors and scores.",
-    )
-    parser.add_argument(
-        "--analysis_name",
-        type=str,
-        default="imagenet",
-        help="Name of the influence analysis.",
-    )
-
-    parser.add_argument(
-        "--checkpoint_dir",
-        type=str,
-        default="./checkpoints",
-        help="A path to store the final checkpoint.",
     )
 
     args = parser.parse_args()
@@ -55,40 +54,38 @@ def parse_args():
 
 
 class ClassificationTask(Task):
-    def compute_model_output(self, batch: BATCH_DTYPE, model: nn.Module) -> torch.Tensor:
-        inputs, _ = batch
-        return model(inputs)
-
     def compute_train_loss(
         self,
-        batch: BATCH_DTYPE,
-        outputs: torch.Tensor,
+        batch: BATCH_TYPE,
+        model: nn.Module,
         sample: bool = False,
     ) -> torch.Tensor:
-        _, labels = batch
-
+        inputs, labels = batch
+        logits = model(inputs)
         if not sample:
-            return F.cross_entropy(outputs, labels, reduction="sum")
+            return F.cross_entropy(logits, labels, reduction="sum")
         with torch.no_grad():
-            probs = torch.nn.functional.softmax(outputs, dim=-1)
+            probs = torch.nn.functional.softmax(logits, dim=-1)
             sampled_labels = torch.multinomial(
                 probs,
                 num_samples=1,
             ).flatten()
-        return F.cross_entropy(outputs, sampled_labels.detach(), reduction="sum")
+        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
 
     def compute_measurement(
         self,
-        batch: BATCH_DTYPE,
-        outputs: torch.Tensor,
+        batch: BATCH_TYPE,
+        model: nn.Module,
     ) -> torch.Tensor:
-        _, labels = batch
+        # Copied from: https://github.com/MadryLab/trak/blob/main/trak/modelout_functions.py.
+        inputs, labels = batch
+        logits = model(inputs)
 
-        bindex = torch.arange(outputs.shape[0]).to(device=outputs.device, non_blocking=False)
-        logits_correct = outputs[bindex, labels]
+        bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
+        logits_correct = logits[bindex, labels]
 
-        cloned_logits = outputs.clone()
-        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=outputs.device, dtype=outputs.dtype)
+        cloned_logits = logits.clone()
+        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
@@ -99,8 +96,8 @@ def main():
 
     logging.basicConfig(level=logging.INFO)
 
-    train_dataset = get_imagenet_dataset(split="eval_train", data_path=args.dataset_dir)
-    # eval_dataset = get_imagenet_dataset(split="valid", data_path=args.dataset_dir)
+    train_dataset = get_imagenet_dataset(split="eval_train", dataset_dir=args.dataset_dir)
+    eval_dataset = get_imagenet_dataset(split="valid", dataset_dir=args.dataset_dir)
 
     model = construct_resnet50()
 
@@ -108,22 +105,38 @@ def main():
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
-        analysis_name=args.analysis_name,
+        analysis_name="imagenet",
         model=model,
         task=task,
     )
 
-    factor_args = FactorArguments(
-        strategy=args.factor_strategy,
-        covariance_data_partition_size=1,
-        covariance_module_partition_size=1,
+    dataloader_kwargs = DataLoaderKwargs(
+        num_workers=4,
     )
-    analyzer.fit_covariance_matrices(
+    analyzer.set_dataloader_kwargs(dataloader_kwargs)
+
+    factor_args = FactorArguments(strategy=args.factor_strategy)
+    analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
+        per_device_batch_size=None,
         factor_args=factor_args,
-        per_device_batch_size=1024,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
+    )
+    score_args = ScoreArguments(query_gradient_rank=args.query_gradient_rank)
+    scores_name = "pairwise"
+    if args.query_gradient_rank is not None:
+        scores_name += f"_qlr{args.query_gradient_rank}"
+    analyzer.compute_pairwise_scores(
+        score_args=score_args,
+        scores_name=scores_name,
+        factors_name=args.factor_strategy,
+        query_dataset=eval_dataset,
+        query_indices=list(range(1000)),
+        train_dataset=train_dataset,
+        per_device_query_batch_size=args.query_batch_size,
+        per_device_train_batch_size=args.train_batch_size,
+        overwrite_output_dir=False,
     )
 
 

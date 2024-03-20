@@ -51,3 +51,7 @@ python detect_mislabeled_dataset.py --dataset_dir ./data \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
+
+On A100 (80GB), it takes roughly 1.5 minutes to compute the self-influence scores (including computing EKFAC factors).
+We can detect around 82% of mislabeled data points by inspecting 10% of the dataset using self-influence scores
+(96% by inspecting 20%).
