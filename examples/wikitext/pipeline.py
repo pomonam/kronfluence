@@ -2,9 +2,9 @@ from itertools import chain
 from typing import List
 
 import torch
-import torch.nn as nn
 from datasets import load_dataset
-from torch.utils.data import DataLoader
+from torch import nn
+from torch.utils import data
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from transformers.pytorch_utils import Conv1D
 
@@ -42,7 +42,7 @@ def construct_gpt2() -> nn.Module:
 def get_wikitext_dataset(
     split: str,
     indices: List[int] = None,
-) -> torch.utils.data.DataLoader:
+) -> data.Dataset:
     assert split in ["train", "eval_train", "valid"]
 
     raw_datasets = load_dataset("wikitext", "wikitext-2-raw-v1")
@@ -82,7 +82,7 @@ def get_wikitext_dataset(
         desc=f"Grouping texts in chunks of {block_size}",
     )
 
-    if split == "train" or split == "eval_train":
+    if split == ["train", "eval_train"]:
         train_dataset = lm_datasets["train"]
         ds = train_dataset
     else:

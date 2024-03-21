@@ -2,6 +2,7 @@ import argparse
 import logging
 import math
 import os
+import time
 
 import torch
 import torch.nn.functional as F
@@ -9,7 +10,7 @@ from accelerate.utils import set_seed
 from torch import nn
 from torch.utils import data
 from transformers import default_data_collator
-import time
+
 from examples.wikitext.pipeline import construct_gpt2, get_wikitext_dataset
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

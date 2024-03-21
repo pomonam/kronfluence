@@ -173,7 +173,7 @@ def main():
         per_device_batch_size=None,
         factor_args=factor_args,
         overwrite_output_dir=False,
-        initial_per_device_batch_size_attempt=512,
+        initial_per_device_batch_size_attempt=128,
     )
 
     # Compute pairwise scores.
