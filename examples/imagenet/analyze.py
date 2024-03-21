@@ -4,13 +4,13 @@ from typing import Tuple
 
 import torch
 import torch.nn.functional as F
-from analyzer import Analyzer, prepare_model
-from arguments import FactorArguments, ScoreArguments
-from task import Task
 from torch import nn
-from utils.dataset import DataLoaderKwargs
 
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
+from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.task import Task
+from kronfluence.utils.dataset import DataLoaderKwargs
 
 BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 
@@ -96,11 +96,15 @@ def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
 
+    # Prepare the dataset.
     train_dataset = get_imagenet_dataset(split="eval_train", dataset_dir=args.dataset_dir)
     eval_dataset = get_imagenet_dataset(split="valid", dataset_dir=args.dataset_dir)
 
+    # Prepare the trained model.
     model = construct_resnet50()
     task = ClassificationTask()
+
+    # Define task and prepare model.
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
@@ -108,11 +112,13 @@ def main():
         model=model,
         task=task,
     )
+    # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(
         num_workers=4,
     )
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
+    # Compute influence factors.
     factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
@@ -122,6 +128,7 @@ def main():
         overwrite_output_dir=False,
     )
 
+    # Compute pairwise scores.
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
     scores_name = "pairwise"
@@ -138,6 +145,8 @@ def main():
         per_device_train_batch_size=args.train_batch_size,
         overwrite_output_dir=True,
     )
+    scores = analyzer.load_pairwise_scores(scores_name)
+    print(scores["all_modules"].shape)
 
 
 if __name__ == "__main__":

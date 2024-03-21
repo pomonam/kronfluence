@@ -1,6 +1,9 @@
 # ImageNet & ResNet-50 Example
 
-This directory contains scripts for training ResNet-50 on ImageNet. 
+This directory contains scripts for training ResNet-50 on ImageNet. Please begin by installing necessary packages.
+```bash
+pip install -r requirements.txt
+```
 
 ## Training
 
@@ -10,7 +13,7 @@ We will use the pre-trained model from `torchvision.models.resnet50`.
 
 To obtain a pairwise influence scores on 1000 query data points using `ekfac`, run the following command:
 ```bash
-python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
+python analyze.py --dataset_dir PATH_TO_IMAGENET \
     --query_gradient_rank -1 \
     --query_batch_size 100 \
     --train_batch_size 512 \
@@ -21,7 +24,7 @@ On A100 (80GB), it takes approximately 12 hours to compute the pairwise scores (
 We can also use query batching (low-rank approximation to the query gradient) to compute influence scores with a 
 larger query batch size.
 ```bash
-python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
+python analyze.py --dataset_dir PATH_TO_IMAGENET \
     --query_gradient_rank 32 \
     --query_batch_size 500 \
     --train_batch_size 512 \
@@ -29,8 +32,8 @@ python analyze.py --dataset_dir /mfs1/datasets/imagenet_pytorch/ \
 ```
 On A100 (80GB), it takes less than 4 hours to compute the pairwise scores with query batching (including computing EKFAC factors).
 
-But how accurate are the low-rank approximations? Assuming that you ran above two commands, `query_batching_analysis.py`
-contains code the compute the correlations between the full rank prediction and low-rank prediction.
+Assuming that you ran above two commands, `query_batching_analysis.py`
+contains code to compute the correlations between the full rank prediction and low-rank scores.
 
 <p align="center">
 <a href="#"><img width="380" img src="figure/query_batching.png" alt="Counterfactual"/></a>
@@ -41,7 +44,12 @@ The averaged correlations between the low-rank and full rank scores for 100 data
 
 You can also use DistributedDataParallel (DDP) to speed up influence computations. You can run:
 ```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=2 ddp_analyze.py
+torchrun --standalone --nnodes=1 --nproc-per-node=2 ddp_analyze.py --dataset_dir PATH_TO_IMAGENET \
+    --query_gradient_rank -1 \
+    --factor_batch_size 512 \
+    --query_batch_size 100 \
+    --train_batch_size 512 \
+    --factor_strategy ekfac
 ```
 On 2 A100 (80GB), it takes approximately 6 hours to compute the pairwise scores. When available, you can use more GPUs 
 to speed up influence computations.

@@ -13,7 +13,7 @@ def main():
 
     full_scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"]
     lr_scores = Analyzer.load_file("scores_pairwise_qlr32/pairwise_scores.safetensors")["all_modules"]
-    print(full_scores)
+
     # Only plot first 1000 points to avoid clutter.
     plt.rcParams.update({"figure.dpi": 150})
     plt.rcParams.update(markers.with_edge())

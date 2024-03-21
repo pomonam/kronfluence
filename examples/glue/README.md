@@ -33,14 +33,25 @@ python analyze.py --dataset_name sst2 \
 On A100 (80GB), it takes roughly 80 minutes to compute the pairwise scores for SST2 with around 900 query data points 
 (including computing EKFAC factors).
 
+We can also use query batching (low-rank approximation to the query gradient) to compute influence scores with a 
+larger query batch size.
 ```bash
 python analyze.py --dataset_name sst2 \
     --query_gradient_rank 32 \
-    --query_batch_size 400 \
+    --query_batch_size 436 \
     --train_batch_size 256 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
+On A100 (80GB), it takes less than 4 hours to compute the pairwise scores with query batching (including computing EKFAC factors).
+
+Assuming that you ran above two commands, `query_batching_analysis.py`
+contains code to compute the correlations between the full rank prediction and low-rank scores.
+
+<p align="center">
+<a href="#"><img width="380" img src="figure/query_batching.png" alt="Counterfactual"/></a>
+</p>
+The averaged correlations between the low-rank and full rank scores for 100 data points is 0.98.
 
 # Counterfactual Evaluation
 

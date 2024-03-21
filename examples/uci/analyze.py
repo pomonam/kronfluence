@@ -6,11 +6,11 @@ from typing import Tuple
 
 import torch
 import torch.nn.functional as F
-from kronfluence.arguments import FactorArguments
 from torch import nn
 
 from examples.uci.pipeline import construct_regression_mlp, get_regression_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.arguments import FactorArguments
 from kronfluence.task import Task
 
 BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]

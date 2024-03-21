@@ -2,9 +2,10 @@ import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
-from analyzer import Analyzer
 from scipy.stats import spearmanr
 from tueplots import markers
+
+from kronfluence.analyzer import Analyzer
 
 
 def main():

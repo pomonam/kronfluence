@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument(
         "--seed",
         type=int,
-        default=1004,
+        default=0,
         help="A seed for reproducible training pipeline.",
     )
     parser.add_argument(

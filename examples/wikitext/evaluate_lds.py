@@ -2,9 +2,9 @@ import logging
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 from scipy.stats import spearmanr
 from tueplots import markers
-import torch
 
 from kronfluence.analyzer import Analyzer
 
@@ -18,7 +18,7 @@ def main():
     mask = ((mask + 1) % 2).to(dtype=torch.float32)
     print(results)
 
-    scores = Analyzer.load_file("scores_pairwise/scores_pairwise/pairwise_scores.safetensors")["all_modules"]
+    scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"]
     print(scores)
 
     preds = mask @ scores.T

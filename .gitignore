@@ -167,3 +167,4 @@ checkpoints/
 analyses/
 data/
 *.pth
+*.pt

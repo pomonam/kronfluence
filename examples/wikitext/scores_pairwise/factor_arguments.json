@@ -1,0 +1,19 @@
+{
+    "strategy": "ekfac",
+    "use_empirical_fisher": false,
+    "immediate_gradient_removal": false,
+    "ignore_bias": false,
+    "distributed_sync_steps": 1000,
+    "covariance_max_examples": 100000,
+    "covariance_data_partition_size": 1,
+    "covariance_module_partition_size": 1,
+    "activation_covariance_dtype": "torch.float32",
+    "gradient_covariance_dtype": "torch.float32",
+    "eigendecomposition_dtype": "torch.float64",
+    "lambda_max_examples": 100000,
+    "lambda_data_partition_size": 1,
+    "lambda_module_partition_size": 1,
+    "lambda_iterative_aggregate": false,
+    "cached_activation_cpu_offload": false,
+    "lambda_dtype": "torch.float32"
+}

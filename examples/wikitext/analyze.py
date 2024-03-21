@@ -95,7 +95,6 @@ class LanguageModelingTask(Task):
             summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels.detach(), reduction="sum")
         return summed_loss
 
-
     def compute_measurement(
         self,
         batch: BATCH_TYPE,
@@ -173,7 +172,7 @@ def main():
 
     # Compute pairwise scores.
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
-    score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32, damping=1e-08)
+    score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
     scores_name = "pairwise"
     if rank is not None:
         scores_name += f"_qlr{rank}"
