@@ -1,7 +1,6 @@
 from itertools import chain
 from typing import List
 
-import torch
 from datasets import load_dataset
 from torch import nn
 from torch.utils import data
@@ -47,6 +46,7 @@ def get_wikitext_dataset(
 
     raw_datasets = load_dataset("wikitext", "wikitext-2-raw-v1")
     tokenizer = AutoTokenizer.from_pretrained("gpt2", use_fast=True, trust_remote_code=True)
+
     column_names = raw_datasets["train"].column_names
     text_column_name = "text" if "text" in column_names else column_names[0]
 

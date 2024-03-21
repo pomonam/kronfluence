@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 from accelerate.utils import set_seed
 from torch import nn
+from torch.nn import CrossEntropyLoss
 from torch.utils import data
 from transformers import default_data_collator
 
@@ -89,6 +90,7 @@ def train(
 
     model = construct_gpt2().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    loss_fn = CrossEntropyLoss(reduction="mean")
 
     start_time = time.time()
     model.eval()
@@ -103,10 +105,10 @@ def train(
             labels = batch["labels"].to(device=DEVICE)
             shift_logits = lm_logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
-            loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-            total_loss += loss.detach().float()
+            loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
             loss.backward()
             optimizer.step()
+            total_loss += loss.detach().float()
         logging.info(f"Epoch {epoch + 1} - Averaged Loss: {total_loss / len(dataset)}")
     end_time = time.time()
     elapsed_time = end_time - start_time
