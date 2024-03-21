@@ -21,12 +21,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Influence analysis on WikiText dataset.")
 
     parser.add_argument(
-        "--analyses_name",
-        type=str,
-        default="default",
-        help="The name of the analysis.",
-    )
-    parser.add_argument(
         "--checkpoint_dir",
         type=str,
         default="./checkpoints",
@@ -150,7 +144,7 @@ def main():
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
-        analysis_name=args.analyses_name,
+        analysis_name="wikitext",
         model=model,
         task=task,
     )

@@ -82,7 +82,7 @@ def get_wikitext_dataset(
         desc=f"Grouping texts in chunks of {block_size}",
     )
 
-    if split == ["train", "eval_train"]:
+    if split in ["train", "eval_train"]:
         train_dataset = lm_datasets["train"]
         ds = train_dataset
     else:
