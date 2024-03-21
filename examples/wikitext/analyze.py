@@ -95,6 +95,7 @@ class LanguageModelingTask(Task):
             summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels.detach(), reduction="sum")
         return summed_loss
 
+
     def compute_measurement(
         self,
         batch: BATCH_TYPE,
@@ -106,11 +107,11 @@ class LanguageModelingTask(Task):
     def tracked_modules(self) -> List[str]:
         total_modules = []
 
-        for i in range(11):
+        for i in range(12):
             total_modules.append(f"transformer.h.{i}.attn.c_attn")
             total_modules.append(f"transformer.h.{i}.attn.c_proj")
 
-        for i in range(11):
+        for i in range(12):
             total_modules.append(f"transformer.h.{i}.mlp.c_fc")
             total_modules.append(f"transformer.h.{i}.mlp.c_proj")
 

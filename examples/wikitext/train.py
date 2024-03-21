@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument(
         "--eval_batch_size",
         type=int,
-        default=8,
+        default=16,
         help="Batch size for the evaluation dataloader.",
     )
 
