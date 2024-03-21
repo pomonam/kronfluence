@@ -180,6 +180,7 @@ def main():
     if args.use_half_precision:
         score_args.per_sample_gradient_dtype = torch.bfloat16
         score_args.score_dtype = torch.bfloat16
+        score_args.cached_activation_cpu_offload = True
         scores_name += "_half"
 
     analyzer.compute_pairwise_scores(
