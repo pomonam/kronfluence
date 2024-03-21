@@ -166,13 +166,13 @@ def main():
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
-        overwrite_output_dir=False,
+        overwrite_output_dir=True,
         initial_per_device_batch_size_attempt=128,
     )
 
     # Compute pairwise scores.
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
-    score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
+    score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32, damping=1e-08)
     scores_name = "pairwise"
     if rank is not None:
         scores_name += f"_qlr{rank}"
@@ -192,7 +192,7 @@ def main():
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
-        overwrite_output_dir=False,
+        overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores("pairwise")
     print(scores["all_modules"].shape)
