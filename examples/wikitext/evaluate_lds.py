@@ -15,7 +15,8 @@ def main():
     mask = torch.from_numpy(results["mask"]).float()
     mask = ((mask + 1) % 2).to(dtype=torch.float64).t()
 
-    scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"].to(dtype=torch.float64)
+    # The path might need to get fixed.
+    scores = Analyzer.load_file("scores_pairwise/ekfac_pairwise.safetensors")["all_modules"].to(dtype=torch.float64)
     preds = (scores @ mask).t().numpy()
 
     corr_lst = []

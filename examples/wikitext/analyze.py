@@ -194,8 +194,8 @@ def main():
         per_device_train_batch_size=args.train_batch_size,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_pairwise_scores(scores_name)
-    print(scores["all_modules"].shape)
+    scores = analyzer.load_pairwise_scores(scores_name)["all_modules"]
+    logging.info(f"Scores shape: {scores.shape}")
 
 
 if __name__ == "__main__":
