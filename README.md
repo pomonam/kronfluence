@@ -13,7 +13,7 @@
     <a href="https://github.com/pomonam/kronfluence/actions/workflows/python-test.yml">
         <img alt="CI" src="https://github.com/pomonam/kronfluence/actions/workflows/python-test.yml/badge.svg">
     </a>
-    <a href="https://github.com/mlcommons/kronfluence/actions/workflows/linting.yml">
+    <a href="https://github.com/pomonam/kronfluence/actions/workflows/linting.yml">
         <img alt="Linting" src="https://github.com/pomonam/kronfluence/actions/workflows/linting.yml/badge.svg">
     </a>
     <a href="https://github.com/astral-sh/ruff">
