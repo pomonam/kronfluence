@@ -45,6 +45,13 @@ def parse_args():
         help="Strategy to compute preconditioning factors.",
     )
 
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        default=False,
+        help="Boolean flag to profile computations.",
+    )
+
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -102,6 +109,7 @@ def main():
         model=model,
         task=task,
         cpu=True,
+        profile=args.profile,
     )
 
     factor_args = FactorArguments(strategy=args.factor_strategy)
