@@ -15,7 +15,7 @@ def main():
     mask = torch.from_numpy(results["mask"]).float()
     mask = ((mask + 1) % 2).to(dtype=torch.float64).t()
 
-    # The path might need to get fixed.
+    # You might need to change the path.
     scores = Analyzer.load_file("scores_pairwise/ekfac_pairwise.safetensors")["all_modules"].to(dtype=torch.float64)
     preds = (scores @ mask).t().numpy()
 

@@ -13,6 +13,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     train_dataset = get_wikitext_dataset(split="train")
+    # You might need to change the path.
     scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][
         :50
     ].sum(dim=0)
@@ -26,7 +27,7 @@ def main():
         remove_indices = [tensor.item() for tensor in remove_indices]
         return list(set(list(range(len(train_dataset)))) - set(remove_indices))
 
-    eval_train_dataset = get_wikitext_dataset(split="eval_train", indices=list(range(50)))
+    eval_train_dataset = get_wikitext_dataset(split="valid", indices=list(range(50)))
 
     def train_and_evaluate(indices):
         train_dataset = get_wikitext_dataset(split="train", indices=indices)
@@ -37,7 +38,7 @@ def main():
             learning_rate=3e-05,
             weight_decay=0.01,
         )
-        return evaluate_model(model, eval_train_dataset, 1)
+        return evaluate_model(model, eval_train_dataset, batch_size=16)
 
     num_iter = 1
     topk_lst = [0, 50, 100, 150, 200]
