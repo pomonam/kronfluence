@@ -206,7 +206,10 @@ class TorchProfiler(Profiler):
 
     def _trace_handler(self, p) -> None:
         """Adds the PyTorch Profiler trace output to a list once it is ready."""
-        output = p.key_averages().table(sort_by="self_cuda_time_total", row_limit=10)
+        # Set metric to sort by based on device
+        is_cpu = (self.state.device == torch.device("cpu"))
+        sort_by_metric = "self_cpu_time_total" if is_cpu else "self_cuda_time_total"
+        output = p.key_averages().table(sort_by=sort_by_metric, row_limit=10)
         self.trace_outputs.append(output)
 
     def _reset_output(self) -> None:
@@ -219,7 +222,7 @@ class TorchProfiler(Profiler):
         assert len(self.actions) == len(self.trace_outputs), \
             f"Mismatch in the number of actions and profiles collected: " + \
             f"# Actions: {len(self.actions)}, # Profiles: {len(self.trace_outputs)}"
-        prof_prefix = "Profile Summary for Action"
+        prof_prefix = "Profiler Summary for Action"
         no_summary_str = "*** No Summary returned from PyTorch Profiler ***"
         outputs = [no_summary_str if elm=="" else elm for elm in self.trace_outputs]
         summary = [f"\n{prof_prefix}: {elm[0]}\n{elm[1]}" for elm in zip(self.actions, outputs)]
