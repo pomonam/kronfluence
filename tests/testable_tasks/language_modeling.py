@@ -131,11 +131,11 @@ class LanguageModelingTask(Task):
     def tracked_modules(self) -> List[str]:
         total_modules = []
 
-        for i in range(4):
+        for i in range(5):
             total_modules.append(f"transformer.h.{i}.attn.c_attn")
             total_modules.append(f"transformer.h.{i}.attn.c_proj")
 
-        for i in range(4):
+        for i in range(5):
             total_modules.append(f"transformer.h.{i}.mlp.c_fc")
             total_modules.append(f"transformer.h.{i}.mlp.c_proj")
 
