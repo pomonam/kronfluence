@@ -40,7 +40,7 @@ def main():
         return evaluate_model(model, eval_train_dataset, 1)
 
     num_iter = 1
-    topk_lst = [0, 20, 40, 60, 80, 100]
+    topk_lst = [0, 50, 100, 150, 200]
     remove_perp_lst = []
 
     for topk in topk_lst:
