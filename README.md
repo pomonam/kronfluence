@@ -10,11 +10,11 @@
     <a href="https://github.com/pomonam/kronfluence/blob/main/LICENSE">
         <img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
     </a>
-    <a href="https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/CI.yml">
-        <img alt="CI" src="https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/CI.yml/badge.svg">
+    <a href="https://github.com/pomonam/kronfluence/actions/workflows/python-test.yml">
+        <img alt="CI" src="https://github.com/pomonam/kronfluence/actions/workflows/python-test.yml/badge.svg">
     </a>
     <a href="https://github.com/mlcommons/algorithmic-efficiency/actions/workflows">
-        <img alt="Linting" src="https://github.com/mlcommons/algorithmic-efficiency/actions/workflows/linting.yml/badge.svg">
+        <img alt="Linting" src="https://github.com/pomonam/kronfluence/actions/workflows/linting.yml/badge.svg">
     </a>
     <a href="https://github.com/astral-sh/ruff">
         <img alt="Ruff" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json">
