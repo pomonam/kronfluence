@@ -153,7 +153,7 @@ def main():
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     # Compute influence factors.
-    factor_args = FactorArguments(strategy=args.factor_strategy, lambda_iterative_aggregate=True)
+    factor_args = FactorArguments(strategy=args.factor_strategy)
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
