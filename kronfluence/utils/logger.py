@@ -7,6 +7,7 @@ from typing import Dict, Generator, List, Tuple
 
 import torch
 import torch.distributed as dist
+import torch.profiler as t_prof
 
 from kronfluence.utils.state import State
 
@@ -155,6 +156,67 @@ class PassThroughProfiler(Profiler):
     def summary(self) -> str:
         """Returns a formatted summary for the Profiler."""
         return ""
+    
+
+class TorchProfiler(Profiler):
+    """A PyTorch Profiler objective that provides detailed profiling information: 
+    https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html
+    """
+
+    def __init__(self, state: State) -> None:
+        """Initializes an instance of the PyTorch Profiler class.
+        """
+        super().__init__(state=state)
+        self.actions: list = []
+        self.trace_outputs: list = []
+        self._set_up_torch_profiler()
+
+    def start(self, action_name: str) -> None:
+        """Defines how to start recording an action."""
+        if not self.state.is_main_process:
+            return
+        if action_name in self.current_actions:
+            raise ValueError(f"Attempted to start {action_name} which has already started.")
+        self.current_actions[action_name] = 0.0 # Dummy value
+        self.actions.append(action_name)
+        self._torch_prof.start()
+
+    def stop(self, action_name: str) -> None:
+        """Defines how to record the duration once an action is complete."""
+        if not self.state.is_main_process:
+            return
+        if action_name not in self.current_actions:
+            raise ValueError(f"Attempting to stop recording an action " f"({action_name}) which was never started.")
+        _ = self.current_actions.pop(action_name)
+        self._torch_prof.stop()
+    
+    def _set_up_torch_profiler(self) -> None:
+        """Creates the PyTorch profiler object with the necessary arguments.
+        Check this: 
+        https://pytorch.org/tutorials/intermediate/tensorboard_profiler_tutorial.html#use-profiler-to-record-execution-events.
+        """
+        self._torch_prof = t_prof.profile(
+            activities = [t_prof.ProfilerActivity.CPU, t_prof.ProfilerActivity.CUDA],
+            record_shapes = True,
+            profile_memory = True,
+            with_stach = False,
+            with_flops = False,
+            on_trace_ready = self._trace_handler,
+        )
+
+    def _trace_handler(self, p) -> None:
+        """Adds the PyTorch Profiler trace output to a list once it is ready."""
+        output = p.key_averages().table(sort_by="self_cuda_time_total", row_limit=10)
+        self.trace_outputs.append(output)
+
+    def summary(self) -> str:
+        """Returns a formatted summary for the PyTorch Profiler."""
+        assert len(self.actions) == len(self.trace_outputs), \
+            f"Mismatch in the number of actions and profiles collected: " + \
+            f"# Actions: {len(self.actions)}, # Profiles: {len(self.trace_outputs)}"
+        prof_prefix = "Profile Summary for Action"
+        summary = [f"{prof_prefix}: {elm[0]}\n{elm[1]}\n" for elm in zip(self.actions, self.trace_outputs)]
+        return "\n".join(summary)
 
 
 # Timing utilities copied from
