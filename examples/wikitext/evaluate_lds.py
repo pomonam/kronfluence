@@ -22,7 +22,7 @@ def main():
     corr_lst = []
     for i in range(diff_loss.shape[1]):
         corr_lst.append(spearmanr(diff_loss[:, i], preds[:, i])[0])
-    print(np.mean(corr_lst))
+    logging.info(f"LDS: {np.mean(corr_lst)}")
 
 
 if __name__ == "__main__":

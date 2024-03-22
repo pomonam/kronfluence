@@ -1,5 +1,6 @@
 import logging
 import math
+from random import shuffle
 from typing import List
 
 import torch
@@ -14,10 +15,12 @@ def main():
 
     train_dataset = get_wikitext_dataset(split="train")
     # You might need to change the path.
-    scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][
+    identity_scores = Analyzer.load_file("analyses/wikitext/scores_identity_pairwise/pairwise_scores.safetensors")["all_modules"][
         :50
     ].sum(dim=0)
-    # scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"][:5].sum(dim=0)
+    ekfac_scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][
+        :50
+    ].sum(dim=0)
 
     def get_topk_indices(current_score: torch.Tensor, topk: int = 1) -> torch.Tensor:
         return torch.topk(current_score, topk).indices
@@ -42,21 +45,50 @@ def main():
 
     num_iter = 1
     topk_lst = [0, 50, 100, 150, 200]
-    remove_perp_lst = []
 
+    ekfac_remove_perp_lst = []
     for topk in topk_lst:
-        keep_indices = get_topk_keep_indices(scores, topk=topk)
+        keep_indices = get_topk_keep_indices(ekfac_scores, topk=topk)
 
         perp = 0.0
         for _ in range(num_iter):
             new_loss = train_and_evaluate(indices=keep_indices)
             perp += math.exp(new_loss)
         perp /= num_iter
-        remove_perp_lst.append(perp)
+        ekfac_remove_perp_lst.append(perp)
 
         logging.info(f"Removed {topk} data points. Perplexity: {perp}")
+    logging.info(f"EKFAC: {ekfac_remove_perp_lst}")
 
-    logging.info(remove_perp_lst)
+    id_remove_perp_lst = []
+    for topk in topk_lst:
+        keep_indices = get_topk_keep_indices(identity_scores, topk=topk)
+
+        perp = 0.0
+        for _ in range(num_iter):
+            new_loss = train_and_evaluate(indices=keep_indices)
+            perp += math.exp(new_loss)
+        perp /= num_iter
+        id_remove_perp_lst.append(perp)
+
+        logging.info(f"Removed {topk} data points. Perplexity: {perp}")
+    logging.info(f"TracIn: {id_remove_perp_lst}")
+
+    random_indices = list(range(4656))
+    shuffle(random_indices)
+    random_remove_perp_lst = []
+    for topk in topk_lst:
+        keep_indices = random_indices[topk:]
+
+        perp = 0.0
+        for _ in range(num_iter):
+            new_loss = train_and_evaluate(indices=keep_indices)
+            perp += math.exp(new_loss)
+        perp /= num_iter
+        random_remove_perp_lst.append(perp)
+
+        logging.info(f"Removed {topk} data points. Perplexity: {perp}")
+    logging.info(f"Random: {random_remove_perp_lst}")
 
 
 if __name__ == "__main__":
