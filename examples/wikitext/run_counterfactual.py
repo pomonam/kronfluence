@@ -14,7 +14,7 @@ def main():
 
     train_dataset = get_wikitext_dataset(split="train")
     scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][
-        :5
+        :50
     ].sum(dim=0)
     # scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"][:5].sum(dim=0)
 
@@ -26,7 +26,7 @@ def main():
         remove_indices = [tensor.item() for tensor in remove_indices]
         return list(set(list(range(len(train_dataset)))) - set(remove_indices))
 
-    eval_train_dataset = get_wikitext_dataset(split="eval_train", indices=list(range(5)))
+    eval_train_dataset = get_wikitext_dataset(split="eval_train", indices=list(range(50)))
 
     def train_and_evaluate(indices):
         train_dataset = get_wikitext_dataset(split="train", indices=indices)
