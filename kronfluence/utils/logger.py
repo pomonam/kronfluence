@@ -199,7 +199,7 @@ class TorchProfiler(Profiler):
             activities = [t_prof.ProfilerActivity.CPU, t_prof.ProfilerActivity.CUDA],
             record_shapes = True,
             profile_memory = True,
-            with_stach = False,
+            with_stack = False,
             with_flops = False,
             on_trace_ready = self._trace_handler,
         )
@@ -209,13 +209,22 @@ class TorchProfiler(Profiler):
         output = p.key_averages().table(sort_by="self_cuda_time_total", row_limit=10)
         self.trace_outputs.append(output)
 
+    def _reset_output(self) -> None:
+        """Resets actions and outputs list."""
+        self.actions = []
+        self.trace_outputs = []
+
     def summary(self) -> str:
         """Returns a formatted summary for the PyTorch Profiler."""
         assert len(self.actions) == len(self.trace_outputs), \
             f"Mismatch in the number of actions and profiles collected: " + \
             f"# Actions: {len(self.actions)}, # Profiles: {len(self.trace_outputs)}"
         prof_prefix = "Profile Summary for Action"
-        summary = [f"{prof_prefix}: {elm[0]}\n{elm[1]}\n" for elm in zip(self.actions, self.trace_outputs)]
+        no_summary_str = "*** No Summary returned from PyTorch Profiler ***"
+        outputs = [no_summary_str if elm=="" else elm for elm in self.trace_outputs]
+        summary = [f"\n{prof_prefix}: {elm[0]}\n{elm[1]}" for elm in zip(self.actions, outputs)]
+        # Reset actions and outputs once summary is invoked
+        self._reset_output()
         return "\n".join(summary)
 
 
