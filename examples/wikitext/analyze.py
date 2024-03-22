@@ -173,14 +173,14 @@ def main():
     # Compute pairwise scores.
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
-    scores_name = "pairwise"
+    scores_name = f"{factor_args.strategy}_pairwise"
     if rank is not None:
         scores_name += f"_qlr{rank}"
 
     if args.use_half_precision:
         score_args.per_sample_gradient_dtype = torch.bfloat16
         score_args.score_dtype = torch.bfloat16
-        # score_args.cached_activation_cpu_offload = True
+        score_args.cached_activation_cpu_offload = True
         scores_name += "_half"
 
     analyzer.compute_pairwise_scores(

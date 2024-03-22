@@ -1,5 +1,7 @@
 # Kronfluence: Technical Documentation & FAQs
 
+For a detailed description of the methodology, see the [**paper**](https://arxiv.org/abs/2308.03296) *Studying Large Language Model Generalization with Influence Functions*
+
 ## Requirements
 
 Kronfluence has been tested on the following versions of [PyTorch](https://pytorch.org/):

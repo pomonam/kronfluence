@@ -23,7 +23,7 @@
 
 ---
 
-> **Kronfluence** is a repository designed to compute [influence functions](https://arxiv.org/abs/1703.04730) using [Kronecker-factored Approximate Curvature (KFAC)](https://arxiv.org/abs/1503.05671) or [Eigenvalue-corrected KFAC (EKFAC)](https://arxiv.org/abs/1806.03884).
+> **Kronfluence** is a research repository designed to compute [influence functions](https://arxiv.org/abs/1703.04730) using [Kronecker-factored Approximate Curvature (KFAC)](https://arxiv.org/abs/1503.05671) or [Eigenvalue-corrected KFAC (EKFAC)](https://arxiv.org/abs/1806.03884).
 For a detailed description of the methodology, see the [**paper**](https://arxiv.org/abs/2308.03296) *Studying Large Language Model Generalization with Influence Functions*.
 
 ---
@@ -57,10 +57,10 @@ pip install -e .
 Kronfluence supports influence computations on `nn.Linear` and `nn.Conv2d` modules. See the [**Technical Documentation**](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) 
 page for a comprehensive guide.
 
-### Examples
+### Learn More
 
-The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples on how to use Kronfluence.
-We plan to add more language model examples. **TL;DR** You need to prepare the trained model and datasets, and pass them into the `Analyzer`.
+The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples.
+We plan to add more examples in the future. **TL;DR** You need to prepare the trained model and datasets, and pass them into `Analyzer`.
 
 ```python
 import torch
@@ -94,27 +94,27 @@ eval_dataset = torchvision.datasets.MNIST(
     train=True,
 )
 
-# Initialize the task with relevant loss and measurement.
+# Define the task.
 task = MnistTask()
 
-# Prepare the model for influence computation with the specified task.
+# Prepare the model for influence computation.
 model = prepare_model(model=model, task=task)
 analyzer = Analyzer(analysis_name="mnist", model=model, task=task)
 
-# Fit all EKFAC factors for the given model on the training dataset.
-analyzer.fit_all_factors(factors_name="ekfac", dataset=train_dataset)
+# Fit all EKFAC factors for the given model.
+analyzer.fit_all_factors(factors_name="my_factors", dataset=train_dataset)
 
-# Compute all pairwise influence scores using the computed factors.
+# Compute all pairwise influence scores with the computed factors.
 analyzer.compute_pairwise_scores(
-    scores_name="pairwise_scores",
-    factors_name="ekfac",
+    scores_name="my_scores",
+    factors_name="my_factors",
     query_dataset=eval_dataset,
     train_dataset=train_dataset,
     per_device_query_batch_size=1024,
 )
 
 # Load the scores with dimension `len(eval_dataset) x len(train_dataset)`.
-scores = analyzer.load_pairwise_scores(scores_name="pairwise_scoeres")
+scores = analyzer.load_pairwise_scores(scores_name="my_scores")
 ```
 
 ## Contributing

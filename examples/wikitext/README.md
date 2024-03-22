@@ -28,20 +28,27 @@ python analyze.py --query_batch_size 32 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
-You can also use `identity`, `diagonal`, and `kfac`. On A100 (80GB), it takes roughly 1.5 minutes to compute the 
+You can also use `identity`, `diagonal`, and `kfac`. On A100 (80GB), it takes roughly 50 minutes to compute the 
 pairwise scores (including computing EKFAC factors).
 
 Can we speed up the computations?
 ```bash
-python analyze.py --query_batch_size 97 \
+python analyze.py --query_batch_size 32 \
     --train_batch_size 64 \
-    --query_gradient_rank 32 \
     --use_half_precision true \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
 
+## Counterfactual Experiment
+```bash
+python analyze.py --query_batch_size 32 \
+    --train_batch_size 64 \
+    --checkpoint_dir ./checkpoints \
+    --factor_strategy identity
+```
+
 ## Computing Linear Datamodeling Score
 
-We can compute the [Linear Datamodeling Score (LDS)](https://arxiv.org/abs/2303.14186). The code in `evaluate_lds.py`
-measures the LDS obtained by retraining the network 600 times with different subsets of the dataset (5 repeats and 120 masks).
+We can compute the [Linear Datamodeling Score (LDS)](https://arxiv.org/abs/2303.14186). The code in `evaluate_lds.py` measures the LDS obtained by 
+retraining the network 600 times with different subsets of the dataset (5 repeats and 120 masks).

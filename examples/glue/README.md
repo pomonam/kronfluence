@@ -53,14 +53,10 @@ contains code to compute the correlations between the full rank prediction and l
 </p>
 The averaged correlations between the low-rank and full rank scores for 100 data points is 0.98.
 
-# Counterfactual Evaluation
+## Counterfactual Evaluation
 
-We can conduct a simplified version of the counterfactual evaluation on the RTE dataset.
+We plan to add a simplified demo for counterfactual evaluation on the RTE dataset soon.
 
-```bash
-python analyze.py --dataset_name rte \
-    --query_batch_size 114 \
-    --train_batch_size 256 \
-    --checkpoint_dir ./checkpoints \
-    --factor_strategy ekfac
-```
+<p align="center">
+<a href="#"><img width="380" img src="figure/counterfactual.png" alt="Counterfactual"/></a>
+</p>

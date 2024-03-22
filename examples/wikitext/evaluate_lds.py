@@ -19,7 +19,7 @@ def main():
     preds = (scores @ mask).t().numpy()
 
     corr_lst = []
-    for i in range(120):
+    for i in range(diff_loss.shape[1]):
         corr_lst.append(spearmanr(diff_loss[:, i], preds[:, i])[0])
     print(np.mean(corr_lst))
 
