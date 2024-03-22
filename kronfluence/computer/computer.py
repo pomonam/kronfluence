@@ -321,7 +321,7 @@ class Computer(ABC):
         """Log the summary of the profiling results."""
         profile_summary = self.profiler.summary()
         if profile_summary != "":
-            self.logger.info(self.profiler.summary())
+            self.logger.info(profile_summary)
 
     def load_factor_args(self, factors_name: str) -> Optional[FactorArguments]:
         """Loads factor arguments with the given factor name."""
