@@ -2,6 +2,7 @@ import os
 from typing import List, Tuple
 
 import numpy as np
+import pandas as pd
 import torch
 from sklearn.preprocessing import StandardScaler
 from torch import nn
@@ -43,7 +44,8 @@ def get_regression_dataset(
     assert split in ["train", "eval_train", "valid"]
 
     # Load the dataset from the `.data` file.
-    data = np.loadtxt(os.path.join(dataset_dir, data_name + ".data"), delimiter=None)
+    # data = np.loadtxt(os.path.join(dataset_dir, data_name + ".data"), delimiter=None)
+    data = pd.read_excel(os.path.join(dataset_dir, data_name + ".xls")).to_numpy()
     data = data.astype(np.float32)
 
     # Shuffle the dataset.
