@@ -238,6 +238,10 @@ analyzer.fit_covariance_matrices(factors_name="initial_factor", dataset=train_da
 covariance_matrices = analyzer.load_covariance_matrices(factors_name="initial_factor")
 ```
 
+This corresponds to Equation 16 in the paper, where the layerwise Gauss-Newton Hessian $\mathbf{G}$ is represented with:
+
+$$\mathbf{G} = \mathbf{A} \otimes \mathbf{S}$$
+
 You can tune:
 - `covariance_max_examples`: Controls the maximum number of data points for fitting covariance matrices. Setting it to `None`,
 Kronfluence computes covariance matrices for all data points.
