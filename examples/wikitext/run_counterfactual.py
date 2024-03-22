@@ -13,8 +13,8 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     train_dataset = get_wikitext_dataset(split="train")
-    # scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][0]
-    scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"][0]
+    scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][:5].sum(dim=0)
+    # scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"][:5].sum(dim=0)
 
     def get_topk_indices(current_score: torch.Tensor, topk: int = 1) -> torch.Tensor:
         return torch.topk(current_score, topk).indices
