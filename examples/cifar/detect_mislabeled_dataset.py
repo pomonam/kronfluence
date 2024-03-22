@@ -91,12 +91,12 @@ def main():
     )
     # Compute self-influence scores.
     analyzer.compute_self_scores(
-        scores_name="self",
+        scores_name=args.factor_strategy,
         factors_name=args.factor_strategy,
         train_dataset=train_dataset,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_pairwise_scores("self")["all_modules"]
+    scores = analyzer.load_pairwise_scores(args.factor_strategy)["all_modules"]
 
     total_corrupt_size = int(args.corrupt_percentage * len(train_dataset))
     corrupted_indices = list(range(int(args.corrupt_percentage * len(train_dataset))))
@@ -109,8 +109,8 @@ def main():
         predicted_indices = list(predicted_indices.numpy())
         accuracies.append(len(set(predicted_indices) & set(corrupted_indices)) / total_corrupt_size)
 
-    logging.info(f"Inspect interval: {list(intervals.numpy())}")
-    logging.info(f"Accuracies: {accuracies}")
+    logging.info(f"Inspect Interval: {list(intervals.numpy())}")
+    logging.info(f"Detection Accuracy: {accuracies}")
 
 
 if __name__ == "__main__":

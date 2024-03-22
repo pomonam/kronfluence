@@ -11,8 +11,9 @@ from kronfluence.analyzer import Analyzer
 def main():
     logging.basicConfig(level=logging.INFO)
 
-    full_scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"]
-    lr_scores = Analyzer.load_file("scores_pairwise_qlr32/pairwise_scores.safetensors")["all_modules"]
+    # Load the scores. You might need to modify the path.
+    full_scores = Analyzer.load_file("scores_ekfac/pairwise_scores.safetensors")["all_modules"]
+    lr_scores = Analyzer.load_file("scores_ekfac_qlr32/pairwise_scores.safetensors")["all_modules"]
 
     # Only plot first 1000 points to avoid clutter.
     plt.rcParams.update({"figure.dpi": 150})
@@ -24,6 +25,7 @@ def main():
     plt.ylabel("Low Rank (32) Score")
     plt.show()
 
+    # Compute the averaged spearman correlation.
     all_corr = []
     for i in range(100):
         all_corr.append(spearmanr(full_scores[i], lr_scores[i])[0])

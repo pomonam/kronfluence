@@ -33,7 +33,7 @@ class Residual(nn.Module):
 
 
 def construct_resnet9() -> nn.Module:
-    # ResNet-9 architecture from: https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb.
+    # ResNet-9 architecture from https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb.
     def conv_bn(
         channels_in: int,
         channels_out: int,

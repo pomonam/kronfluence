@@ -31,7 +31,8 @@ pairwise scores (including computing EKFAC factors).
 
 ## Mislabeled Data Detection
 
-We can use self-influence scores to detect mislabeled data points. First, train the model with 10% of training dataset mislabeled by running the following command:
+We can use self-influence scores (see Section 5.4 for the [paper](https://arxiv.org/pdf/1703.04730.pdf)) to detect mislabeled examples. 
+First, train the model with 10% of training examples mislabeled by running the following command:
 ```bash
 python train.py --dataset_dir ./data \
     --corrupt_percentage 0.1 \
@@ -52,6 +53,5 @@ python detect_mislabeled_dataset.py --dataset_dir ./data \
     --factor_strategy ekfac
 ```
 
-On A100 (80GB), it takes roughly 1.5 minutes to compute the self-influence scores (including computing EKFAC factors).
-We can detect around 82% of mislabeled data points by inspecting 10% of the dataset using self-influence scores
-(96% by inspecting 20%).
+On A100 (80GB), it takes roughly 1.5 minutes to compute the self-influence scores.
+We can detect around 82% of mislabeled data points by inspecting 10% of the dataset (96% by inspecting 20%).

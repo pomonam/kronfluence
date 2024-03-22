@@ -114,7 +114,7 @@ def main():
     # Compute pairwise scores.
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     score_args = ScoreArguments(query_gradient_rank=rank)
-    scores_name = "pairwise"
+    scores_name = args.factor_strategy
     if rank is not None:
         scores_name += f"_qlr{rank}"
     analyzer.compute_pairwise_scores(
@@ -128,8 +128,8 @@ def main():
         per_device_train_batch_size=args.train_batch_size,
         overwrite_output_dir=False,
     )
-    scores = analyzer.load_pairwise_scores(scores_name)
-    print(scores["all_modules"].shape)
+    scores = analyzer.load_pairwise_scores(scores_name)["all_modules"]
+    logging.info(f"Scores shape: {scores.shape}")
 
 
 if __name__ == "__main__":

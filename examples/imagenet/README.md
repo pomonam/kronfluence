@@ -21,7 +21,7 @@ python analyze.py --dataset_dir PATH_TO_IMAGENET \
 ```
 On A100 (80GB), it takes approximately 12 hours to compute the pairwise scores (including computing EKFAC factors).
 
-We can also use query batching (low-rank approximation to the query gradient) to compute influence scores with a 
+We can also use query batching (low-rank approximation to the query gradient; see Section 3.2.2 from the [paper](https://arxiv.org/pdf/2308.03296.pdf)) to compute influence scores with a 
 larger query batch size.
 ```bash
 python analyze.py --dataset_dir PATH_TO_IMAGENET \
@@ -30,10 +30,9 @@ python analyze.py --dataset_dir PATH_TO_IMAGENET \
     --train_batch_size 512 \
     --factor_strategy ekfac
 ```
-On A100 (80GB), it takes less than 4 hours to compute the pairwise scores with query batching (including computing EKFAC factors).
-
+On A100 (80GB), it takes roughly 4 hours to compute the pairwise scores with query batching (including computing EKFAC factors).
 Assuming that you ran above two commands, `query_batching_analysis.py`
-contains code to compute the correlations between the full rank prediction and low-rank scores.
+contains code to compute the correlations between the full rank and low-rank scores.
 
 <p align="center">
 <a href="#"><img width="380" img src="figure/query_batching.png" alt="Counterfactual"/></a>

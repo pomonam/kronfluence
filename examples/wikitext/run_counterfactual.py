@@ -13,7 +13,8 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     train_dataset = get_wikitext_dataset(split="train")
-    scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][0]
+    # scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][0]
+    scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"][0]
 
     def get_topk_indices(current_score: torch.Tensor, topk: int = 1) -> torch.Tensor:
         return torch.topk(current_score, topk).indices
@@ -23,7 +24,7 @@ def main():
         remove_indices = [tensor.item() for tensor in remove_indices]
         return list(set(list(range(len(train_dataset)))) - set(remove_indices))
 
-    eval_train_dataset = get_wikitext_dataset(split="eval_train", indices=[0])
+    eval_train_dataset = get_wikitext_dataset(split="eval_train", indices=list(range(5)))
 
     def train_and_evaluate(indices):
         train_dataset = get_wikitext_dataset(split="train", indices=indices)
@@ -37,7 +38,7 @@ def main():
         return evaluate_model(model, eval_train_dataset, 1)
 
     num_iter = 3
-    topk_lst = [0, 50, 100, 150, 200, 250]
+    topk_lst = [20, 40, 60, 80, 100]
     remove_perp_lst = []
 
     for topk in topk_lst:
