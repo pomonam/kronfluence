@@ -108,7 +108,6 @@ class Computer(ABC):
             self.model.to(self.state.device)
 
         # Create and configure profiler.
-        # self.profiler = Profiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
         self.profiler = TorchProfiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
 
         # Create and configure output directory.
