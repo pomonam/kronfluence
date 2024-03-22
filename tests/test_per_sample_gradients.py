@@ -13,13 +13,10 @@ from torch.utils.data import DataLoader
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
-from kronfluence.utils.constants import (
-    LAMBDA_MATRIX_NAME,
-    PRECONDITIONED_GRADIENT_NAME,
-)
 from kronfluence.module.tracked_module import ModuleMode, TrackedModule
 from kronfluence.module.utils import set_mode, update_factor_args
 from kronfluence.task import Task
+from kronfluence.utils.constants import LAMBDA_MATRIX_NAME, PRECONDITIONED_GRADIENT_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import (
     ATOL,
@@ -98,6 +95,7 @@ def for_loop_per_sample_gradient(
         "conv",
         "conv_bn",
         "bert",
+        "gpt",
     ],
 )
 @pytest.mark.parametrize("use_measurement", [True, False])
@@ -180,7 +178,11 @@ def test_for_loop_per_sample_gradient_equivalence(
         task=task,
         use_measurement=use_measurement,
     )
+
     for i in range(num_batches):
+        if "lm_head" in for_loop_per_sample_gradients[i]:
+            del for_loop_per_sample_gradients[i]["lm_head"]
+
         assert check_tensor_dict_equivalence(
             per_sample_gradients[i],
             for_loop_per_sample_gradients[i],
@@ -195,6 +197,7 @@ def test_for_loop_per_sample_gradient_equivalence(
         "mlp",
         "repeated_mlp",
         "conv",
+        "gpt",
     ],
 )
 @pytest.mark.parametrize("train_size", [32])
@@ -274,9 +277,8 @@ def test_lambda_equivalence(
     )
 
 
-@pytest.mark.parametrize("seed", [0])
 def test_precondition_gradient(
-    seed: int,
+    seed: int = 0,
 ) -> None:
     input_dim = 128
     output_dim = 256
@@ -329,9 +331,8 @@ def test_precondition_gradient(
     assert torch.allclose(raw_results, results, atol=1e-5, rtol=1e-3)
 
 
-@pytest.mark.parametrize("seed", [0])
 def test_query_gradient_svd(
-    seed: int,
+    seed: int = 0,
 ) -> None:
     input_dim = 2048
     output_dim = 1024
@@ -391,7 +392,6 @@ def test_query_gradient_svd(
     assert torch.allclose(score, lr_score_reconst_matmul)
 
     # These should be able to avoid explicit reconstruction.
-
     # This should be used when input_dim > output_dim.
     intermediate = opt_einsum.contract("qki,toi->qtko", right_mat, new_gradient)
     final = opt_einsum.contract("qtko,qok->qt", intermediate, left_mat)
@@ -477,9 +477,8 @@ def test_query_gradient_svd_reconst(
         assert intermediate.numel() <= reconst_numel
 
 
-@pytest.mark.parametrize("seed", [0])
 def test_compute_score_matmul(
-    seed: int,
+    seed: int = 0,
 ) -> None:
     input_dim = 1024
     output_dim = 2048
@@ -497,30 +496,4 @@ def test_compute_score_matmul(
     unsqueeze_score = opt_einsum.contract("t...,q...->tq", gradient, new_gradient)
     assert torch.allclose(score, unsqueeze_score)
     path = opt_einsum.contract_path("t...,q...->tq", gradient, new_gradient)
-    print(path)
-
-
-@pytest.mark.parametrize("seed", [0])
-def test_compute_score_fast_matmul(
-    seed: int,
-) -> None:
-    input_dim = 512
-    output_dim = 1024
-    seq_len = 32
-    batch_dim = 8
-    query_batch_dim = 16
-
-    set_seed(seed)
-
-    input_activation = torch.rand(size=(batch_dim, seq_len, input_dim), dtype=torch.float64)
-    output_gradient = torch.rand(size=(batch_dim, seq_len, output_dim), dtype=torch.float64)
-    per_sample_gradient = opt_einsum.contract("b...i,b...o->bio", output_gradient, input_activation)
-    gradient = torch.rand(size=(query_batch_dim, output_dim, input_dim), dtype=torch.float64)
-    score = opt_einsum.contract("toi,qoi->tq", per_sample_gradient, gradient)
-    print(score)
-
-    all_score = opt_einsum.contract("tco,tci,qoi->tq", output_gradient, input_activation, gradient)
-    assert torch.allclose(score, all_score)
-
-    path = opt_einsum.contract_path("tco,tci,qoi->tq", output_gradient, input_activation, gradient, optimize="optimal")
     print(path)

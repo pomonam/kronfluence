@@ -6,9 +6,10 @@ import torch
 import torch.nn.functional as F
 import torchvision
 from accelerate.utils import set_seed
-from kronfluence.task import Task
 from torch import nn
 from torch.utils import data
+
+from kronfluence.task import Task
 
 BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 

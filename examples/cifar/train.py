@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import time
 from typing import Tuple
 
 import numpy as np
@@ -10,7 +11,6 @@ from accelerate.utils import set_seed
 from torch import nn
 from torch.optim import lr_scheduler
 from torch.utils import data
-from tqdm import tqdm
 
 from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
 
@@ -55,7 +55,7 @@ def parse_args():
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=0.001,
+        default=0.0001,
         help="Weight decay to train the model.",
     )
     parser.add_argument(
@@ -92,7 +92,6 @@ def train(
     num_train_epochs: int,
     learning_rate: float,
     weight_decay: float,
-    disable_tqdm: bool = False,
 ) -> nn.Module:
     train_dataloader = data.DataLoader(
         dataset=dataset,
@@ -105,7 +104,7 @@ def train(
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     iters_per_epoch = len(train_dataloader)
-    lr_peak_epoch = num_train_epochs // 4
+    lr_peak_epoch = num_train_epochs // 5
     lr_schedule = np.interp(
         np.arange((num_train_epochs + 1) * iters_per_epoch),
         [0, lr_peak_epoch * iters_per_epoch, num_train_epochs * iters_per_epoch],
@@ -113,22 +112,24 @@ def train(
     )
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_schedule.__getitem__)
 
+    start_time = time.time()
     model.train()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
-        with tqdm(train_dataloader, unit="batch", disable=disable_tqdm) as tepoch:
-            for batch in tepoch:
-                tepoch.set_description(f"Epoch {epoch}")
-                model.zero_grad()
-                inputs, labels = batch
-                inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
-                outputs = model(inputs)
-                loss = F.cross_entropy(outputs, labels)
-                loss.backward()
-                optimizer.step()
-                scheduler.step()
-                total_loss += loss.detach().float()
-                tepoch.set_postfix(loss=total_loss.item() / len(train_dataloader))
+        for batch in train_dataloader:
+            model.zero_grad()
+            inputs, labels = batch
+            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            outputs = model(inputs)
+            loss = F.cross_entropy(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+            total_loss += loss.detach().float()
+        logging.info(f"Epoch {epoch + 1} - Averaged Loss: {total_loss / len(dataset)}")
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    logging.info(f"Completed training in {elapsed_time:.2f} seconds.")
     return model
 
 

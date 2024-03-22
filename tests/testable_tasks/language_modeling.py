@@ -6,10 +6,11 @@ from typing import Any, Dict, List, Optional
 import torch
 import torch.nn.functional as F
 from datasets import load_dataset
-from kronfluence.task import Task
 from torch import nn
 from torch.utils import data
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, Conv1D
+
+from kronfluence.task import Task
 
 BATCH_TYPE = Dict[str, torch.Tensor]
 
@@ -130,11 +131,11 @@ class LanguageModelingTask(Task):
     def tracked_modules(self) -> List[str]:
         total_modules = []
 
-        for i in range(4):
+        for i in range(5):
             total_modules.append(f"transformer.h.{i}.attn.c_attn")
             total_modules.append(f"transformer.h.{i}.attn.c_proj")
 
-        for i in range(4):
+        for i in range(5):
             total_modules.append(f"transformer.h.{i}.mlp.c_fc")
             total_modules.append(f"transformer.h.{i}.mlp.c_proj")
 

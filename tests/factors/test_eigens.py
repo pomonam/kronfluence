@@ -8,6 +8,7 @@ from torch import nn
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
+from kronfluence.task import Task
 from kronfluence.utils.constants import (
     ACTIVATION_EIGENVECTORS_NAME,
     EIGENDECOMPOSITION_FACTOR_NAMES,
@@ -16,7 +17,6 @@ from kronfluence.utils.constants import (
     LAMBDA_MATRIX_NAME,
     NUM_LAMBDA_PROCESSED,
 )
-from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
 
