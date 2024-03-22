@@ -1,42 +1,35 @@
 import argparse
 import logging
+import math
 import os
 import time
-from typing import Tuple
 
-import evaluate
 import torch
 import torch.nn.functional as F
 from accelerate.utils import set_seed
 from torch import nn
+from torch.nn import CrossEntropyLoss
 from torch.utils import data
 from transformers import default_data_collator
 
-from examples.glue.pipeline import construct_bert, get_glue_dataset
+from examples.wikitext.pipeline import construct_gpt2, get_wikitext_dataset
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train text classification models on GLUE datasets.")
-
-    parser.add_argument(
-        "--dataset_name",
-        type=str,
-        default="sst2",
-        help="A name of GLUE dataset.",
-    )
+    parser = argparse.ArgumentParser(description="Fine-tune GPT-2 on WikiText dataset.")
 
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=32,
+        default=8,
         help="Batch size for the training dataloader.",
     )
     parser.add_argument(
         "--eval_batch_size",
         type=int,
-        default=32,
+        default=16,
         help="Batch size for the evaluation dataloader.",
     )
 
@@ -62,7 +55,7 @@ def parse_args():
     parser.add_argument(
         "--seed",
         type=int,
-        default=1004,
+        default=0,
         help="A seed for reproducible training pipeline.",
     )
     parser.add_argument(
@@ -75,8 +68,6 @@ def parse_args():
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
-        os.makedirs(args.checkpoint_dir, exist_ok=True)
-        args.checkpoint_dir = os.path.join(args.checkpoint_dir, args.dataset_name)
         os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     return args
@@ -97,21 +88,24 @@ def train(
         collate_fn=default_data_collator,
     )
 
-    model = construct_bert().to(DEVICE)
+    model = construct_gpt2().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    loss_fn = CrossEntropyLoss(reduction="mean")
 
     start_time = time.time()
-    model.train()
+    model.eval()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
         for batch in train_dataloader:
-            loss = model(
+            model.zero_grad()
+            lm_logits = model(
                 input_ids=batch["input_ids"].to(device=DEVICE),
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
-                token_type_ids=batch["token_type_ids"].to(device=DEVICE),
-                labels=batch["labels"].to(device=DEVICE),
-            ).loss
-            optimizer.zero_grad()
+            ).logits
+            labels = batch["labels"].to(device=DEVICE)
+            shift_logits = lm_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
             loss.backward()
             optimizer.step()
             total_loss += loss.detach().float()
@@ -122,30 +116,28 @@ def train(
     return model
 
 
-def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> Tuple[float, float]:
+def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> float:
     dataloader = data.DataLoader(
         dataset=dataset, batch_size=batch_size, shuffle=False, drop_last=False, collate_fn=default_data_collator
     )
 
     model.eval()
-    metric = evaluate.load("glue", "sst2")
     total_loss = 0.0
+    total_num = 0
     for batch in dataloader:
         with torch.no_grad():
-            logits = model(
+            lm_logits = model(
                 input_ids=batch["input_ids"].to(device=DEVICE),
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
-                token_type_ids=batch["token_type_ids"].to(device=DEVICE),
             ).logits
             labels = batch["labels"].to(device=DEVICE)
-            total_loss += F.cross_entropy(logits, labels, reduction="sum").detach()
-            predictions = logits.argmax(dim=-1)
-            metric.add_batch(
-                predictions=predictions,
-                references=labels,
-            )
-    eval_metric = metric.compute()
-    return total_loss.item() / len(dataloader.dataset), eval_metric["accuracy"]
+            shift_logits = lm_logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
+            loss = F.cross_entropy(reshaped_shift_logits, shift_labels.view(-1), reduction="sum").detach().float()
+            total_loss += loss
+            total_num += reshaped_shift_logits.shape[0]
+    return total_loss.item() / total_num
 
 
 def main():
@@ -156,7 +148,7 @@ def main():
     if args.seed is not None:
         set_seed(args.seed)
 
-    train_dataset = get_glue_dataset(data_name=args.dataset_name, split="train")
+    train_dataset = get_wikitext_dataset(split="train")
     model = train(
         dataset=train_dataset,
         batch_size=args.train_batch_size,
@@ -165,13 +157,15 @@ def main():
         weight_decay=args.weight_decay,
     )
 
-    eval_train_dataset = get_glue_dataset(data_name=args.dataset_name, split="eval_train")
-    train_loss, train_acc = evaluate_model(model=model, dataset=eval_train_dataset, batch_size=args.eval_batch_size)
-    logger.info(f"Train loss: {train_loss}, Train Accuracy: {train_acc}")
+    eval_train_dataset = get_wikitext_dataset(split="eval_train")
+    train_loss = evaluate_model(model=model, dataset=eval_train_dataset, batch_size=args.eval_batch_size)
+    train_perplexity = math.exp(train_loss)
+    logger.info(f"Train perplexity: {train_perplexity}")
 
-    eval_dataset = get_glue_dataset(data_name=args.dataset_name, split="valid")
-    eval_loss, eval_acc = evaluate_model(model=model, dataset=eval_dataset, batch_size=args.eval_batch_size)
-    logger.info(f"Evaluation loss: {eval_loss}, Evaluation Accuracy: {eval_acc}")
+    eval_dataset = get_wikitext_dataset(split="valid")
+    eval_loss = evaluate_model(model=model, dataset=eval_dataset, batch_size=args.eval_batch_size)
+    eval_perplexity = math.exp(eval_loss)
+    logger.info(f"Evaluation perplexity: {eval_perplexity}")
 
     if args.checkpoint_dir is not None:
         torch.save(model.state_dict(), os.path.join(args.checkpoint_dir, "model.pth"))

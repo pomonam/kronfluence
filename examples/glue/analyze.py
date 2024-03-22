@@ -1,28 +1,36 @@
 import argparse
 import logging
-from typing import Tuple
+import os
+from typing import Dict, Optional
 
 import torch
 import torch.nn.functional as F
 from torch import nn
+from transformers import default_data_collator
 
-from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
+from examples.glue.pipeline import construct_bert, get_glue_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
 
-BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
+BATCH_TYPE = Dict[str, torch.Tensor]
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on ImageNet dataset.")
+    parser = argparse.ArgumentParser(description="Influence analysis on GLUE dataset.")
 
     parser.add_argument(
-        "--dataset_dir",
+        "--dataset_name",
         type=str,
-        default="/mfs1/datasets/imagenet_pytorch/",
-        help="A folder containing the ImageNet dataset.",
+        default="sst2",
+        help="A name of GLUE dataset.",
+    )
+    parser.add_argument(
+        "--checkpoint_dir",
+        type=str,
+        default="./checkpoints",
+        help="A path that is storing the final checkpoint of the model.",
     )
 
     parser.add_argument(
@@ -41,30 +49,40 @@ def parse_args():
         "--train_batch_size",
         type=int,
         default=128,
-        help="Batch size for computing training gradient.",
+        help="Batch size for computing training gradients.",
     )
     parser.add_argument(
         "--factor_strategy",
         type=str,
         default="ekfac",
-        help="Strategy to compute preconditioning factors.",
+        help="Strategy to compute influence factors.",
     )
 
     args = parser.parse_args()
+
+    if args.checkpoint_dir is not None:
+        os.makedirs(args.checkpoint_dir, exist_ok=True)
+        args.checkpoint_dir = os.path.join(args.checkpoint_dir, args.dataset_name)
+        os.makedirs(args.checkpoint_dir, exist_ok=True)
+
     return args
 
 
-class ClassificationTask(Task):
+class TextClassificationTask(Task):
     def compute_train_loss(
         self,
         batch: BATCH_TYPE,
         model: nn.Module,
         sample: bool = False,
     ) -> torch.Tensor:
-        inputs, labels = batch
-        logits = model(inputs)
+        logits = model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            token_type_ids=batch["token_type_ids"],
+        ).logits
+
         if not sample:
-            return F.cross_entropy(logits, labels, reduction="sum")
+            return F.cross_entropy(logits, batch["labels"], reduction="sum")
         with torch.no_grad():
             probs = torch.nn.functional.softmax(logits, dim=-1)
             sampled_labels = torch.multinomial(
@@ -79,9 +97,13 @@ class ClassificationTask(Task):
         model: nn.Module,
     ) -> torch.Tensor:
         # Copied from: https://github.com/MadryLab/trak/blob/main/trak/modelout_functions.py.
-        inputs, labels = batch
-        logits = model(inputs)
+        logits = model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+            token_type_ids=batch["token_type_ids"],
+        ).logits
 
+        labels = batch["labels"]
         bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
         logits_correct = logits[bindex, labels]
 
@@ -91,31 +113,43 @@ class ClassificationTask(Task):
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
 
+    def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
+        return batch["attention_mask"]
+
 
 def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
 
     # Prepare the dataset.
-    train_dataset = get_imagenet_dataset(split="eval_train", dataset_dir=args.dataset_dir)
-    eval_dataset = get_imagenet_dataset(split="valid", dataset_dir=args.dataset_dir)
+    train_dataset = get_glue_dataset(
+        data_name=args.dataset_name,
+        split="eval_train",
+    )
+    eval_dataset = get_glue_dataset(
+        data_name=args.dataset_name,
+        split="valid",
+    )
 
     # Prepare the trained model.
-    model = construct_resnet50()
-    task = ClassificationTask()
+    model = construct_bert()
+    checkpoint_path = os.path.join(args.checkpoint_dir, "model.pth")
+    if not os.path.isfile(checkpoint_path):
+        raise ValueError(f"No checkpoint found at {checkpoint_path}.")
+    model.load_state_dict(torch.load(checkpoint_path))
 
     # Define task and prepare model.
+    task = TextClassificationTask()
     model = prepare_model(model, task)
 
     analyzer = Analyzer(
-        analysis_name="imagenet",
+        analysis_name=args.dataset_name,
         model=model,
         task=task,
+        cpu=False,
     )
     # Configure parameters for DataLoader.
-    dataloader_kwargs = DataLoaderKwargs(
-        num_workers=4,
-    )
+    dataloader_kwargs = DataLoaderKwargs(collate_fn=default_data_collator)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     # Compute influence factors.
@@ -125,9 +159,9 @@ def main():
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
-        overwrite_output_dir=False,
+        overwrite_output_dir=True,
+        initial_per_device_batch_size_attempt=512,
     )
-
     # Compute pairwise scores.
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
@@ -139,7 +173,7 @@ def main():
         scores_name=scores_name,
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
-        query_indices=list(range(1000)),
+        query_indices=list(range(min([len(eval_dataset), 2000]))),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,

@@ -1,8 +1,7 @@
 # UCI Regression Example
 
-This directory contains scripts designed for training a regression model and conducting influence analysis with 
-datasets from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/datasets). Install all necessary packages:
-
+This directory contains scripts for training a regression model and conducting influence analysis with 
+datasets from the [UCI Machine Learning Repository](https://archive.ics.uci.edu/datasets). Please begin by installing necessary packages.
 ```bash
 pip install -r requirements.txt
 ```
@@ -11,7 +10,7 @@ pip install -r requirements.txt
 
 To train a regression model on the Concrete dataset, run the following command:
 ```bash
-python train.py --dataset_name concrete \ 
+python train.py --dataset_name concrete \
     --dataset_dir ./data \
     --output_dir ./checkpoints \
     --train_batch_size 32 \
@@ -22,16 +21,21 @@ python train.py --dataset_name concrete \
     --seed 1004
 ```
 
-# Computing Pairwise Influence Scores
+## Computing Pairwise Influence Scores
 
-To obtain a pairwise influence scores using EKFAC, run the following command:
+To obtain a pairwise influence scores using `ekfac`, run the following command:
 ```bash
-python analyze.py --dataset_name concrete \ 
+python analyze.py --dataset_name concrete \
     --dataset_dir ./data \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
+You can also use `identity`, `diagonal`, and `kfac`.
 
-# Counterfactual Evaluation
+## Counterfactual Evaluation
 
-You can check the notebook `tutorial.ipynb` for running the counterfactual evaluation.
+You can check the notebook `tutorial.ipynb` to run the counterfactual evaluation.
+
+<p align="center">
+<a href="#"><img width="380" img src="figure/counterfactual.png" alt="Counterfactual"/></a>
+</p>

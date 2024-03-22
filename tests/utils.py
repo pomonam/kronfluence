@@ -108,6 +108,9 @@ def reshape_parameter_gradient_to_module_matrix(
     remove_gradient: bool = True,
 ) -> torch.Tensor:
     if isinstance(module, nn.Linear):
+        if module_name == "lm_head":
+            # Edge case for small GPT model.
+            return
         gradient_matrix = gradient_dict[module_name + ".weight"]
         if remove_gradient:
             del gradient_dict[module_name + ".weight"]

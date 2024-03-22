@@ -2,8 +2,8 @@ import os
 from typing import List
 
 import torch
-import torch.nn as nn
 import torchvision
+from torch import nn
 from torch.utils.data import Dataset
 
 

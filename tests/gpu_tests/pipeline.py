@@ -10,13 +10,13 @@ from torch.utils.data import Dataset
 
 from kronfluence.task import Task
 
-BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
+BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 
 
 class GpuTestTask(Task):
     def compute_train_loss(
         self,
-        batch: BATCH_DTYPE,
+        batch: BATCH_TYPE,
         model: nn.Module,
         sample: bool = False,
     ) -> torch.Tensor:
@@ -34,7 +34,7 @@ class GpuTestTask(Task):
 
     def compute_measurement(
         self,
-        batch: BATCH_DTYPE,
+        batch: BATCH_TYPE,
         model: nn.Module,
     ) -> torch.Tensor:
         inputs, labels = batch

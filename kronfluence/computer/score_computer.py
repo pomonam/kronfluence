@@ -301,8 +301,11 @@ class ScoreComputer(Computer):
             )
         if query_indices is not None:
             query_dataset = data.Subset(dataset=query_dataset, indices=query_indices)
+            del query_indices
+
         if train_indices is not None:
             train_dataset = data.Subset(dataset=train_dataset, indices=train_indices)
+            del train_indices
 
         with self.profiler.profile("Load All Factors"):
             loaded_factors = self.load_all_factors(
@@ -592,6 +595,7 @@ class ScoreComputer(Computer):
             )
         if train_indices is not None:
             train_dataset = data.Subset(dataset=train_dataset, indices=train_indices)
+            del train_indices
 
         with self.profiler.profile("Load All Factors"):
             loaded_factors = self.load_all_factors(
