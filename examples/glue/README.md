@@ -43,7 +43,7 @@ python analyze.py --dataset_name sst2 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
-On A100 (80GB), it takes less than 4 hours to compute the pairwise scores with query batching (including computing EKFAC factors).
+Note that query batching is slower in this case (140 minutes in total), as the number of training data points is small and the cost of performing SVD dominates the overall cost.
 Assuming that you ran above two commands, `query_batching_analysis.py` contains code to compute the correlations between the full rank and low-rank scores.
 
 <p align="center">

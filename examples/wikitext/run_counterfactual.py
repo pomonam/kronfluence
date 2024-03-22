@@ -3,7 +3,9 @@ import math
 from random import shuffle
 from typing import List
 
+import matplotlib.pyplot as plt
 import torch
+from tueplots import markers
 
 from examples.wikitext.pipeline import get_wikitext_dataset
 from examples.wikitext.train import evaluate_model, train
@@ -15,12 +17,12 @@ def main():
 
     train_dataset = get_wikitext_dataset(split="train")
     # You might need to change the path.
-    identity_scores = Analyzer.load_file("analyses/wikitext/scores_identity_pairwise/pairwise_scores.safetensors")["all_modules"][
-        :50
-    ].sum(dim=0)
-    ekfac_scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][
-        :50
-    ].sum(dim=0)
+    identity_scores = Analyzer.load_file("analyses/wikitext/scores_identity_pairwise/pairwise_scores.safetensors")[
+        "all_modules"
+    ][:50].sum(dim=0)
+    ekfac_scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")[
+        "all_modules"
+    ][:50].sum(dim=0)
 
     def get_topk_indices(current_score: torch.Tensor, topk: int = 1) -> torch.Tensor:
         return torch.topk(current_score, topk).indices
@@ -89,6 +91,18 @@ def main():
 
         logging.info(f"Removed {topk} data points. Perplexity: {perp}")
     logging.info(f"Random: {random_remove_perp_lst}")
+
+    plt.rcParams.update({"figure.dpi": 150})
+    plt.rcParams.update(markers.with_edge())
+    plt.rcParams["axes.axisbelow"] = True
+    plt.plot(topk_lst, [ekfac_remove_perp_lst[0]] + random_remove_perp_lst[1:], "o-", label="Random")
+    plt.plot(topk_lst, [ekfac_remove_perp_lst[0]] + id_remove_perp_lst[1:], "o-", label="TracIn (Identity)")
+    plt.plot(topk_lst, ekfac_remove_perp_lst, "o-", label="IF (EKFAC)")
+    plt.grid()
+    plt.legend()
+    plt.xlabel("Number of Training Samples Removed")
+    plt.ylabel("Mean Query Perplexity")
+    plt.show()
 
 
 if __name__ == "__main__":

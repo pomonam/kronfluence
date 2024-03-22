@@ -34,12 +34,13 @@ pairwise scores (including computing EKFAC factors).
 
 ## Counterfactual Experiment
 
-```bash
-python analyze.py --query_batch_size 32 \
-    --train_batch_size 64 \
-    --checkpoint_dir ./checkpoints \
-    --factor_strategy identity
-```
+We can conduct counterfactual experiment by observing the increase in validation perplexity when removing top influential sequences.
+We show a simple demo in `run_counterfactual.py` (the code assumes that you have computed the pairwise influence scores with `ekfac` and `identity`).
+<p align="center">
+<a href="#"><img width="380" img src="figure/counterfactual.png" alt="Counterfactual"/></a>
+</p>
+
+
 
 ## Computing Linear Datamodeling Score
 
