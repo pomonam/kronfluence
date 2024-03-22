@@ -116,7 +116,7 @@ def main():
     )
     # Compute pairwise scores.
     analyzer.compute_pairwise_scores(
-        scores_name="pairwise",
+        scores_name=args.factor_strategy,
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
         train_dataset=train_dataset,
@@ -124,8 +124,8 @@ def main():
         per_device_query_batch_size=len(eval_dataset),
         overwrite_output_dir=False,
     )
-    scores = analyzer.load_pairwise_scores("pairwise")
-    print(scores["all_modules"].shape)
+    scores = analyzer.load_pairwise_scores(args.factor_strategy)["all_modules"]
+    logging.info(f"Scores shape: {scores.shape}")
 
 
 if __name__ == "__main__":

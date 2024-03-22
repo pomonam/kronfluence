@@ -1,22 +1,19 @@
 import logging
+import math
 from typing import List
 
-import numpy as np
 import torch
-from scipy.stats import spearmanr
 
 from examples.wikitext.pipeline import get_wikitext_dataset
+from examples.wikitext.train import evaluate_model, train
 from kronfluence.analyzer import Analyzer
-from examples.wikitext.train import train, evaluate_model
-
-
 
 
 def main():
     logging.basicConfig(level=logging.INFO)
 
     train_dataset = get_wikitext_dataset(split="train")
-    scores = Analyzer.load_file("scores_pairwise/pairwise_scores.safetensors")["all_modules"][0]
+    scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"][0]
 
     def get_topk_indices(current_score: torch.Tensor, topk: int = 1) -> torch.Tensor:
         return torch.topk(current_score, topk).indices
@@ -26,12 +23,10 @@ def main():
         remove_indices = [tensor.item() for tensor in remove_indices]
         return list(set(list(range(len(train_dataset)))) - set(remove_indices))
 
-    train_dataset = get_wikitext_dataset(split="train")
     eval_train_dataset = get_wikitext_dataset(split="eval_train", indices=[0])
 
-
-    def train_fnc(indices):
-        train_dataset = get_wikitext_dataset(split="train")
+    def train_and_evaluate(indices):
+        train_dataset = get_wikitext_dataset(split="train", indices=indices)
         model = train(
             dataset=train_dataset,
             batch_size=8,
@@ -39,10 +34,25 @@ def main():
             learning_rate=3e-05,
             weight_decay=0.01,
         )
-        # return eva
+        return evaluate_model(model, eval_train_dataset, 1)
 
-    keep_indices = get_topk_keep_indices(scores, topk=5)
+    num_iter = 3
+    topk_lst = [0, 50, 100, 150, 200, 250]
+    remove_perp_lst = []
 
+    for topk in topk_lst:
+        keep_indices = get_topk_keep_indices(scores, topk=topk)
+
+        perp = 0.
+        for _ in range(num_iter):
+            new_loss = train_and_evaluate(indices=keep_indices)
+            perp += math.exp(new_loss)
+        perp /= num_iter
+        remove_perp_lst.append(perp)
+
+        logging.info(f"Removed {topk} data points. Perplexity: {perp}")
+
+    logging.info(remove_perp_lst)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
 scikit-learn
 jupyter
-tueplots
 matplotlib
+tueplots

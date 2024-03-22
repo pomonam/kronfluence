@@ -31,16 +31,9 @@ python analyze.py --query_batch_size 32 \
 You can also use `identity`, `diagonal`, and `kfac`. On A100 (80GB), it takes roughly 50 minutes to compute the 
 pairwise scores (including computing EKFAC factors).
 
-Can we speed up the computations?
-```bash
-python analyze.py --query_batch_size 32 \
-    --train_batch_size 64 \
-    --use_half_precision true \
-    --checkpoint_dir ./checkpoints \
-    --factor_strategy ekfac
-```
 
 ## Counterfactual Experiment
+
 ```bash
 python analyze.py --query_batch_size 32 \
     --train_batch_size 64 \
