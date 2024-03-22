@@ -38,7 +38,7 @@ from kronfluence.utils.exceptions import (
     TrackedModuleNotFoundError,
     UnsupportableModuleError,
 )
-from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger
+from kronfluence.utils.logger import PassThroughProfiler, Profiler, TorchProfiler, get_logger
 from kronfluence.utils.save import (
     FACTOR_ARGUMENTS_NAME,
     FACTOR_SAVE_PREFIX,
@@ -108,7 +108,8 @@ class Computer(ABC):
             self.model.to(self.state.device)
 
         # Create and configure profiler.
-        self.profiler = Profiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
+        # self.profiler = Profiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
+        self.profiler = TorchProfiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
 
         # Create and configure output directory.
         self.output_dir = Path(output_dir).joinpath(name).resolve()
