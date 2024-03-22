@@ -37,24 +37,18 @@ def parse_args():
         default="./checkpoints",
         help="A path that is storing the final checkpoint of the model.",
     )
-
     parser.add_argument(
         "--factor_strategy",
         type=str,
         default="ekfac",
         help="Strategy to compute influence factors.",
     )
-<<<<<<< HEAD
-
     parser.add_argument(
         "--profile",
         action="store_true",
         default=False,
         help="Boolean flag to profile computations.",
     )
-
-=======
->>>>>>> main
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
