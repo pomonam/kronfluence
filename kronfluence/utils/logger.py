@@ -156,7 +156,7 @@ class PassThroughProfiler(Profiler):
     def summary(self) -> str:
         """Returns a formatted summary for the Profiler."""
         return ""
-    
+
 
 class TorchProfiler(Profiler):
     """A PyTorch Profiler objective that provides detailed profiling information: 
@@ -190,7 +190,7 @@ class TorchProfiler(Profiler):
             raise ValueError(f"Attempting to stop recording an action " f"({action_name}) which was never started.")
         _ = self.current_actions.pop(action_name)
         self._torch_prof.stop()
-    
+
     def _set_up_torch_profiler(self) -> None:
         """Creates the PyTorch profiler object with the necessary arguments.
         Check this: 
@@ -208,7 +208,7 @@ class TorchProfiler(Profiler):
     def _trace_handler(self, p) -> None:
         """Adds the PyTorch Profiler trace output to a list once it is ready."""
         # Set metric to sort based on device
-        is_cpu = (self.state.device == torch.device("cpu"))
+        is_cpu = self.state.device == torch.device("cpu")
         sort_by_metric = "self_cpu_time_total" if is_cpu else "self_cuda_time_total"
 
         # Obtain formatted output from profiler
@@ -260,7 +260,7 @@ class TorchProfiler(Profiler):
     def summary(self) -> str:
         """Returns a formatted summary for the PyTorch Profiler."""
         assert len(self.actions) == len(self.trace_outputs), \
-            f"Mismatch in the number of actions and outputs collected: " + \
+            "Mismatch in the number of actions and outputs collected: " + \
             f"# Actions: {len(self.actions)}, # Ouptuts: {len(self.trace_outputs)}"
         prof_prefix = "Profiler Summary for Action"
         no_summary_str = "*** No Summary returned from PyTorch Profiler ***"

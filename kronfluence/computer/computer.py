@@ -37,7 +37,7 @@ from kronfluence.utils.exceptions import (
     FactorsNotFoundError,
     TrackedModuleNotFoundError,
 )
-from kronfluence.utils.logger import PassThroughProfiler, Profiler, TorchProfiler, get_logger
+from kronfluence.utils.logger import PassThroughProfiler, TorchProfiler, get_logger
 from kronfluence.utils.save import (
     FACTOR_ARGUMENTS_NAME,
     FACTOR_SAVE_PREFIX,
