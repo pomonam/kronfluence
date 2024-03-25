@@ -137,7 +137,7 @@ pip install -e ."[dev]"
 ### Contributors
 [Juhan Bae](https://github.com/pomonam/kronfluence), [Omkar Dige](https://github.com/xeon27), and [Adil Asif](https://github.com/adil-a/) 
 are the main contributors to this repository.
-We thank Lev McKinney, Sang Keun Choe, Hwijeen Ahn, Minsoo Kang, Youngseog Chung, Kewen Zhao, abd Laura Ruis for their feedback during the development process.
+We thank Lev McKinney, Sang Keun Choe, Hwijeen Ahn, Minsoo Kang, Youngseog Chung, Kewen Zhao, and Laura Ruis for their feedback during the development process.
 
 ## License
 
