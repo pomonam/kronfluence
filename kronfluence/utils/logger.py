@@ -216,7 +216,10 @@ class TorchProfiler(Profiler):
         self.trace_outputs.append(output)
 
         # Obtain total time taken for the action
-        total_time = p.key_averages().self_cpu_time_total if is_cpu else p.key_averages().self_cuda_time_total
+        if is_cpu:
+            total_time = p.key_averages().self_cpu_time_total
+        else:
+            total_time = sum([event.self_cuda_time_total for event in p.key_averages()])
         total_time = total_time * 10**(-6) # Convert from micro sec to sec
         self.recorded_durations[self.actions[-1]].append(total_time)
 
