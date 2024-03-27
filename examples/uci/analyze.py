@@ -37,12 +37,17 @@ def parse_args():
         default="./checkpoints",
         help="A path that is storing the final checkpoint of the model.",
     )
-
     parser.add_argument(
         "--factor_strategy",
         type=str,
         default="ekfac",
         help="Strategy to compute influence factors.",
+    )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        default=False,
+        help="Boolean flag to profile computations.",
     )
     args = parser.parse_args()
 
@@ -104,6 +109,7 @@ def main():
         model=model,
         task=task,
         cpu=True,
+        profile=args.profile,
     )
     # Compute influence factors.
     factor_args = FactorArguments(strategy=args.factor_strategy)
