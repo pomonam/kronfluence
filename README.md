@@ -1,5 +1,5 @@
 <p align="center">
-<a href="#"><img width="380" img src=".assets/kronfluence.svg" alt="Kronfluence"/></a>
+<a href="#"><img width="380" img src="https://raw.githubusercontent.com/pomonam/kronfluence/main/.assets/kronfluence.svg" alt="Kronfluence"/></a>
 </p>
 
 
@@ -59,8 +59,9 @@ page for a comprehensive guide.
 
 ### Learn More
 
-The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples.
-We plan to add more examples in the future. **TL;DR** You need to prepare the trained model and datasets, and pass them into `Analyzer`.
+The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples demonstrating how to use Kronfluence.
+More examples will be added in the future. 
+**TL;DR** You need to prepare a trained model and datasets, and pass them into the `Analyzer` class.
 
 ```python
 import torch
@@ -132,6 +133,11 @@ git clone https://github.com/pomonam/kronfluence.git
 cd kronfluence
 pip install -e ."[dev]"
 ```
+
+### Contributors
+[Juhan Bae](https://github.com/pomonam/kronfluence), [Omkar Dige](https://github.com/xeon27), and [Adil Asif](https://github.com/adil-a/) 
+are the main contributors to this repository.
+We thank Lev McKinney, Sang Keun Choe, Hwijeen Ahn, Minsoo Kang, Youngseog Chung, Kewen Zhao, and Laura Ruis for their feedback during the development process.
 
 ## License
 
