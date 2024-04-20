@@ -4,14 +4,13 @@ import os
 from typing import Tuple
 
 import torch
-import torch.distributed as dist
-from torch.nn.parallel.distributed import DistributedDataParallel
 
 from examples.imagenet.analyze import ClassificationTask
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.utils.dataset import DataLoaderKwargs
+from kronfluence.utils.model import apply_ddp
 
 torch.backends.cudnn.benchmark = True
 BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
@@ -73,20 +72,20 @@ def main():
     train_dataset = get_imagenet_dataset(split="eval_train", dataset_dir=args.dataset_dir)
     eval_dataset = get_imagenet_dataset(split="valid", dataset_dir=args.dataset_dir)
 
-    dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
-    device = torch.device("cuda:{}".format(LOCAL_RANK))
-    torch.cuda.set_device(LOCAL_RANK)
-
     # Prepare the trained model.
     model = construct_resnet50()
     task = ClassificationTask()
 
     # Define task and prepare model.
     model = prepare_model(model, task)
-    model = model.to(device=device)
 
     # Apply DDP.
-    model = DistributedDataParallel(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
+    model = apply_ddp(
+        model=model,
+        local_rank=LOCAL_RANK,
+        rank=WORLD_RANK,
+        world_size=WORLD_SIZE,
+    )
 
     analyzer = Analyzer(
         analysis_name="imagenet_ddp",
