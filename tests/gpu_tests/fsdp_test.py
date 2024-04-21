@@ -6,7 +6,6 @@ import unittest
 
 import torch
 import torch.distributed as dist
-# from torch.nn.parallel import DistributedDataParallel
 from torch.utils import data
 
 from kronfluence.analyzer import Analyzer, prepare_model
@@ -46,19 +45,6 @@ class FSDPTest(unittest.TestCase):
         cls.task = GpuTestTask()
         cls.model = prepare_model(cls.model, cls.task)
 
-        # dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
-        # device = torch.device("cuda:{}".format(LOCAL_RANK))
-        # torch.cuda.set_device(LOCAL_RANK)
-
-        # cls.model = cls.model.to(device=device)
-        # cls.model = DistributedDataParallel(cls.model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
-        # my_auto_wrap_policy = functools.partial(size_based_auto_wrap_policy, min_num_params=100)
-        # cls.model = FSDP(
-        #     cls.model,
-        #     use_orig_params=False,
-        #     auto_wrap_policy=my_auto_wrap_policy,
-        #     cpu_offload=CPUOffload(offload_params=True),
-        # )
         cls.model = apply_fsdp(
             model=cls.model,
             local_rank=LOCAL_RANK,
