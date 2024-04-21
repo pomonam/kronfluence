@@ -57,7 +57,7 @@ def apply_fsdp(
         world_size (int): The total number of processes.
 
     Returns:
-        torch.nn.Module: The model wrapped with FSDP.
+        FSDP: The model wrapped with FSDP.
     """
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
     device = torch.device("cuda:{}".format(local_rank))
