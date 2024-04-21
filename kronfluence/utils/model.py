@@ -6,13 +6,13 @@ from torch import nn
 import torch.distributed as dist
 
 from torch.distributed.fsdp import (
-    FullyShardedDataParallel as FSDP, 
-    CPUOffload, 
+    FullyShardedDataParallel as FSDP,
+    CPUOffload,
     ShardingStrategy,
 )
 from torch.distributed.fsdp.wrap import (
-    size_based_auto_wrap_policy, 
-    transformer_auto_wrap_policy
+    size_based_auto_wrap_policy,
+    transformer_auto_wrap_policy,
 )
 from torch.nn.parallel.distributed import DistributedDataParallel
 
@@ -36,7 +36,7 @@ def apply_ddp(
         DistributedDataParallel: The model wrapped with DDP.
     """
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
-    device = torch.device("cuda:{}".format(local_rank))
+    device = torch.device(f"cuda:{local_rank}")
     torch.cuda.set_device(local_rank)
 
     ddp_cfg = {
@@ -83,7 +83,7 @@ def apply_fsdp(
         FSDP: The model wrapped with FSDP.
     """
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
-    device = torch.device("cuda:{}".format(local_rank))
+    device = torch.device(f"cuda:{local_rank}")
     torch.cuda.set_device(local_rank)
 
     if not hasattr(ShardingStrategy, sharding_strategy):
@@ -94,12 +94,12 @@ def apply_fsdp(
         if layer_to_wrap is None:
             raise ValueError("`layer_to_wrap` must be provided for transformer models.")
         my_auto_wrap_policy = functools.partial(
-            transformer_auto_wrap_policy, 
+            transformer_auto_wrap_policy,
             transformer_layer_cls={layer_to_wrap},
         )
     else:
         my_auto_wrap_policy = functools.partial(
-            size_based_auto_wrap_policy, 
+            size_based_auto_wrap_policy,
             min_num_params=100,
         )
 
