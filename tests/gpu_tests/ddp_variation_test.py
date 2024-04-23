@@ -8,11 +8,11 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 from torch import nn
-from torch.nn.parallel import DistributedDataParallel
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
+from kronfluence.utils.model import apply_ddp
 from tests.gpu_tests.ddp_test import OLD_FACTOR_NAME
 from tests.gpu_tests.pipeline import BATCH_TYPE, construct_test_mlp, get_mnist_dataset
 
@@ -73,12 +73,13 @@ class DDPVariationTest(unittest.TestCase):
         cls.task = GpuVariationTask()
         cls.model = prepare_model(cls.model, cls.task)
 
-        dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
-        device = torch.device("cuda:{}".format(LOCAL_RANK))
-        torch.cuda.set_device(LOCAL_RANK)
+        cls.model = apply_ddp(
+            model=cls.model,
+            local_rank=LOCAL_RANK,
+            rank=WORLD_RANK,
+            world_size=WORLD_SIZE,
+        )
 
-        cls.model = cls.model.to(device=device)
-        cls.model = DistributedDataParallel(cls.model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
         cls.analyzer = Analyzer(
             analysis_name="gpu_test",
             model=cls.model,

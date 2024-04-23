@@ -6,7 +6,6 @@ import unittest
 
 import torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel
 from torch.utils import data
 
 from kronfluence.analyzer import Analyzer, prepare_model
@@ -16,6 +15,7 @@ from kronfluence.utils.constants import (
     COVARIANCE_FACTOR_NAMES,
     LAMBDA_FACTOR_NAMES,
 )
+from kronfluence.utils.model import apply_ddp
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
 from tests.utils import check_tensor_dict_equivalence
@@ -45,12 +45,13 @@ class DDPTest(unittest.TestCase):
         cls.task = GpuTestTask()
         cls.model = prepare_model(cls.model, cls.task)
 
-        dist.init_process_group("nccl", rank=WORLD_RANK, world_size=WORLD_SIZE)
-        device = torch.device("cuda:{}".format(LOCAL_RANK))
-        torch.cuda.set_device(LOCAL_RANK)
+        cls.model = apply_ddp(
+            model=cls.model,
+            local_rank=LOCAL_RANK,
+            rank=WORLD_RANK,
+            world_size=WORLD_SIZE,
+        )
 
-        cls.model = cls.model.to(device=device)
-        cls.model = DistributedDataParallel(cls.model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
         cls.analyzer = Analyzer(
             analysis_name="gpu_test",
             model=cls.model,
