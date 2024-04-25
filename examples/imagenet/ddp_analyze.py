@@ -108,8 +108,6 @@ def main():
     # Compute influence factors.
     factor_args = FactorArguments(
         strategy=args.factor_strategy,
-        covariance_module_partition_size=4,
-        lambda_module_partition_size=4,
     )
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
