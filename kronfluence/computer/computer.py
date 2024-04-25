@@ -323,7 +323,7 @@ class Computer(ABC):
         profile_save_path = (self.profiler_dir / f"summary_rank_{self.state.process_index}.txt").resolve()
         if profile_summary != "":
             self.logger.info(profile_summary)
-            with open(profile_save_path, 'a') as f:
+            with open(profile_save_path, 'a', encoding='utf-8') as f:
                 f.write(profile_summary)
 
     def load_factor_args(self, factors_name: str) -> Optional[FactorArguments]:
