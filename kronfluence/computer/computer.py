@@ -105,12 +105,15 @@ class Computer(ABC):
         if not self.state.use_distributed:
             self.model.to(self.state.device)
 
-        # Create and configure profiler.
-        self.profiler = TorchProfiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
-
         # Create and configure output directory.
         self.output_dir = Path(output_dir).joinpath(name).resolve()
         os.makedirs(name=self.output_dir, exist_ok=True)
+
+        # Create and configure profiler.
+        self.profiler = TorchProfiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
+        # Create directory to save profiler output.
+        self.profiler_dir = (self.output_dir / "profiler_output").resolve()
+        os.makedirs(name=self.profiler_dir, exist_ok=True)
 
         # DataLoader parameters.
         self._dataloader_params = DataLoaderKwargs()
@@ -317,8 +320,11 @@ class Computer(ABC):
     def _log_profile_summary(self) -> None:
         """Log the summary of the profiling results."""
         profile_summary = self.profiler.summary()
+        profile_save_path = (self.profiler_dir / f"summary_rank_{self.state.process_index}.txt").resolve()
         if profile_summary != "":
             self.logger.info(profile_summary)
+            with open(profile_save_path, 'a') as f:
+                f.write(profile_summary)
 
     def load_factor_args(self, factors_name: str) -> Optional[FactorArguments]:
         """Loads factor arguments with the given factor name."""

@@ -173,8 +173,6 @@ class TorchProfiler(Profiler):
 
     def start(self, action_name: str) -> None:
         """Defines how to start recording an action."""
-        if not self.state.is_main_process:
-            return
         if action_name in self.current_actions:
             raise ValueError(f"Attempted to start {action_name} which has already started.")
         # Set dummy value, since only used to track duplicate actions
@@ -184,8 +182,6 @@ class TorchProfiler(Profiler):
 
     def stop(self, action_name: str) -> None:
         """Defines how to stop recording an action."""
-        if not self.state.is_main_process:
-            return
         if action_name not in self.current_actions:
             raise ValueError(f"Attempting to stop recording an action " f"({action_name}) which was never started.")
         _ = self.current_actions.pop(action_name)
