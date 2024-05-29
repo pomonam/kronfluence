@@ -59,6 +59,12 @@ def parse_args():
         default="ekfac",
         help="Strategy to compute preconditioning factors.",
     )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        default=False,
+        help="Boolean flag to profile computations.",
+    )
 
     args = parser.parse_args()
     return args
@@ -91,6 +97,7 @@ def main():
         analysis_name="imagenet_ddp",
         model=model,
         task=task,
+        profile=args.profile,
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(
