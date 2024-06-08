@@ -276,6 +276,7 @@ def compute_pairwise_scores_with_loaders(
                     truncate_preconditioned_gradient(model=model, keep_size=query_remainder)
 
             # Compute the dot product between preconditioning query gradient and all training gradients.
+            del measurement
             model.zero_grad(set_to_none=True)
             release_memory()
             scores = _compute_dot_products_with_loader(
