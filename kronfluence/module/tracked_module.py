@@ -75,10 +75,6 @@ class TrackedModule(nn.Module):
         self.name = name
         self.original_module = original_module
 
-        # A way to avoid Autograd computing the gradient with respect to the model parameters.
-        self._constant: Optional[bool] = None
-        self._is_leaf: bool = False
-
         if factor_args is None:
             factor_args = FactorArguments()
         self.factor_args = factor_args
@@ -134,8 +130,6 @@ class TrackedModule(nn.Module):
     def forward(self, inputs: torch.Tensor, *args, **kwargs) -> Any:
         """A forward pass of the tracked module. This should have identical behavior to
         the original module."""
-        # if self._is_leaf:
-        #     return self.original_module(inputs + self._constant, *args, **kwargs)
         return self.original_module(inputs, *args, **kwargs)
 
     def set_mode(self, mode: ModuleMode, keep_factors: bool = True) -> None:
@@ -198,18 +192,6 @@ class TrackedModule(nn.Module):
             handle = self._cached_hooks.pop()
             handle.remove()
         self._cached_hooks = []
-
-    # def _register_constant(self):
-    #     """Registers a constant term to avoid Autograd computing gradients with respect to the model parameters."""
-    #     self._is_leaf = True
-    #     self._constant = nn.Parameter(
-    #         torch.zeros(
-    #             1,
-    #             requires_grad=True,
-    #             device=self.original_module.weight.device,
-    #             dtype=torch.float16,
-    #         )
-    #     )
 
     ##############################################
     # Methods for computing covariance matrices. #
