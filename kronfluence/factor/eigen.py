@@ -14,7 +14,6 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     get_tracked_module_names,
     load_factors,
-    remove_attention_mask,
     set_factors,
     set_mode,
     synchronize_lambda_matrices,

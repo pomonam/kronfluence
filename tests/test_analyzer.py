@@ -53,7 +53,7 @@ def test_analyzer(
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     factor_args = FactorArguments(strategy=strategy)
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_name}",
+        factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
         dataset=train_dataset,
         per_device_batch_size=16,
         dataloader_kwargs=kwargs,
@@ -62,7 +62,7 @@ def test_analyzer(
     )
     analyzer.compute_pairwise_scores(
         scores_name="pairwise",
-        factors_name=f"pytest_{test_name}",
+        factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
         query_dataset=query_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -85,8 +85,6 @@ def test_default_factor_arguments() -> None:
 
     assert factor_args.strategy == "ekfac"
     assert factor_args.use_empirical_fisher is False
-    assert factor_args.immediate_gradient_removal is False
-    assert factor_args.ignore_bias is False
 
     assert factor_args.covariance_max_examples == 100_000
     assert factor_args.covariance_data_partition_size == 1
@@ -106,8 +104,7 @@ def test_default_factor_arguments() -> None:
 def test_default_score_arguments() -> None:
     factor_args = ScoreArguments()
 
-    assert factor_args.damping is None
-    assert factor_args.immediate_gradient_removal is False
+    assert factor_args.damping == 1e-08
     assert factor_args.cached_activation_cpu_offload is False
 
     assert factor_args.data_partition_size == 1

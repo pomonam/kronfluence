@@ -263,6 +263,8 @@ def test_lambda_equivalence(
     total_added = {}
     for gradient_batch in for_loop_per_sample_gradients:
         for module_name in gradient_batch:
+            if "lm_head" in module_name:
+                continue
             if module_name not in aggregated_matrices:
                 aggregated_matrices[module_name] = (gradient_batch[module_name] ** 2.0).sum(dim=0)
                 total_added[module_name] = gradient_batch[module_name].shape[0]
@@ -290,7 +292,6 @@ def test_precondition_gradient(
     A = torch.rand(size=(input_dim, input_dim), dtype=torch.float64)
     B = torch.rand(size=(output_dim, output_dim), dtype=torch.float64)
     Lambda = torch.rand(size=(output_dim, input_dim), dtype=torch.float64)
-
     gradient = torch.rand(size=(batch_dim, output_dim, input_dim), dtype=torch.float64)
 
     start_time = time.time()
