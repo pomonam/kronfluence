@@ -81,7 +81,7 @@ def covariance_matrices_exist(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
-    """Checks if covariance matrices exist at specified directory."""
+    """Checks if covariance matrices exist at the specified directory."""
     for factor_name in COVARIANCE_FACTOR_NAMES:
         save_path = covariance_matrices_save_path(
             output_dir=output_dir,
@@ -105,7 +105,7 @@ def fit_covariance_matrices_with_loader(
 
     Args:
         model (nn.Module):
-            The model that covariance matrices will be computed.
+            The model for which covariance matrices will be computed.
         state (State):
             The current process's information (e.g., device being used).
         task (Task):
@@ -115,20 +115,18 @@ def fit_covariance_matrices_with_loader(
         factor_args (FactorArguments):
             Arguments for computing covariance matrices.
         tracked_module_names (List[str], optional):
-            A list of module names that covariance matrices will be computed. If not specified, covariance
-            matrices will be computed for all tracked modules.
+            A list of module names for which covariance matrices will be computed. If not specified,
+            covariance matrices will be computed for all tracked modules.
 
     Returns:
         Tuple[torch.Tensor, FACTOR_TYPE]:
-            A tuple containing the number of data points processed, and computed covariance matrices in CPU.
-            The covariance matrices are organized in nested dictionaries, where the first key in the name of the
-            covariance matrix (e.g., activation covariance and gradient covariance) and the second key is
+            A tuple containing the number of data points processed and computed covariance matrices in CPU.
+            The covariance matrices are organized in nested dictionaries, where the first key is the name of the
+            covariance matrix (e.g., activation covariance and pseudo-gradient covariance) and the second key is
             the module name.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
-        remove_attention_mask(model=model)
-        set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
         set_mode(
             model=model,
             tracked_module_names=tracked_module_names,
@@ -172,6 +170,7 @@ def fit_covariance_matrices_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
+        model.zero_grad(set_to_none=True)
         remove_attention_mask(model=model)
 
         if state.use_distributed:

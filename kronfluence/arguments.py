@@ -37,17 +37,9 @@ class FactorArguments(Arguments):
     use_empirical_fisher: bool = field(
         default=False,
         metadata={
-            "help": "Whether to use empirical fisher (using labels from batch) instead of "
+            "help": "Whether to use empirical Fisher (using labels from batch) instead of "
             "true Fisher (using sampled labels)."
         },
-    )
-    immediate_gradient_removal: bool = field(
-        default=False,
-        metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
-    )
-    ignore_bias: bool = field(
-        default=False,
-        metadata={"help": "Whether to ignore factor computations on bias parameters. Defaults to False."},
     )
     distributed_sync_steps: int = field(
         default=1_000,
@@ -153,15 +145,11 @@ class ScoreArguments(Arguments):
 
     # General configuration. #
     damping: Optional[float] = field(
-        default=None,
+        default=1e-08,
         metadata={
-            "help": "A damping factor for the damped matrix-vector product. "
-            "Uses a heuristic based on mean eigenvalues (0.1 x mean eigenvalues) if None."
+            "help": "A damping factor for the damped inverse Hessian-vector product (iHVP). "
+            "Uses a heuristic based on mean eigenvalues (0.1 x mean eigenvalues) if set to None."
         },
-    )
-    immediate_gradient_removal: bool = field(
-        default=False,
-        metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
     )
     cached_activation_cpu_offload: bool = field(
         default=False,

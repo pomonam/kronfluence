@@ -159,13 +159,12 @@ class PassThroughProfiler(Profiler):
 
 
 class TorchProfiler(Profiler):
-    """A PyTorch Profiler objective that provides detailed profiling information: 
-    https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html
+    """A PyTorch Profiler objective that provides detailed profiling information:
+    https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html.
     """
 
     def __init__(self, state: State) -> None:
-        """Initializes an instance of the PyTorch Profiler class.
-        """
+        """Initializes an instance of the PyTorch Profiler class."""
         super().__init__(state=state)
         self.actions: list = []
         self.trace_outputs: list = []
@@ -188,35 +187,32 @@ class TorchProfiler(Profiler):
         self._torch_prof.stop()
 
     def _set_up_torch_profiler(self) -> None:
-        """Creates the PyTorch profiler object with the necessary arguments.
-        Check this: 
-        https://pytorch.org/tutorials/intermediate/tensorboard_profiler_tutorial.html#use-profiler-to-record-execution-events.
-        """
+        """Creates the PyTorch profiler object with the necessary arguments."""
         self._torch_prof = t_prof.profile(
-            activities = [t_prof.ProfilerActivity.CPU, t_prof.ProfilerActivity.CUDA],
-            record_shapes = True,
-            profile_memory = True,
-            with_stack = False,
-            with_flops = False,
-            on_trace_ready = self._trace_handler,
+            activities=[t_prof.ProfilerActivity.CPU, t_prof.ProfilerActivity.CUDA],
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=False,
+            with_flops=False,
+            on_trace_ready=self._trace_handler,
         )
 
     def _trace_handler(self, p) -> None:
         """Adds the PyTorch Profiler trace output to a list once it is ready."""
-        # Set metric to sort based on device
+        # Set metric to sort based on device.
         is_cpu = self.state.device == torch.device("cpu")
         sort_by_metric = "self_cpu_time_total" if is_cpu else "self_cuda_time_total"
 
-        # Obtain formatted output from profiler
+        # Obtain formatted output from profiler.
         output = p.key_averages().table(sort_by=sort_by_metric, row_limit=10)
         self.trace_outputs.append(output)
 
-        # Obtain total time taken for the action
+        # Obtain total time taken for the action.
         if is_cpu:
             total_time = p.key_averages().self_cpu_time_total
         else:
             total_time = sum(event.self_cuda_time_total for event in p.key_averages())
-        total_time = total_time * 10**(-6) # Convert from micro sec to sec
+        total_time = total_time * 10 ** (-6)  # Convert from micro sec to sec
         self.recorded_durations[self.actions[-1]].append(total_time)
 
     def _reset_output(self) -> None:
@@ -258,17 +254,18 @@ class TorchProfiler(Profiler):
 
     def summary(self) -> str:
         """Returns a formatted summary for the PyTorch Profiler."""
-        assert len(self.actions) == len(self.trace_outputs), \
-            "Mismatch in the number of actions and outputs collected: " + \
-            f"# Actions: {len(self.actions)}, # Ouptuts: {len(self.trace_outputs)}"
+        assert len(self.actions) == len(self.trace_outputs), (
+            "Mismatch in the number of actions and outputs collected: "
+            + f"# Actions: {len(self.actions)}, # Ouptuts: {len(self.trace_outputs)}"
+        )
         prof_prefix = "Profiler Summary for Action"
         no_summary_str = "*** No Summary returned from PyTorch Profiler ***"
-        # Consolidate detailed summary
-        outputs = [no_summary_str if elm=="" else elm for elm in self.trace_outputs]
+        # Consolidate detailed summary.
+        outputs = [no_summary_str if elm == "" else elm for elm in self.trace_outputs]
         summary = "\n".join([f"\n{prof_prefix}: {elm[0]}\n{elm[1]}" for elm in zip(self.actions, outputs)])
-        # Append overall action level summary
+        # Append overall action level summary.
         summary = f"{summary}\n\n{self._high_level_summary()}"
-        # Reset actions and outputs once summary is invoked
+        # Reset actions and outputs once summary is invoked.
         self._reset_output()
         return summary
 

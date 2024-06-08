@@ -35,7 +35,7 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
             flattened_activation = flattened_activation.clone()
             flattened_activation.mul_(flattened_attention_mask)
 
-        if self.original_module.bias is not None and not self.factor_args.ignore_bias:
+        if self.original_module.bias is not None:
             append_term = flattened_activation.new_ones((flattened_activation.size(0), 1), requires_grad=False)
             if flattened_attention_mask is not None:
                 append_term.mul_(flattened_attention_mask)
@@ -77,7 +77,7 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                 with dimension `batch_size x gradient_dim x activation_dim`. An additional dimension is added
                 when the bias term is used.
         """
-        if self.original_module.bias is not None and not self.factor_args.ignore_bias:
+        if self.original_module.bias is not None:
             shape = list(input_activation.size()[:-1]) + [1]
             append_term = input_activation.new_ones(shape, requires_grad=False)
             input_activation = torch.cat([input_activation, append_term], dim=-1)
