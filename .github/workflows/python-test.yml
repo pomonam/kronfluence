@@ -19,9 +19,12 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install -r requirements.txt
+        pip install -r dev_requirements.txt
         python setup.py install
 
     - name: Run All Tests
       run: |
         pip install -e ."[dev]"
         pytest -vx tests/test_analyzer.py
+        pytest -vx tests/factors/test_covariances.py
+        pytest -vx tests/factors/test_eigens.py

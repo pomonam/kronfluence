@@ -58,11 +58,12 @@ class RegressionTask(Task):
     ) -> torch.Tensor:
         inputs, targets = batch
         outputs = model(inputs)
+
         if not sample:
             return F.mse_loss(outputs, targets, reduction="sum")
         with torch.no_grad():
-            sampled_targets = torch.normal(outputs, std=math.sqrt(0.5))
-        return F.mse_loss(outputs, sampled_targets.detach(), reduction="sum")
+            sampled_targets = torch.normal(outputs.detach(), std=math.sqrt(0.5))
+        return F.mse_loss(outputs, sampled_targets, reduction="sum")
 
     def compute_measurement(
         self,

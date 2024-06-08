@@ -7,6 +7,7 @@ from torch import nn
 from torch.utils import data
 from transformers import default_data_collator
 
+from kronfluence import Analyzer, prepare_model
 from kronfluence.task import Task
 from kronfluence.utils.exceptions import UnsupportableModuleError
 from tests.testable_tasks.classification import (
@@ -28,12 +29,25 @@ from tests.testable_tasks.regression import (
 )
 from tests.testable_tasks.text_classification import (
     TextClassificationTask,
+    WrongTextClassificationTask,
     make_bert_dataset,
     make_tiny_bert,
 )
 
-RTOL = 1e-2
-ATOL = 1e-4
+RTOL = 1.3e-6
+ATOL = 1e-5
+
+
+def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
+    model = prepare_model(model=model, task=task)
+    analyzer = Analyzer(
+        analysis_name=f"pytest_{__name__}",
+        model=model,
+        task=task,
+        disable_model_save=True,
+        cpu=True,
+    )
+    return model, analyzer
 
 
 def prepare_test(
@@ -73,6 +87,12 @@ def prepare_test(
         query_dataset = make_bert_dataset(num_data=query_size, seed=seed + 1, do_not_pad=do_not_pad)
         task = TextClassificationTask()
         data_collator = default_data_collator
+    elif test_name == "wrong_bert":
+        model = make_tiny_bert(seed=seed)
+        train_dataset = make_bert_dataset(num_data=train_size, seed=seed, do_not_pad=do_not_pad)
+        query_dataset = make_bert_dataset(num_data=query_size, seed=seed + 1, do_not_pad=do_not_pad)
+        task = WrongTextClassificationTask()
+        data_collator = default_data_collator
     elif test_name == "gpt":
         model = make_tiny_gpt(seed=seed)
         train_dataset = make_gpt_dataset(num_data=train_size, seed=seed)
@@ -96,6 +116,7 @@ def check_tensor_dict_equivalence(
 
     for key in dict1:
         if not torch.allclose(dict1[key], dict2[key], atol=atol, rtol=rtol):
+            print("{} does not match.".format(key))
             return False
     return True
 

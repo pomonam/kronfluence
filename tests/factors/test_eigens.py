@@ -1,14 +1,9 @@
 # pylint: skip-file
 
-from typing import Tuple
-
 import pytest
 import torch
-from torch import nn
 
-from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
-from kronfluence.task import Task
 from kronfluence.utils.constants import (
     ACTIVATION_EIGENVECTORS_NAME,
     EIGENDECOMPOSITION_FACTOR_NAMES,
@@ -18,19 +13,13 @@ from kronfluence.utils.constants import (
     NUM_LAMBDA_PROCESSED,
 )
 from kronfluence.utils.dataset import DataLoaderKwargs
-from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
-
-
-def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
-    model = prepare_model(model=model, task=task)
-    analyzer = Analyzer(
-        analysis_name=f"pytest_{__name__}",
-        model=model,
-        task=task,
-        disable_model_save=True,
-        cpu=True,
-    )
-    return model, analyzer
+from tests.utils import (
+    ATOL,
+    RTOL,
+    check_tensor_dict_equivalence,
+    prepare_model_and_analyzer,
+    prepare_test,
+)
 
 
 @pytest.mark.parametrize(
@@ -53,6 +42,7 @@ def test_perform_eigendecomposition(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure that the Eigendecomposition computations are working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -91,10 +81,11 @@ def test_perform_eigendecomposition(
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
         "conv",
         "conv_bn",
-        "gpt",
         "bert",
+        "gpt",
     ],
 )
 @pytest.mark.parametrize("lambda_dtype", [torch.float32, torch.bfloat16])
@@ -106,6 +97,7 @@ def test_fit_lambda_matrices(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure that the Lambda computations are working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -124,7 +116,7 @@ def test_fit_lambda_matrices(
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        per_device_batch_size=4,
+        per_device_batch_size=train_size // 4,
         factor_args=factor_args,
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
@@ -154,7 +146,7 @@ def test_lambda_matrices_batch_size_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
-    # Lambda matrices should be identical regardless of the batch size used.
+    # Lambda matrices should be identical regardless of what batch size used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -169,9 +161,12 @@ def test_lambda_matrices_batch_size_equivalence(
     factor_args = FactorArguments(
         strategy=strategy,
         use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        lambda_dtype=torch.float64,
     )
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_name}_{strategy}_bs1",
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_batch_size_equivalence.__name__}_{strategy}_bs1",
         dataset=train_dataset,
         per_device_batch_size=1,
         factor_args=factor_args,
@@ -179,11 +174,11 @@ def test_lambda_matrices_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs1_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_name}_{strategy}_bs1",
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_batch_size_equivalence.__name__}_{strategy}_bs1",
     )
 
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_name}_{strategy}_bs8",
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_batch_size_equivalence.__name__}_{strategy}_bs8",
         dataset=train_dataset,
         per_device_batch_size=8,
         factor_args=factor_args,
@@ -191,7 +186,7 @@ def test_lambda_matrices_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs8_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_name}_{strategy}_bs8",
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_batch_size_equivalence.__name__}_{strategy}_bs8",
     )
 
     for name in LAMBDA_FACTOR_NAMES:
@@ -219,7 +214,7 @@ def test_lambda_matrices_partition_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
-    # Covariance matrices should be identical regardless of the partition used.
+    # Lambda matrices should be identical regardless of what the partition used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -234,6 +229,9 @@ def test_lambda_matrices_partition_equivalence(
     factor_args = FactorArguments(
         strategy=strategy,
         use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        lambda_dtype=torch.float64,
     )
     factors_name = f"pytest_{test_name}_{strategy}_{test_lambda_matrices_partition_equivalence.__name__}"
     analyzer.fit_all_factors(
@@ -251,6 +249,9 @@ def test_lambda_matrices_partition_equivalence(
     factor_args = FactorArguments(
         strategy=strategy,
         use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        lambda_dtype=torch.float64,
         lambda_data_partition_size=data_partition_size,
         lambda_module_partition_size=module_partition_size,
     )
@@ -286,7 +287,7 @@ def test_lambda_matrices_iterative_aggregate(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure aggregated lambda computation is working and the results are identical.
+    # Make sure aggregated lambda computation is working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -302,6 +303,9 @@ def test_lambda_matrices_iterative_aggregate(
     factor_args = FactorArguments(
         use_empirical_fisher=True,
         lambda_iterative_aggregate=False,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        lambda_dtype=torch.float64,
     )
     analyzer.fit_all_factors(
         factors_name=factors_name,
@@ -318,6 +322,9 @@ def test_lambda_matrices_iterative_aggregate(
     factor_args = FactorArguments(
         use_empirical_fisher=True,
         lambda_iterative_aggregate=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        lambda_dtype=torch.float64,
     )
     analyzer.fit_all_factors(
         factors_name=factors_name + "_iterative",
@@ -350,7 +357,7 @@ def test_lambda_matrices_max_examples(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure the max Lambda data selection is working.
+    # Make sure the max Lambda data selection is working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,

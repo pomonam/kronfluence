@@ -1,15 +1,12 @@
-from typing import Optional
 import functools
+from typing import Optional
 
 import torch
-from torch import nn
 import torch.distributed as dist
-
-from torch.distributed.fsdp import (
-    FullyShardedDataParallel as FSDP,
-    CPUOffload,
-    ShardingStrategy,
-)
+from torch import nn
+from torch.distributed.fsdp import CPUOffload
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp import ShardingStrategy
 from torch.distributed.fsdp.wrap import (
     size_based_auto_wrap_policy,
     transformer_auto_wrap_policy,
