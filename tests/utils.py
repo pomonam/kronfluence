@@ -116,7 +116,6 @@ def check_tensor_dict_equivalence(
 
     for key in dict1:
         if not torch.allclose(dict1[key], dict2[key], atol=atol, rtol=rtol):
-            print("{} does not match.".format(key))
             return False
     return True
 
@@ -144,7 +143,10 @@ def reshape_parameter_gradient_to_module_matrix(
                 del gradient_dict[module_name + ".bias"]
     elif isinstance(module, nn.Conv2d):
         gradient_matrix = gradient_dict[module_name + ".weight"]
-        gradient_matrix = gradient_matrix.view(gradient_matrix.size(0), gradient_matrix.size(1), -1)
+        if len(gradient_matrix.size()) == 5:
+            gradient_matrix = gradient_matrix.view(gradient_matrix.size(0), gradient_matrix.size(1), -1)
+        else:
+            gradient_matrix = gradient_matrix.view(gradient_matrix.size(0), -1)
         if remove_gradient:
             del gradient_dict[module_name + ".weight"]
         if module_name + ".bias" in gradient_dict:
