@@ -72,7 +72,7 @@ def test_analyzer(
     )
     analyzer.compute_self_scores(
         scores_name="self",
-        factors_name=f"pytest_{test_name}",
+        factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
