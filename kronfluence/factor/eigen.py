@@ -295,6 +295,7 @@ def fit_lambda_matrices_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
+        del loss
         model.zero_grad(set_to_none=True)
 
         if state.use_distributed:
