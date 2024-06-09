@@ -324,10 +324,12 @@ class TrackedModule(nn.Module):
                 # Compute and update activation covariance matrix in the forward pass.
                 self._update_activation_covariance_matrix(inputs[0].detach())
             # Register backward hook to obtain gradient with respect to the output.
-            if not outputs.requires_grad:
-                print(f"Happened! {module}")
-                outputs.requires_grad = True
-            self._cached_hooks.append(outputs.register_hook(backward_hook))
+            try:
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            except RuntimeError:
+                self._register_constant()
+                outputs.requires_grad_(True)
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
