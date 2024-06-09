@@ -319,7 +319,7 @@ class TrackedModule(nn.Module):
         """Installs forward and backward hooks for computation of the covariance matrices."""
 
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: Tuple[torch.Tensor]) -> None:
-            # del module
+            del module
             with torch.no_grad():
                 # Compute and update activation covariance matrix in the forward pass.
                 self._update_activation_covariance_matrix(inputs[0].detach())
