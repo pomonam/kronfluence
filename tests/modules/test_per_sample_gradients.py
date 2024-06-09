@@ -130,27 +130,10 @@ def test_for_loop_per_sample_gradient_equivalence(
         batch_lst.append(next(train_iter))
 
     model = prepare_model(model=model, task=task)
-    analyzer = Analyzer(
-        analysis_name=f"pytest_{test_name}",
-        model=model,
-        task=task,
-        disable_model_save=True,
-        cpu=True,
-    )
-    kwargs = DataLoaderKwargs(collate_fn=data_collator)
     factor_args = FactorArguments(
         strategy="identity",
     )
     update_factor_args(model=model, factor_args=factor_args)
-
-    analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_name}_gradient",
-        dataset=train_dataset,
-        factor_args=factor_args,
-        per_device_batch_size=1,
-        overwrite_output_dir=True,
-        dataloader_kwargs=kwargs,
-    )
 
     per_sample_gradients = []
     set_mode(model, ModuleMode.PRECONDITION_GRADIENT)
@@ -186,6 +169,118 @@ def test_for_loop_per_sample_gradient_equivalence(
         assert check_tensor_dict_equivalence(
             per_sample_gradients[i],
             for_loop_per_sample_gradients[i],
+            atol=ATOL,
+            rtol=RTOL,
+        )
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "repeated_mlp",
+        "conv",
+        "conv_bn",
+        "bert",
+        "gpt",
+    ],
+)
+@pytest.mark.parametrize("use_measurement", [True, False])
+@pytest.mark.parametrize("train_size", [61])
+@pytest.mark.parametrize("seed", [1])
+def test_mean_gradient_equivalence(
+    test_name: str,
+    use_measurement: bool,
+    train_size: int,
+    seed: int,
+) -> None:
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name=test_name,
+        train_size=train_size,
+        seed=seed,
+    )
+    original_model = copy.deepcopy(model)
+
+    batch_size = 4
+    num_batches = train_size // batch_size
+    train_loader = DataLoader(
+        train_dataset,
+        collate_fn=data_collator,
+        batch_size=batch_size,
+        drop_last=False,
+        shuffle=False,
+    )
+
+    batch_lst = []
+    train_iter = iter(train_loader)
+    for _ in range(num_batches):
+        batch_lst.append(next(train_iter))
+
+    model = prepare_model(model=model, task=task)
+    factor_args = FactorArguments(
+        strategy="identity",
+    )
+    update_factor_args(model=model, factor_args=factor_args)
+
+    per_sample_gradients = []
+    set_mode(model, ModuleMode.PRECONDITION_GRADIENT)
+    for i in range(num_batches):
+        model.zero_grad(set_to_none=True)
+        if use_measurement:
+            loss = task.compute_measurement(
+                batch=batch_lst[i],
+                model=model,
+            )
+        else:
+            loss = task.compute_train_loss(batch=batch_lst[i], model=model, sample=False)
+        loss.backward()
+
+        module_gradients = {}
+        for module in model.modules():
+            if isinstance(module, TrackedModule):
+                module_gradients[module.name] = module.get_factor(factor_name=PRECONDITIONED_GRADIENT_NAME)
+
+        per_sample_gradients.append(module_gradients)
+
+    summed_gradients = []
+    for i in range(num_batches):
+        original_model.zero_grad(set_to_none=True)
+        if use_measurement:
+            loss = task.compute_measurement(
+                batch=batch_lst[i],
+                model=original_model,
+            )
+        else:
+            loss = task.compute_train_loss(batch=batch_lst[i], model=original_model, sample=False)
+        loss.backward()
+
+        parameter_gradient_dict = {}
+        for param_name, param in original_model.named_parameters():
+            if param.grad is not None:
+                parameter_gradient_dict[param_name] = param.grad
+
+        summed_gradient_dict = {}
+        for module_name, module in original_model.named_modules():
+            if isinstance(module, (nn.Linear, nn.Conv2d)):
+                summed_gradient_dict[module_name] = reshape_parameter_gradient_to_module_matrix(
+                    module=module,
+                    module_name=module_name,
+                    gradient_dict=parameter_gradient_dict,
+                    remove_gradient=True,
+                )
+        del parameter_gradient_dict
+        summed_gradients.append(summed_gradient_dict)
+
+    for i in range(num_batches):
+        if "lm_head" in summed_gradients[i]:
+            del summed_gradients[i]["lm_head"]
+
+        for module_name in per_sample_gradients[i]:
+            per_sample_gradients[i][module_name] = per_sample_gradients[i][module_name].sum(dim=0)
+
+        assert check_tensor_dict_equivalence(
+            per_sample_gradients[i],
+            summed_gradients[i],
             atol=ATOL,
             rtol=RTOL,
         )
@@ -263,6 +358,8 @@ def test_lambda_equivalence(
     total_added = {}
     for gradient_batch in for_loop_per_sample_gradients:
         for module_name in gradient_batch:
+            if "lm_head" in module_name:
+                continue
             if module_name not in aggregated_matrices:
                 aggregated_matrices[module_name] = (gradient_batch[module_name] ** 2.0).sum(dim=0)
                 total_added[module_name] = gradient_batch[module_name].shape[0]
@@ -290,7 +387,6 @@ def test_precondition_gradient(
     A = torch.rand(size=(input_dim, input_dim), dtype=torch.float64)
     B = torch.rand(size=(output_dim, output_dim), dtype=torch.float64)
     Lambda = torch.rand(size=(output_dim, input_dim), dtype=torch.float64)
-
     gradient = torch.rand(size=(batch_dim, output_dim, input_dim), dtype=torch.float64)
 
     start_time = time.time()

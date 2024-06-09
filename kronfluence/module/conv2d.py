@@ -94,7 +94,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
             pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
         )
 
-        if self.original_module.bias is not None and not self.factor_args.ignore_bias:
+        if self.original_module.bias is not None:
             input_activation = torch.cat(
                 [
                     input_activation,
@@ -153,7 +153,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
             pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
         )
 
-        if self.original_module.bias is not None and not self.factor_args.ignore_bias:
+        if self.original_module.bias is not None:
             input_activation = torch.cat(
                 [
                     input_activation,

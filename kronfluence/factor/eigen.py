@@ -14,7 +14,6 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     get_tracked_module_names,
     load_factors,
-    remove_attention_mask,
     set_factors,
     set_mode,
     synchronize_lambda_matrices,
@@ -75,7 +74,7 @@ def load_eigendecomposition(
 def eigendecomposition_exist(
     output_dir: Path,
 ) -> bool:
-    """Checks if Eigendecomposition results exist at specified path."""
+    """Checks if Eigendecomposition results exist at the specified path."""
     for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
         save_path = eigendecomposition_save_path(
             output_dir=output_dir,
@@ -108,7 +107,7 @@ def perform_eigendecomposition(
     Returns:
         FACTOR_TYPE:
             The Eigendecomposition results in CPU. The Eigendecomposition results are organized in
-            nested dictionaries, where the first key in the name of the Eigendecomposition factor (e.g.,
+            nested dictionaries, where the first key is the name of the Eigendecomposition factor (e.g.,
             activation eigenvector), and the second key is the module name.
     """
     eigen_factors: FACTOR_TYPE = {}
@@ -206,7 +205,7 @@ def lambda_matrices_exist(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
-    """Check if Lambda matrices exist at specified path."""
+    """Check if Lambda matrices exist at the specified path."""
     for factor_name in LAMBDA_FACTOR_NAMES:
         save_path = lambda_matrices_save_path(
             output_dir=output_dir,
@@ -227,11 +226,11 @@ def fit_lambda_matrices_with_loader(
     eigen_factors: Optional[FACTOR_TYPE] = None,
     tracked_module_names: Optional[List[str]] = None,
 ) -> Tuple[torch.Tensor, FACTOR_TYPE]:
-    """Computes Lambda matrices for a given model and task.
+    """Computes Lambda (corrected eigenvalues) matrices for a given model and task.
 
     Args:
         model (nn.Module):
-            The model that Lambda matrices will be computed.
+            The model for which Lambda matrices will be computed.
         state (State):
             The current process's information (e.g., device being used).
         task (Task):
@@ -243,19 +242,17 @@ def fit_lambda_matrices_with_loader(
         eigen_factors (FACTOR_TYPE, optional):
             The eigendecomposition results to use for computing Lambda matrices.
         tracked_module_names (List[str], optional):
-            A list of module names that Lambda matrices will be computed. If not specified, Lambda
-            matrices will be computed for all available tracked modules.
+            A list of module names for which Lambda matrices will be computed. If not specified,
+            Lambda matrices will be computed for all tracked modules.
 
     Returns:
         Tuple[torch.Tensor, FACTOR_TYPE]:
             A tuple containing the number of data points processed, and computed Lambda matrices in CPU.
-            The Lambda matrices are organized in nested dictionaries, where the first key in the name of
+            The Lambda matrices are organized in nested dictionaries, where the first key is the name of
             the computed variable and the second key is the module name.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
-        remove_attention_mask(model=model)
-        set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
         set_mode(
             model=model,
             tracked_module_names=tracked_module_names,
@@ -298,6 +295,9 @@ def fit_lambda_matrices_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
+        del loss
+        model.zero_grad(set_to_none=True)
+
         if state.use_distributed:
             # Aggregate Lambda matrices across multiple devices or nodes.
             synchronize_lambda_matrices(model=model)

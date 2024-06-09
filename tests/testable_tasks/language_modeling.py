@@ -113,12 +113,12 @@ class LanguageModelingTask(Task):
         else:
             reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             with torch.no_grad():
-                probs = torch.nn.functional.softmax(reshaped_shift_logits, dim=-1)
+                probs = torch.nn.functional.softmax(reshaped_shift_logits.detach(), dim=-1)
                 sampled_labels = torch.multinomial(
                     probs,
                     num_samples=1,
                 ).flatten()
-            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels.detach(), reduction="sum")
+            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels, reduction="sum")
         return summed_loss
 
     def compute_measurement(

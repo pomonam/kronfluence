@@ -37,7 +37,7 @@ from kronfluence.utils.exceptions import (
     FactorsNotFoundError,
     TrackedModuleNotFoundError,
 )
-from kronfluence.utils.logger import PassThroughProfiler, TorchProfiler, get_logger
+from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger
 from kronfluence.utils.save import (
     FACTOR_ARGUMENTS_NAME,
     FACTOR_SAVE_PREFIX,
@@ -110,7 +110,7 @@ class Computer(ABC):
         os.makedirs(name=self.output_dir, exist_ok=True)
 
         # Create and configure profiler.
-        self.profiler = TorchProfiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
+        self.profiler = Profiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
         # Create directory to save profiler output.
         self.profiler_dir = (self.output_dir / "profiler_output").resolve()
         os.makedirs(name=self.profiler_dir, exist_ok=True)
@@ -323,7 +323,7 @@ class Computer(ABC):
         profile_save_path = (self.profiler_dir / f"summary_rank_{self.state.process_index}.txt").resolve()
         if profile_summary != "":
             self.logger.info(profile_summary)
-            with open(profile_save_path, 'a', encoding='utf-8') as f:
+            with open(profile_save_path, "a", encoding="utf-8") as f:
                 f.write(profile_summary)
 
     def load_factor_args(self, factors_name: str) -> Optional[FactorArguments]:

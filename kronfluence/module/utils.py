@@ -74,7 +74,6 @@ def wrap_tracked_modules(
                 factor_args=factor_args,
                 score_args=score_args,
             )
-            tracked_module.requires_grad_(True)
             parent, target_name = _get_submodules(model=model, key=module_name)
             setattr(parent, target_name, tracked_module)
             tracked_module_count += 1

@@ -276,6 +276,8 @@ def compute_pairwise_scores_with_loaders(
                     truncate_preconditioned_gradient(model=model, keep_size=query_remainder)
 
             # Compute the dot product between preconditioning query gradient and all training gradients.
+            del query_batch, measurement
+            model.zero_grad(set_to_none=True)
             release_memory()
             scores = _compute_dot_products_with_loader(
                 model=model,
@@ -288,11 +290,10 @@ def compute_pairwise_scores_with_loaders(
 
             with torch.no_grad():
                 if state.is_main_process:
-                    with torch.no_grad():
-                        for module_name, current_scores in scores.items():
-                            if module_name not in total_scores_chunks:
-                                total_scores_chunks[module_name] = []
-                            total_scores_chunks[module_name].append(current_scores)
+                    for module_name, current_scores in scores.items():
+                        if module_name not in total_scores_chunks:
+                            total_scores_chunks[module_name] = []
+                        total_scores_chunks[module_name].append(current_scores)
                 state.wait_for_everyone()
             pbar.update(1)
 

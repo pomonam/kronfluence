@@ -40,18 +40,6 @@ class ModuleMode(str, BaseEnum):
     SELF_SCORE = "self_score"
 
 
-@torch.no_grad()
-def full_backward_gradient_removal_hook(
-    module: nn.Module,
-    grad_inputs: Tuple[torch.Tensor],
-    grad_outputs: Tuple[torch.Tensor],
-) -> None:
-    """Removes all saved `.grad` computed by Autograd from model's parameters."""
-    del grad_inputs, grad_outputs
-    for parameter in module.parameters():
-        parameter.grad = None
-
-
 class TrackedModule(nn.Module):
     """A wrapper class for PyTorch modules to compute preconditioning factors and influence scores."""
 
@@ -86,6 +74,10 @@ class TrackedModule(nn.Module):
 
         self.name = name
         self.original_module = original_module
+
+        # A way to avoid Autograd computing the gradient with respect to the model parameters.
+        self._constant: Optional[bool] = None
+        self._is_leaf: bool = False
 
         if factor_args is None:
             factor_args = FactorArguments()
@@ -142,6 +134,8 @@ class TrackedModule(nn.Module):
     def forward(self, inputs: torch.Tensor, *args, **kwargs) -> Any:
         """A forward pass of the tracked module. This should have identical behavior to
         the original module."""
+        if self._is_leaf:
+            return self.original_module(inputs + self._constant, *args, **kwargs)
         return self.original_module(inputs, *args, **kwargs)
 
     def set_mode(self, mode: ModuleMode, keep_factors: bool = True) -> None:
@@ -204,6 +198,18 @@ class TrackedModule(nn.Module):
             handle = self._cached_hooks.pop()
             handle.remove()
         self._cached_hooks = []
+
+    def _register_constant(self):
+        """Register a constant term to avoid Autograd computing gradients with respect to the model parameters."""
+        self._is_leaf = True
+        self._constant = nn.Parameter(
+            torch.zeros(
+                1,
+                requires_grad=True,
+                device=self.original_module.weight.device,
+                dtype=torch.float16,
+            )
+        )
 
     ##############################################
     # Methods for computing covariance matrices. #
@@ -318,7 +324,12 @@ class TrackedModule(nn.Module):
                 # Compute and update activation covariance matrix in the forward pass.
                 self._update_activation_covariance_matrix(inputs[0].detach())
             # Register backward hook to obtain gradient with respect to the output.
-            self._cached_hooks.append(outputs.register_hook(backward_hook))
+            try:
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            except RuntimeError:
+                self._register_constant()
+                outputs.requires_grad_(True)
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -328,11 +339,6 @@ class TrackedModule(nn.Module):
             self._update_gradient_covariance_matrix(output_gradient.detach())
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
-
-        if self.factor_args.immediate_gradient_removal:
-            self._registered_hooks.append(
-                self.original_module.register_full_backward_hook(full_backward_gradient_removal_hook)
-            )
 
     def _release_covariance_matrices(self) -> None:
         """Clears the stored activation and pseudo-gradient covariance matrices from memory."""
@@ -480,7 +486,12 @@ class TrackedModule(nn.Module):
                 else:
                     self._cached_activations.append(cached_activation)
             # Register backward hook to obtain gradient with respect to the output.
-            self._cached_hooks.append(outputs.register_hook(backward_hook))
+            try:
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            except RuntimeError:
+                self._register_constant()
+                outputs.requires_grad_(True)
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -508,11 +519,6 @@ class TrackedModule(nn.Module):
                 self._cached_per_sample_gradient = None
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
-
-        if self.factor_args.immediate_gradient_removal:
-            self._registered_hooks.append(
-                self.original_module.register_full_backward_hook(full_backward_gradient_removal_hook)
-            )
 
     def _release_lambda_matrix(self) -> None:
         """Clears the stored Lambda matrix from memory."""
@@ -566,9 +572,9 @@ class TrackedModule(nn.Module):
             full_matrices=False,
         )
         rank = self.score_args.query_gradient_rank
-        U_k = U[:, :, :rank]
-        S_k = S[:, :rank]
         # Avoid holding the full memory of the original tensor before indexing.
+        U_k = U[:, :, :rank].clone()
+        S_k = S[:, :rank].clone()
         V_k = V[:, :rank, :].clone()
         return [
             torch.matmul(U_k, torch.diag_embed(S_k)).to(dtype=self.score_args.score_dtype).contiguous(),
@@ -587,7 +593,12 @@ class TrackedModule(nn.Module):
                 else:
                     self._cached_activations.append(cached_activation)
             # Register backward hook to obtain gradient with respect to the output.
-            self._cached_hooks.append(outputs.register_hook(backward_hook))
+            try:
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            except RuntimeError:
+                self._register_constant()
+                outputs.requires_grad_(True)
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -633,11 +644,6 @@ class TrackedModule(nn.Module):
                     )
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
-
-        if self.factor_args.immediate_gradient_removal:
-            self._registered_hooks.append(
-                self.original_module.register_full_backward_hook(full_backward_gradient_removal_hook)
-            )
 
     def _release_preconditioned_gradient(self) -> None:
         """Clears the preconditioned per-sample-gradient from memory."""
@@ -726,7 +732,12 @@ class TrackedModule(nn.Module):
                 else:
                     self._cached_activations.append(cached_activation)
             # Register backward hook to obtain gradient with respect to the output.
-            self._cached_hooks.append(outputs.register_hook(backward_hook))
+            try:
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            except RuntimeError:
+                self._register_constant()
+                outputs.requires_grad_(True)
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -789,11 +800,6 @@ class TrackedModule(nn.Module):
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
 
-        if self.factor_args.immediate_gradient_removal:
-            self._registered_hooks.append(
-                self.original_module.register_full_backward_hook(full_backward_gradient_removal_hook)
-            )
-
     def _register_self_score_hooks(self) -> None:
         """Installs forward and backward hooks for computation of self-influence scores."""
 
@@ -806,7 +812,12 @@ class TrackedModule(nn.Module):
                 else:
                     self._cached_activations.append(cached_activation)
             # Register backward hook to obtain gradient with respect to the output.
-            self._cached_hooks.append(outputs.register_hook(backward_hook))
+            try:
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            except RuntimeError:
+                self._register_constant()
+                outputs.requires_grad_(True)
+                self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -868,11 +879,6 @@ class TrackedModule(nn.Module):
                 self._cached_per_sample_gradient = None
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
-
-        if self.factor_args.immediate_gradient_removal:
-            self._registered_hooks.append(
-                self.original_module.register_full_backward_hook(full_backward_gradient_removal_hook)
-            )
 
     def release_scores(self) -> None:
         """Clears the influence scores from memory."""
