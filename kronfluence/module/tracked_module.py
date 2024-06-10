@@ -24,6 +24,7 @@ from kronfluence.utils.constants import (
     PAIRWISE_SCORE_MATRIX_NAME,
     PRECONDITIONED_GRADIENT_NAME,
     SELF_SCORE_VECTOR_NAME,
+    AGGREGATED_PRECONDITIONED_GRADIENT_NAME,
 )
 from kronfluence.utils.exceptions import FactorsNotFoundError
 
@@ -115,6 +116,7 @@ class TrackedModule(nn.Module):
 
         # Storage for preconditioned query gradients and influence scores. #
         self._storage[PRECONDITIONED_GRADIENT_NAME] = None
+        self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = None
         self._storage[PAIRWISE_SCORE_MATRIX_NAME] = None
         self._storage[SELF_SCORE_VECTOR_NAME] = None
 
@@ -614,32 +616,54 @@ class TrackedModule(nn.Module):
                     preconditioned_gradient = self._compute_low_rank_preconditioned_gradient(
                         preconditioned_gradient=preconditioned_gradient
                     )
-                    if self._storage[PRECONDITIONED_GRADIENT_NAME] is not None:
-                        self._storage[PRECONDITIONED_GRADIENT_NAME] = [
-                            torch.cat(
-                                (self._storage[PRECONDITIONED_GRADIENT_NAME][0], preconditioned_gradient[0]), dim=0
-                            ),
-                            torch.cat(
-                                (self._storage[PRECONDITIONED_GRADIENT_NAME][1], preconditioned_gradient[1]), dim=0
-                            ),
-                        ]
-                    else:
-                        self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient
+                    self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient
                 else:
-                    if self._storage[PRECONDITIONED_GRADIENT_NAME] is not None:
-                        self._storage[PRECONDITIONED_GRADIENT_NAME] = torch.cat(
-                            (self._storage[PRECONDITIONED_GRADIENT_NAME], preconditioned_gradient), dim=0
-                        )
-                    else:
-                        self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient.to(
-                            dtype=self.score_args.score_dtype
-                        )
+                    self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient.to(
+                        dtype=self.score_args.score_dtype
+                    )
                 del preconditioned_gradient
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
 
+    def aggregate_preconditioned_gradient(self):
+        """Aggregates the preconditioned per-sample-gradients."""
+        assert self._storage[PRECONDITIONED_GRADIENT_NAME] is not None
+        if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
+            if self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] is not None:
+                self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = [
+                    torch.cat(
+                        (
+                            self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME][0],
+                            self._storage[PRECONDITIONED_GRADIENT_NAME][0],
+                        ),
+                        dim=0,
+                    ),
+                    torch.cat(
+                        (
+                            self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME][1],
+                            self._storage[PRECONDITIONED_GRADIENT_NAME][1],
+                        ),
+                        dim=0,
+                    ),
+                ]
+                del self._storage[PRECONDITIONED_GRADIENT_NAME]
+                self._storage[PRECONDITIONED_GRADIENT_NAME] = None
+            else:
+                self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = self._storage[PRECONDITIONED_GRADIENT_NAME]
+        else:
+            if self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] is not None:
+                self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = torch.cat(
+                    (self._storage[PRECONDITIONED_GRADIENT_NAME], self._storage[PRECONDITIONED_GRADIENT_NAME]), dim=0
+                )
+                del self._storage[PRECONDITIONED_GRADIENT_NAME]
+                self._storage[PRECONDITIONED_GRADIENT_NAME] = None
+            else:
+                self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = self._storage[PRECONDITIONED_GRADIENT_NAME]
+
     def _release_preconditioned_gradient(self) -> None:
         """Clears the preconditioned per-sample-gradient from memory."""
+        del self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME]
+        self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = None
         del self._storage[PRECONDITIONED_GRADIENT_NAME]
         self._storage[PRECONDITIONED_GRADIENT_NAME] = None
         self._cached_activations = []
@@ -691,7 +715,10 @@ class TrackedModule(nn.Module):
                         input_tensor=self._storage[PRECONDITIONED_GRADIENT_NAME][i].contiguous(),
                     )
                     self._storage[PRECONDITIONED_GRADIENT_NAME][i] = (
-                        stacked_matrix.transpose(0, 1).reshape(num_processes * size[0], size[1], size[2]).contiguous()
+                        stacked_matrix.transpose(0, 1)
+                        .reshape(num_processes * size[0], size[1], size[2])
+                        .contiguous()
+                        .clone()
                     )
             else:
                 size = self._storage[PRECONDITIONED_GRADIENT_NAME].size()
@@ -708,6 +735,7 @@ class TrackedModule(nn.Module):
                     stacked_preconditioned_gradient.transpose(0, 1)
                     .reshape(num_processes * size[0], size[1], size[2])
                     .contiguous()
+                    .clone()
                 )
 
     ###########################################
@@ -750,9 +778,9 @@ class TrackedModule(nn.Module):
             # If the module was used multiple times throughout the forward pass,
             # only compute scores after aggregating all per-sample-gradients.
             if len(self._cached_activations) == 0:
-                if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
+                if isinstance(self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME], list):
                     # The preconditioned gradient is stored as a low-rank approximation.
-                    left_mat, right_mat = self._storage[PRECONDITIONED_GRADIENT_NAME]
+                    left_mat, right_mat = self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME]
 
                     input_dim = right_mat.size(2)
                     output_dim = left_mat.size(1)
@@ -780,7 +808,7 @@ class TrackedModule(nn.Module):
                 else:
                     self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
                         "qio,tio->qt",
-                        self._storage[PRECONDITIONED_GRADIENT_NAME],
+                        self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME],
                         self._cached_per_sample_gradient,
                     )
                 del self._cached_per_sample_gradient

@@ -19,7 +19,7 @@ from kronfluence.module.utils import (
     synchronize_preconditioned_gradient,
     truncate_preconditioned_gradient,
     update_factor_args,
-    update_score_args,
+    update_score_args, aggregate_preconditioned_gradient,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -275,6 +275,7 @@ def compute_pairwise_scores_with_loaders(
                     num_query_processed = num_aggregates * per_device_query_batch_size * state.num_processes
                     truncate_preconditioned_gradient(model=model, keep_size=num_query_processed + query_remainder)
 
+            aggregate_preconditioned_gradient(model=model)
             num_aggregates += 1
             del query_batch, measurement
             model.zero_grad(set_to_none=True)
