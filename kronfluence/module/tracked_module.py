@@ -450,6 +450,9 @@ class TrackedModule(nn.Module):
                 requires_grad=False,
             )
 
+        if self._gradient_scale != 1.:
+            per_sample_gradient.mul_(self._gradient_scale)
+
         if FactorConfig.CONFIGS[self.factor_args.strategy].requires_eigendecomposition_for_lambda:
             if self.factor_args.lambda_iterative_aggregate:
                 # This batch-wise iterative update can be useful when the GPU memory is limited.
