@@ -4,7 +4,8 @@ from typing import Dict, List, Optional, Union
 import torch
 from accelerate.utils import send_to_device
 from safetensors.torch import load_file, save_file
-from torch import nn
+from torch import nn, autocast
+from torch.cuda.amp import GradScaler
 from torch.utils import data
 from tqdm import tqdm
 
@@ -20,7 +21,7 @@ from kronfluence.module.utils import (
     truncate_preconditioned_gradient,
     update_factor_args,
     update_score_args,
-    aggregate_preconditioned_gradient,
+    aggregate_preconditioned_gradient, set_gradient_scale, remove_gradient_scale,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -110,6 +111,8 @@ def _compute_dot_products_with_loader(
     else:
         score_chunks[ALL_MODULE_NAME] = []
     total_steps = 0
+    enable_amp = score_args.amp_dtype is not None
+    scaler = GradScaler(enabled=enable_amp)
 
     with tqdm(
         total=len(train_loader),
@@ -122,12 +125,17 @@ def _compute_dot_products_with_loader(
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
-                loss = task.compute_train_loss(
-                    batch=batch,
-                    model=model,
-                    sample=False,
-                )
-                loss.backward()
+                with autocast(device_type=state.device.type, enabled=enable_amp, dtype=score_args.amp_dtype):
+                    loss = task.compute_train_loss(
+                        batch=batch,
+                        model=model,
+                        sample=False,
+                    )
+                scaled_loss = scaler.scale(loss)
+                gradient_scale = 1. / scaler.get_scale()
+                if gradient_scale != 1.:
+                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
+                scaled_loss.backward()
             total_steps += 1
 
             with torch.no_grad():
@@ -156,6 +164,7 @@ def _compute_dot_products_with_loader(
 
     with torch.no_grad():
         model.zero_grad(set_to_none=True)
+        remove_gradient_scale(model=model)
         set_mode(
             model=model,
             mode=ModuleMode.PRECONDITION_GRADIENT,
@@ -249,6 +258,9 @@ def compute_pairwise_scores_with_loaders(
     num_batches = len(query_loader)
     query_iter = iter(query_loader)
     num_aggregates = 0
+    enable_amp = score_args.amp_dtype is not None
+    scaler = GradScaler(enabled=enable_amp)
+
     with tqdm(
         total=num_batches,
         desc="Computing pairwise scores (query gradient)",
@@ -264,8 +276,13 @@ def compute_pairwise_scores_with_loaders(
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
-                measurement = task.compute_measurement(batch=query_batch, model=model)
-                measurement.backward()
+                with autocast(device_type=state.device.type, enabled=enable_amp, dtype=score_args.amp_dtype):
+                    measurement = task.compute_measurement(batch=query_batch, model=model)
+                scaled_measurement = scaler.scale(measurement)
+                gradient_scale = 1. / scaler.get_scale()
+                if gradient_scale != 1.:
+                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
+                scaled_measurement.backward()
 
             if state.use_distributed:
                 # Stack preconditioned query gradient across multiple devices or nodes.
@@ -279,6 +296,7 @@ def compute_pairwise_scores_with_loaders(
             num_aggregates += 1
             del query_batch, measurement
             model.zero_grad(set_to_none=True)
+            remove_gradient_scale(model=model)
             release_memory()
 
             if num_aggregates < score_args.num_query_gradient_aggregations and query_index != len(query_loader) - 1:

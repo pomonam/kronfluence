@@ -615,6 +615,9 @@ class TrackedModule(nn.Module):
                 del per_sample_gradient
 
             if len(self._cached_activations) == 0:
+                if self._gradient_scale != 1.:
+                    self._cached_per_sample_gradient.mul_(self._gradient_scale)
+
                 preconditioned_gradient = FactorConfig.CONFIGS[self.factor_args.strategy].precondition_gradient(
                     gradient=self._cached_per_sample_gradient.to(dtype=self.score_args.precondition_dtype),
                     storage=self._storage,
@@ -798,6 +801,9 @@ class TrackedModule(nn.Module):
             # If the module was used multiple times throughout the forward pass,
             # only compute scores after aggregating all per-sample-gradients.
             if len(self._cached_activations) == 0:
+                if self._gradient_scale != 1.:
+                    self._cached_per_sample_gradient.mul_(self._gradient_scale)
+
                 if isinstance(self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME], list):
                     # The preconditioned gradient is stored as a low-rank approximation.
                     left_mat, right_mat = self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME]
@@ -893,6 +899,9 @@ class TrackedModule(nn.Module):
             # If the module was used multiple times throughout the forward pass,
             # only compute scores after aggregating all per-sample-gradients.
             if len(self._cached_activations) == 0:
+                if self._gradient_scale != 1.:
+                    self._cached_per_sample_gradient.mul_(self._gradient_scale)
+
                 preconditioned_gradient = (
                     FactorConfig.CONFIGS[self.factor_args.strategy]
                     .precondition_gradient(
