@@ -1,6 +1,6 @@
 # pylint: skip-file
 
-from typing import Dict, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn.functional as F

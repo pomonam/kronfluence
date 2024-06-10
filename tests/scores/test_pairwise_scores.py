@@ -520,7 +520,7 @@ def test_compute_pairwise_scores_with_indices(
 )
 @pytest.mark.parametrize("query_size", [64])
 @pytest.mark.parametrize("train_size", [32])
-@pytest.mark.parametrize("num_query_gradient_aggregates", [4, 7])
+@pytest.mark.parametrize("num_query_gradient_aggregates", [2, 5])
 @pytest.mark.parametrize("seed", [5])
 def test_query_aggregation(
     test_name: str,

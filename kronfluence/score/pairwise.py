@@ -19,7 +19,8 @@ from kronfluence.module.utils import (
     synchronize_preconditioned_gradient,
     truncate_preconditioned_gradient,
     update_factor_args,
-    update_score_args, aggregate_preconditioned_gradient,
+    update_score_args,
+    aggregate_preconditioned_gradient,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (

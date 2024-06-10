@@ -654,7 +654,11 @@ class TrackedModule(nn.Module):
         else:
             if self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] is not None:
                 self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = torch.cat(
-                    (self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME], self._storage[PRECONDITIONED_GRADIENT_NAME]), dim=0
+                    (
+                        self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME],
+                        self._storage[PRECONDITIONED_GRADIENT_NAME],
+                    ),
+                    dim=0,
                 )
                 del self._storage[PRECONDITIONED_GRADIENT_NAME]
                 self._storage[PRECONDITIONED_GRADIENT_NAME] = None
