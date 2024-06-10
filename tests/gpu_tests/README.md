@@ -1,7 +1,7 @@
 # GPU Tests for Kronfluence
 
 This folder contains various GPU tests for Kronfluence. Before running the tests, you need to prepare the 
-test by training an MNIST model and saving the raw results using a single GPU:
+baseline results by training an MNIST model and saving the results obtained with a single GPU:
 ```bash
 python prepare_tests.py
 ```
@@ -13,15 +13,15 @@ python cpu_test.py
 ```
 
 ### DDP Tests
-To test if running with Distributed Data Parallel (DDP) obtains the same result, run:
+To test if running with Distributed Data Parallel (DDP) with 3 GPUs obtains the same result, run:
 ```bash
-torchrun --nnodes=1 --nproc_per_node=2 ddp_test.py
+torchrun --nnodes=1 --nproc_per_node=3 ddp_test.py
 ```
 
 ### FSDP Tests
-To test if running with Fully Sharded Data Parallel (FSDP) obtains the same result, run:
+To test if running with Fully Sharded Data Parallel (FSDP) with 3 GPUs obtains the same result, run:
 ```bash
-torchrun --nnodes=1 --nproc_per_node=2 ddp_test.py
+torchrun --nnodes=1 --nproc_per_node=4 fsdp_test.py
 ```
 
 ### torch.compile Tests
@@ -39,6 +39,5 @@ python amp_test.py
 ### CPU Offload Test
 To test if `cached_activation_cpu_offload` option is properly implemented, run:
 ```bash
-python test_offload_cpu.py
+pytest test_offload_cpu.py
 ```
-
