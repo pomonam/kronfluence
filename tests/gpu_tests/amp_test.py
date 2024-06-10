@@ -31,6 +31,7 @@ class CPUTest(unittest.TestCase):
         device = torch.device("cuda")
         cls.model = construct_test_mlp().to(device=device)
         cls.model.load_state_dict(torch.load("model.pth"))
+        cls.model = cls.model.double()
 
         cls.train_dataset = get_mnist_dataset(split="train", data_path="data")
         cls.train_dataset = data.Subset(cls.train_dataset, indices=list(range(TRAIN_INDICES)))
