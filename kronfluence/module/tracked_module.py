@@ -621,13 +621,14 @@ class TrackedModule(nn.Module):
                     self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient.to(
                         dtype=self.score_args.score_dtype
                     )
-                del preconditioned_gradient
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
 
     def aggregate_preconditioned_gradient(self):
         """Aggregates the preconditioned per-sample-gradients."""
-        assert self._storage[PRECONDITIONED_GRADIENT_NAME] is not None
+        if self._storage[PRECONDITIONED_GRADIENT_NAME] is None:
+            return
+
         if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
             if self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] is not None:
                 self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = [
@@ -653,7 +654,7 @@ class TrackedModule(nn.Module):
         else:
             if self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] is not None:
                 self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = torch.cat(
-                    (self._storage[PRECONDITIONED_GRADIENT_NAME], self._storage[PRECONDITIONED_GRADIENT_NAME]), dim=0
+                    (self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME], self._storage[PRECONDITIONED_GRADIENT_NAME]), dim=0
                 )
                 del self._storage[PRECONDITIONED_GRADIENT_NAME]
                 self._storage[PRECONDITIONED_GRADIENT_NAME] = None
