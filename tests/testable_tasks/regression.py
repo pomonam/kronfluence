@@ -57,6 +57,10 @@ class RegressionTask(Task):
         sample: bool = False,
     ) -> torch.Tensor:
         inputs, targets = batch
+
+        if list(model.parameters())[1].dtype == torch.float64:
+            inputs = inputs.to(dtype=torch.float64)
+            targets = targets.to(dtype=torch.float64)
         outputs = model(inputs)
 
         if not sample:

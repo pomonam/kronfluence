@@ -195,10 +195,14 @@ class ScoreArguments(Arguments):
         default=None,
         metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
     )
+    num_query_gradient_aggregates: int = field(
+        default=1,
+        metadata={"help": "Number of query batches to aggregate over."},
+    )
 
     # Dtype configuration. #
     query_gradient_svd_dtype: torch.dtype = field(
-        default=torch.float64,
+        default=torch.float32,
         metadata={"help": "Dtype for performing singular value decomposition (SVD) on the query gradient."},
     )
     score_dtype: torch.dtype = field(

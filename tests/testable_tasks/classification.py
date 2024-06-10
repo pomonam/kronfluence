@@ -58,6 +58,9 @@ class ClassificationTask(Task):
         sample: bool = False,
     ) -> torch.Tensor:
         inputs, labels = batch
+
+        if list(model.parameters())[1].dtype == torch.float64:
+            inputs = inputs.to(dtype=torch.float64)
         logits = model(inputs)
 
         if not sample:
@@ -76,6 +79,9 @@ class ClassificationTask(Task):
         model: nn.Module,
     ) -> torch.Tensor:
         inputs, labels = batch
+
+        if list(model.parameters())[1].dtype == torch.float64:
+            inputs = inputs.to(dtype=torch.float64)
         logits = model(inputs)
 
         bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)

@@ -637,11 +637,27 @@ class TrackedModule(nn.Module):
                     preconditioned_gradient = self._compute_low_rank_preconditioned_gradient(
                         preconditioned_gradient=preconditioned_gradient
                     )
-                    self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient
+                    if self._storage[PRECONDITIONED_GRADIENT_NAME] is not None:
+                        self._storage[PRECONDITIONED_GRADIENT_NAME] = [
+                            torch.cat(
+                                (self._storage[PRECONDITIONED_GRADIENT_NAME][0], preconditioned_gradient[0]), dim=0
+                            ),
+                            torch.cat(
+                                (self._storage[PRECONDITIONED_GRADIENT_NAME][1], preconditioned_gradient[1]), dim=0
+                            ),
+                        ]
+                    else:
+                        self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient
                 else:
-                    self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient.to(
-                        dtype=self.score_args.score_dtype
-                    )
+                    if self._storage[PRECONDITIONED_GRADIENT_NAME] is not None:
+                        self._storage[PRECONDITIONED_GRADIENT_NAME] = torch.cat(
+                            (self._storage[PRECONDITIONED_GRADIENT_NAME], preconditioned_gradient), dim=0
+                        )
+                    else:
+                        self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient.to(
+                            dtype=self.score_args.score_dtype
+                        )
+                del preconditioned_gradient
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
 

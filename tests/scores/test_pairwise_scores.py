@@ -1,29 +1,14 @@
 # pylint: skip-file
 
-from typing import Optional, Tuple
+from typing import Optional
 
 import pytest
 import torch
-from torch import nn
 
-from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
-from kronfluence.task import Task
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
-from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
-
-
-def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
-    model = prepare_model(model=model, task=task)
-    analyzer = Analyzer(
-        analysis_name=f"pytest_{__name__}",
-        model=model,
-        task=task,
-        disable_model_save=True,
-        cpu=True,
-    )
-    return model, analyzer
+from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test, prepare_model_and_analyzer
 
 
 @pytest.mark.parametrize(
@@ -33,6 +18,7 @@ def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module,
         "repeated_mlp",
         "conv",
         "conv_bn",
+        "bert",
         "gpt",
     ],
 )
@@ -49,6 +35,7 @@ def test_compute_pairwise_scores(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure that the pairwise influence computations are working properly.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
@@ -115,6 +102,7 @@ def test_compute_pairwise_scores_dtype(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure that the pairwise influence computations are working properly with different dtypes.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
@@ -179,12 +167,14 @@ def test_pairwise_scores_batch_size_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Pairwise influence scores should be identical regardless of what batch size used.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
@@ -194,7 +184,7 @@ def test_pairwise_scores_batch_size_equivalence(
     factor_args = FactorArguments(
         strategy=strategy,
     )
-    factors_name = f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}"
+    factors_name = f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -206,9 +196,12 @@ def test_pairwise_scores_batch_size_equivalence(
 
     score_args = ScoreArguments(
         per_module_score=False,
+        score_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
     )
     analyzer.compute_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs1",
+        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_bs1",
         factors_name=factors_name,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
@@ -219,11 +212,11 @@ def test_pairwise_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs1_scores = analyzer.load_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs1",
+        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_bs1",
     )
 
     analyzer.compute_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs8",
+        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_bs8",
         factors_name=factors_name,
         query_dataset=test_dataset,
         per_device_query_batch_size=3,
@@ -234,7 +227,7 @@ def test_pairwise_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs8_scores = analyzer.load_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs8",
+        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_bs8",
     )
 
     assert check_tensor_dict_equivalence(
@@ -245,7 +238,7 @@ def test_pairwise_scores_batch_size_equivalence(
     )
 
     analyzer.compute_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs_auto",
+        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_auto",
         factors_name=factors_name,
         query_dataset=test_dataset,
         per_device_query_batch_size=10,
@@ -256,7 +249,7 @@ def test_pairwise_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs_auto_scores = analyzer.load_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs_auto",
+        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_auto",
     )
 
     assert check_tensor_dict_equivalence(
@@ -272,7 +265,6 @@ def test_pairwise_scores_batch_size_equivalence(
     [
         "mlp",
         "conv",
-        "gpt",
     ],
 )
 @pytest.mark.parametrize("data_partition_size", [1, 4])
@@ -290,12 +282,14 @@ def test_pairwise_scores_partition_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Influence scores should be identical regardless of what the partition used.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
@@ -314,6 +308,9 @@ def test_pairwise_scores_partition_equivalence(
     scores_name = f"pytest_{test_name}_{test_pairwise_scores_partition_equivalence.__name__}_scores"
     score_args = ScoreArguments(
         per_module_score=per_module_score,
+        score_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
     )
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
@@ -332,6 +329,9 @@ def test_pairwise_scores_partition_equivalence(
         data_partition_size=data_partition_size,
         module_partition_size=module_partition_size,
         per_module_score=per_module_score,
+        score_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
     )
     analyzer.compute_pairwise_scores(
         scores_name=f"pytest_{test_name}_partition_{data_partition_size}_{module_partition_size}",
@@ -373,12 +373,14 @@ def test_per_module_scores_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Influence scores should be identical with and without per module score computations.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
@@ -395,6 +397,12 @@ def test_per_module_scores_equivalence(
     )
 
     scores_name = f"pytest_{test_name}_{test_per_module_scores_equivalence.__name__}_scores"
+    score_args = ScoreArguments(
+        per_module_score=False,
+        score_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+    )
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         factors_name=factors_name,
@@ -403,11 +411,17 @@ def test_per_module_scores_equivalence(
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
+        score_args=score_args,
         overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores(scores_name=scores_name)
 
-    score_args = ScoreArguments(per_module_score=True)
+    score_args = ScoreArguments(
+        per_module_score=True,
+        score_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+    )
     analyzer.compute_pairwise_scores(
         scores_name=scores_name + "_per_module",
         factors_name=factors_name,
@@ -448,6 +462,7 @@ def test_compute_pairwise_scores_with_indices(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure the indices selection is correctly implemented.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -487,3 +502,96 @@ def test_compute_pairwise_scores_with_indices(
     pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
     assert pairwise_scores[ALL_MODULE_NAME].size(0) == 30
     assert pairwise_scores[ALL_MODULE_NAME].size(1) == 50
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "repeated_mlp",
+        "conv",
+    ],
+)
+@pytest.mark.parametrize("query_size", [64])
+@pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("num_query_gradient_aggregates", [4, 7])
+@pytest.mark.parametrize("seed", [5])
+def test_query_aggregation(
+    test_name: str,
+    query_size: int,
+    train_size: int,
+    num_query_gradient_aggregates: int,
+    seed: int,
+) -> None:
+    # Make sure the query aggregation is correctly implemented.
+    model, train_dataset, test_dataset, data_collator, task = prepare_test(
+        test_name=test_name,
+        query_size=query_size,
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factors_name = f"pytest_{test_name}_{test_query_aggregation.__name__}"
+    analyzer.fit_all_factors(
+        factors_name=factors_name,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+
+    scores_name = f"pytest_{test_name}_{test_query_aggregation.__name__}_scores"
+    score_args = ScoreArguments(
+        query_gradient_rank=8,
+        num_query_gradient_aggregates=1,
+        score_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+    )
+    analyzer.compute_pairwise_scores(
+        scores_name=scores_name,
+        factors_name=factors_name,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=4,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+
+    score_args = ScoreArguments(
+        query_gradient_rank=8,
+        num_query_gradient_aggregates=num_query_gradient_aggregates,
+        score_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+    )
+    analyzer.compute_pairwise_scores(
+        scores_name=f"pytest_{test_name}_{test_query_aggregation.__name__}_aggregate_scores",
+        factors_name=factors_name,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=10,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=5,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    partitioned_scores = analyzer.load_pairwise_scores(
+        scores_name=f"pytest_{test_name}_{test_query_aggregation.__name__}_aggregate_scores",
+    )
+
+    assert check_tensor_dict_equivalence(
+        scores,
+        partitioned_scores,
+        atol=ATOL,
+        rtol=RTOL,
+    )
