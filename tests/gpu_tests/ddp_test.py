@@ -234,7 +234,7 @@ class DDPTest(unittest.TestCase):
 
         score_args = ScoreArguments(
             query_gradient_rank=32,
-            num_query_gradient_aggregates=3,
+            num_query_gradient_aggregations=3,
             score_dtype=torch.float64,
             per_sample_gradient_dtype=torch.float64,
             precondition_dtype=torch.float64,

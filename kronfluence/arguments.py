@@ -195,7 +195,7 @@ class ScoreArguments(Arguments):
         default=None,
         metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
     )
-    num_query_gradient_aggregates: int = field(
+    num_query_gradient_aggregations: int = field(
         default=1,
         metadata={"help": "Number of query batches to aggregate over."},
     )

@@ -520,13 +520,13 @@ def test_compute_pairwise_scores_with_indices(
 )
 @pytest.mark.parametrize("query_size", [64])
 @pytest.mark.parametrize("train_size", [32])
-@pytest.mark.parametrize("num_query_gradient_aggregates", [2, 5])
+@pytest.mark.parametrize("num_query_gradient_aggregations", [2, 5])
 @pytest.mark.parametrize("seed", [5])
 def test_query_aggregation(
     test_name: str,
     query_size: int,
     train_size: int,
-    num_query_gradient_aggregates: int,
+    num_query_gradient_aggregations: int,
     seed: int,
 ) -> None:
     # Make sure the query aggregation is correctly implemented.
@@ -555,7 +555,7 @@ def test_query_aggregation(
     scores_name = f"pytest_{test_name}_{test_query_aggregation.__name__}_scores"
     score_args = ScoreArguments(
         query_gradient_rank=8,
-        num_query_gradient_aggregates=1,
+        num_query_gradient_aggregations=1,
         score_dtype=torch.float64,
         precondition_dtype=torch.float64,
         per_sample_gradient_dtype=torch.float64,
@@ -575,7 +575,7 @@ def test_query_aggregation(
 
     score_args = ScoreArguments(
         query_gradient_rank=8,
-        num_query_gradient_aggregates=num_query_gradient_aggregates,
+        num_query_gradient_aggregations=num_query_gradient_aggregations,
         score_dtype=torch.float64,
         precondition_dtype=torch.float64,
         per_sample_gradient_dtype=torch.float64,

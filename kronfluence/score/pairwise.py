@@ -281,7 +281,7 @@ def compute_pairwise_scores_with_loaders(
             model.zero_grad(set_to_none=True)
             release_memory()
 
-            if num_aggregates < score_args.num_query_gradient_aggregates and query_index != len(query_loader) - 1:
+            if num_aggregates < score_args.num_query_gradient_aggregations and query_index != len(query_loader) - 1:
                 continue
 
             # Compute the dot product between preconditioning query gradient and all training gradients.
