@@ -258,8 +258,8 @@ class DDPTest(unittest.TestCase):
             print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
             print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
             print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][52]}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][52]}")
+            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][44]}")
+            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][44]}")
             assert check_tensor_dict_equivalence(
                 pairwise_scores,
                 new_pairwise_scores,
