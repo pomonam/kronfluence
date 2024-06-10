@@ -8,7 +8,13 @@ import torch
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
-from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test, prepare_model_and_analyzer
+from tests.utils import (
+    ATOL,
+    RTOL,
+    check_tensor_dict_equivalence,
+    prepare_model_and_analyzer,
+    prepare_test,
+)
 
 
 @pytest.mark.parametrize(
