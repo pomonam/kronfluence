@@ -397,3 +397,68 @@ def test_covariance_matrices_max_examples(
 
     for num_examples in covariance_factors[NUM_COVARIANCE_PROCESSED].values():
         assert num_examples == MAX_EXAMPLES
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "conv",
+    ],
+)
+@pytest.mark.parametrize("train_size", [100])
+@pytest.mark.parametrize("seed", [6])
+def test_covariance_matrices_amp(
+    test_name: str,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Covariance matrices should be similar when AMP is enabled.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name=test_name,
+        train_size=train_size,
+        seed=seed,
+    )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        amp_dtype=torch.float16,
+    )
+    analyzer.fit_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}",
+        dataset=train_dataset,
+        factor_args=factor_args,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        dataloader_kwargs=kwargs,
+    )
+    covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}"
+    )
+
+    analyzer.fit_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}_amp",
+        dataset=train_dataset,
+        factor_args=factor_args,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        dataloader_kwargs=kwargs,
+    )
+    amp_covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}_amp"
+    )
+
+    for name in COVARIANCE_FACTOR_NAMES:
+        assert check_tensor_dict_equivalence(
+            covariance_factors[name],
+            amp_covariance_factors[name],
+            atol=ATOL,
+            rtol=RTOL,
+        )

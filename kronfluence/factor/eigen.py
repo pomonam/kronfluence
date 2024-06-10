@@ -5,7 +5,8 @@ import torch
 import torch.distributed as dist
 from accelerate.utils import find_batch_size, send_to_device
 from safetensors.torch import load_file, save_file
-from torch import nn
+from torch import autocast, nn
+from torch.cuda.amp import GradScaler
 from torch.utils import data
 from tqdm import tqdm
 
@@ -14,7 +15,9 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     get_tracked_module_names,
     load_factors,
+    remove_gradient_scale,
     set_factors,
+    set_gradient_scale,
     set_mode,
     synchronize_lambda_matrices,
     update_factor_args,
@@ -263,6 +266,8 @@ def fit_lambda_matrices_with_loader(
                 set_factors(model=model, factor_name=name, factors=eigen_factors[name])
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
+    enable_amp = factor_args.amp_dtype is not None
+    scaler = GradScaler(enabled=enable_amp)
 
     with tqdm(
         total=len(loader),
@@ -275,12 +280,18 @@ def fit_lambda_matrices_with_loader(
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
-                loss = task.compute_train_loss(
-                    batch=batch,
-                    model=model,
-                    sample=not factor_args.use_empirical_fisher,
-                )
-                loss.backward()
+                with autocast(device_type=state.device.type, enabled=enable_amp, dtype=factor_args.amp_dtype):
+                    loss = task.compute_train_loss(
+                        batch=batch,
+                        model=model,
+                        sample=not factor_args.use_empirical_fisher,
+                    )
+                scaled_loss = scaler.scale(loss)
+                if enable_amp:
+                    gradient_scale = 1.0 / scaler.get_scale()
+                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
+                scaled_loss.backward()
+
             num_data_processed += find_batch_size(data=batch)
             total_steps += 1
 
@@ -296,6 +307,7 @@ def fit_lambda_matrices_with_loader(
 
     with torch.no_grad():
         del loss
+        remove_gradient_scale(model=model)
         model.zero_grad(set_to_none=True)
 
         if state.use_distributed:

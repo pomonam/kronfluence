@@ -13,6 +13,7 @@ from kronfluence.factor.config import FactorConfig
 from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     ACTIVATION_EIGENVECTORS_NAME,
+    AGGREGATED_PRECONDITIONED_GRADIENT_NAME,
     COVARIANCE_FACTOR_NAMES,
     EIGENDECOMPOSITION_FACTOR_NAMES,
     GRADIENT_COVARIANCE_MATRIX_NAME,
@@ -24,7 +25,6 @@ from kronfluence.utils.constants import (
     PAIRWISE_SCORE_MATRIX_NAME,
     PRECONDITIONED_GRADIENT_NAME,
     SELF_SCORE_VECTOR_NAME,
-    AGGREGATED_PRECONDITIONED_GRADIENT_NAME,
 )
 from kronfluence.utils.exceptions import FactorsNotFoundError
 
@@ -97,6 +97,7 @@ class TrackedModule(nn.Module):
         self._cached_activations: List[torch.Tensor] = []
         self._cached_per_sample_gradient: Optional[torch.Tensor] = None
         self._attention_mask: Optional[torch.Tensor] = None
+        self._gradient_scale: float = 1.0
         self._registered_hooks: List[RemovableHandle] = []
         self._cached_hooks: List[RemovableHandle] = []
         self._storage: Dict[str, Optional[Any]] = {}
@@ -205,6 +206,14 @@ class TrackedModule(nn.Module):
             handle.remove()
         self._cached_hooks = []
 
+    def set_gradient_scale(self, scale: float = 1.0) -> None:
+        """Sets the scale of the gradient obtained from `GradScaler`."""
+        self._gradient_scale = scale
+
+    def remove_gradient_scale(self) -> None:
+        """Resets the scale of the gradient."""
+        self._gradient_scale = 1.0
+
     ##############################################
     # Methods for computing covariance matrices. #
     ##############################################
@@ -296,6 +305,9 @@ class TrackedModule(nn.Module):
         """
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
         flattened_gradient = self._get_flattened_gradient(output_gradient)
+        if self._gradient_scale != 1.0:
+            # Avoiding in-place operation here.
+            flattened_gradient = self._gradient_scale * flattened_gradient
 
         if self._storage[GRADIENT_COVARIANCE_MATRIX_NAME] is None:
             # Initialize pseudo-gradient covariance matrix if it does not exist.
@@ -437,6 +449,9 @@ class TrackedModule(nn.Module):
                 dtype=torch.int64,
                 requires_grad=False,
             )
+
+        if self._gradient_scale != 1.0:
+            per_sample_gradient.mul_(self._gradient_scale)
 
         if FactorConfig.CONFIGS[self.factor_args.strategy].requires_eigendecomposition_for_lambda:
             if self.factor_args.lambda_iterative_aggregate:
@@ -600,6 +615,9 @@ class TrackedModule(nn.Module):
                 del per_sample_gradient
 
             if len(self._cached_activations) == 0:
+                if self._gradient_scale != 1.0:
+                    self._cached_per_sample_gradient.mul_(self._gradient_scale)
+
                 preconditioned_gradient = FactorConfig.CONFIGS[self.factor_args.strategy].precondition_gradient(
                     gradient=self._cached_per_sample_gradient.to(dtype=self.score_args.precondition_dtype),
                     storage=self._storage,
@@ -783,6 +801,9 @@ class TrackedModule(nn.Module):
             # If the module was used multiple times throughout the forward pass,
             # only compute scores after aggregating all per-sample-gradients.
             if len(self._cached_activations) == 0:
+                if self._gradient_scale != 1.0:
+                    self._cached_per_sample_gradient.mul_(self._gradient_scale)
+
                 if isinstance(self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME], list):
                     # The preconditioned gradient is stored as a low-rank approximation.
                     left_mat, right_mat = self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME]
@@ -878,6 +899,9 @@ class TrackedModule(nn.Module):
             # If the module was used multiple times throughout the forward pass,
             # only compute scores after aggregating all per-sample-gradients.
             if len(self._cached_activations) == 0:
+                if self._gradient_scale != 1.0:
+                    self._cached_per_sample_gradient.mul_(self._gradient_scale)
+
                 preconditioned_gradient = (
                     FactorConfig.CONFIGS[self.factor_args.strategy]
                     .precondition_gradient(
