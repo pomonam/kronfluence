@@ -234,10 +234,11 @@ class DDPTest(unittest.TestCase):
 
         score_args = ScoreArguments(
             query_gradient_rank=32,
-            num_query_gradient_aggregates=16,
+            num_query_gradient_aggregates=3,
             score_dtype=torch.float64,
             per_sample_gradient_dtype=torch.float64,
             precondition_dtype=torch.float64,
+            query_gradient_svd_dtype=torch.float64,
         )
         self.analyzer.compute_pairwise_scores(
             scores_name="ddp_qb_agg",
