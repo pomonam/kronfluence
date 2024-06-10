@@ -8,7 +8,7 @@ pip install -r requirements.txt
 
 ## Training
 
-To train a regression model on the Concrete dataset, run the following command:
+To train a regression model on the `Concrete` dataset, run the following command:
 ```bash
 python train.py --dataset_name concrete \
     --dataset_dir ./data \
@@ -34,8 +34,10 @@ You can also use `identity`, `diagonal`, and `kfac`.
 
 ## Counterfactual Evaluation
 
-You can check the notebook `tutorial.ipynb` to run the counterfactual evaluation.
+You can check the notebook `tutorial.ipynb` to run the counterfactual evaluation. 
+(Note that `TracIn` uses the final checkpoint instead of the intermediate checkpoints throughout training.)
 
 <p align="center">
 <a href="#"><img width="380" img src="figure/counterfactual.png" alt="Counterfactual"/></a>
 </p>
+
