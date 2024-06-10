@@ -246,7 +246,7 @@ class DDPTest(unittest.TestCase):
             train_dataset=self.train_dataset,
             train_indices=list(range(TRAIN_INDICES)),
             query_indices=list(range(QUERY_INDICES)),
-            per_device_query_batch_size=12,
+            per_device_query_batch_size=2,
             per_device_train_batch_size=512,
             score_args=score_args,
             overwrite_output_dir=True,
@@ -258,10 +258,8 @@ class DDPTest(unittest.TestCase):
             print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
             print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
             print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][52]}")
+            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][52]}")
             assert check_tensor_dict_equivalence(
                 pairwise_scores,
                 new_pairwise_scores,
