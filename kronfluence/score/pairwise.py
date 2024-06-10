@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import torch
-from accelerate.utils import send_to_device, find_batch_size
+from accelerate.utils import send_to_device
 from safetensors.torch import load_file, save_file
 from torch import nn
 from torch.utils import data
