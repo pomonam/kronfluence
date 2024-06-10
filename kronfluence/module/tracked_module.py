@@ -878,21 +878,7 @@ class TrackedModule(nn.Module):
             # The preconditioning factors need to be loaded to appropriate device as they will be
             # used at each iteration.
             if not self._storge_at_current_device:
-                for name, factor in self._storage.items():
-                    if factor is not None:
-                        if isinstance(factor, torch.Tensor):
-                            self._storage[name] = factor.to(
-                                device=per_sample_gradient.device,
-                                dtype=self.score_args.precondition_dtype,
-                            )
-                        elif isinstance(factor, list):
-                            for i in range(len(self._storage[name])):
-                                self._storage[name][i] = factor[i].to(
-                                    device=per_sample_gradient.device,
-                                    dtype=self.score_args.precondition_dtype,
-                                )
-                        else:
-                            raise RuntimeError(f"`{name}` in `TrackedModule` storage does not have a valid type.")
+                self._move_storage_to_device(target_device=per_sample_gradient.device)
                 self._storge_at_current_device = True
 
             if self._cached_per_sample_gradient is None:
@@ -956,21 +942,7 @@ class TrackedModule(nn.Module):
             # The preconditioning factors need to be loaded to appropriate device as they will be
             # used at each iteration.
             if not self._storge_at_current_device:
-                for name, factor in self._storage.items():
-                    if factor is not None:
-                        if isinstance(factor, torch.Tensor):
-                            self._storage[name] = factor.to(
-                                device=per_sample_gradient.device,
-                                dtype=self.score_args.precondition_dtype,
-                            )
-                        elif isinstance(factor, list):
-                            for i in range(len(self._storage[name])):
-                                self._storage[name][i] = factor[i].to(
-                                    device=per_sample_gradient.device,
-                                    dtype=self.score_args.precondition_dtype,
-                                )
-                        else:
-                            raise RuntimeError(f"`{name}` in `TrackedModule` storage does not have a valid type.")
+                self._move_storage_to_device(target_device=per_sample_gradient.device)
                 self._storge_at_current_device = True
 
             if self._cached_per_sample_gradient is None:
@@ -996,6 +968,24 @@ class TrackedModule(nn.Module):
                 self._storage[PRECONDITIONED_GRADIENT_NAME] = None
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
+
+    def _move_storage_to_device(self, target_device: torch.device) -> None:
+        """Moves stored factors into the target device."""
+        for name, factor in self._storage.items():
+            if factor is not None:
+                if isinstance(factor, torch.Tensor):
+                    self._storage[name] = factor.to(
+                        device=target_device,
+                        dtype=self.score_args.precondition_dtype,
+                    )
+                elif isinstance(factor, list):
+                    for i in range(len(self._storage[name])):
+                        self._storage[name][i] = factor[i].to(
+                            device=target_device,
+                            dtype=self.score_args.precondition_dtype,
+                        )
+                else:
+                    raise RuntimeError(f"`{name}` in `TrackedModule` storage does not have a valid type.")
 
     def release_scores(self) -> None:
         """Clears the influence scores from memory."""
