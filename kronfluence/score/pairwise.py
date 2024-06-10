@@ -272,7 +272,7 @@ def compute_pairwise_scores_with_loaders(
                 if query_index == len(query_loader) - 1 and query_remainder > 0:
                     # Remove duplicate data points if the dataset is not exactly divisible
                     # by the current batch size.
-                    num_query_processed = num_aggregates * state.num_processes
+                    num_query_processed = num_aggregates * per_device_query_batch_size * state.num_processes
                     truncate_preconditioned_gradient(model=model, keep_size=num_query_processed + query_remainder)
 
             num_aggregates += 1
