@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 import torch
 from accelerate.utils import find_batch_size, send_to_device
 from safetensors.torch import load_file, save_file
-from torch import nn, autocast
+from torch import autocast, nn
 from torch.cuda.amp import GradScaler
 from torch.utils import data
 from tqdm import tqdm
@@ -15,10 +15,12 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     get_tracked_module_names,
     release_scores,
+    remove_gradient_scale,
     set_factors,
+    set_gradient_scale,
     set_mode,
     update_factor_args,
-    update_score_args, set_gradient_scale, remove_gradient_scale,
+    update_score_args,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -178,7 +180,7 @@ def compute_self_scores_with_loaders(
                     )
                 scaled_loss = scaler.scale(loss)
                 if enable_amp:
-                    gradient_scale = 1. / scaler.get_scale()
+                    gradient_scale = 1.0 / scaler.get_scale()
                     set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_loss.backward()
             total_steps += 1

@@ -5,7 +5,7 @@ import torch
 import torch.distributed as dist
 from accelerate.utils import find_batch_size, send_to_device
 from safetensors.torch import load_file, save_file
-from torch import nn, autocast
+from torch import autocast, nn
 from torch.cuda.amp import GradScaler
 from torch.utils import data
 from tqdm import tqdm
@@ -15,10 +15,12 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     load_factors,
     remove_attention_mask,
+    remove_gradient_scale,
     set_attention_mask,
+    set_gradient_scale,
     set_mode,
     synchronize_covariance_matrices,
-    update_factor_args, set_gradient_scale, remove_gradient_scale,
+    update_factor_args,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -161,7 +163,7 @@ def fit_covariance_matrices_with_loader(
                     )
                 scaled_loss = scaler.scale(loss)
                 if enable_amp:
-                    gradient_scale = 1. / scaler.get_scale()
+                    gradient_scale = 1.0 / scaler.get_scale()
                     set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_loss.backward()
 

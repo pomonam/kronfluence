@@ -13,6 +13,7 @@ from kronfluence.factor.config import FactorConfig
 from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     ACTIVATION_EIGENVECTORS_NAME,
+    AGGREGATED_PRECONDITIONED_GRADIENT_NAME,
     COVARIANCE_FACTOR_NAMES,
     EIGENDECOMPOSITION_FACTOR_NAMES,
     GRADIENT_COVARIANCE_MATRIX_NAME,
@@ -24,7 +25,6 @@ from kronfluence.utils.constants import (
     PAIRWISE_SCORE_MATRIX_NAME,
     PRECONDITIONED_GRADIENT_NAME,
     SELF_SCORE_VECTOR_NAME,
-    AGGREGATED_PRECONDITIONED_GRADIENT_NAME,
 )
 from kronfluence.utils.exceptions import FactorsNotFoundError
 
@@ -305,7 +305,7 @@ class TrackedModule(nn.Module):
         """
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
         flattened_gradient = self._get_flattened_gradient(output_gradient)
-        if self._gradient_scale != 1.:
+        if self._gradient_scale != 1.0:
             # Avoiding in-place operation here.
             flattened_gradient = self._gradient_scale * flattened_gradient
 
@@ -450,7 +450,7 @@ class TrackedModule(nn.Module):
                 requires_grad=False,
             )
 
-        if self._gradient_scale != 1.:
+        if self._gradient_scale != 1.0:
             per_sample_gradient.mul_(self._gradient_scale)
 
         if FactorConfig.CONFIGS[self.factor_args.strategy].requires_eigendecomposition_for_lambda:
@@ -615,7 +615,7 @@ class TrackedModule(nn.Module):
                 del per_sample_gradient
 
             if len(self._cached_activations) == 0:
-                if self._gradient_scale != 1.:
+                if self._gradient_scale != 1.0:
                     self._cached_per_sample_gradient.mul_(self._gradient_scale)
 
                 preconditioned_gradient = FactorConfig.CONFIGS[self.factor_args.strategy].precondition_gradient(
@@ -801,7 +801,7 @@ class TrackedModule(nn.Module):
             # If the module was used multiple times throughout the forward pass,
             # only compute scores after aggregating all per-sample-gradients.
             if len(self._cached_activations) == 0:
-                if self._gradient_scale != 1.:
+                if self._gradient_scale != 1.0:
                     self._cached_per_sample_gradient.mul_(self._gradient_scale)
 
                 if isinstance(self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME], list):
@@ -899,7 +899,7 @@ class TrackedModule(nn.Module):
             # If the module was used multiple times throughout the forward pass,
             # only compute scores after aggregating all per-sample-gradients.
             if len(self._cached_activations) == 0:
-                if self._gradient_scale != 1.:
+                if self._gradient_scale != 1.0:
                     self._cached_per_sample_gradient.mul_(self._gradient_scale)
 
                 preconditioned_gradient = (

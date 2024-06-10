@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Union
 import torch
 from accelerate.utils import send_to_device
 from safetensors.torch import load_file, save_file
-from torch import nn, autocast
+from torch import autocast, nn
 from torch.cuda.amp import GradScaler
 from torch.utils import data
 from tqdm import tqdm
@@ -13,15 +13,17 @@ from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.module import TrackedModule
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
+    aggregate_preconditioned_gradient,
     get_tracked_module_names,
     release_scores,
+    remove_gradient_scale,
     set_factors,
+    set_gradient_scale,
     set_mode,
     synchronize_preconditioned_gradient,
     truncate_preconditioned_gradient,
     update_factor_args,
     update_score_args,
-    aggregate_preconditioned_gradient, set_gradient_scale, remove_gradient_scale,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -133,7 +135,7 @@ def _compute_dot_products_with_loader(
                     )
                 scaled_loss = scaler.scale(loss)
                 if enable_amp:
-                    gradient_scale = 1. / scaler.get_scale()
+                    gradient_scale = 1.0 / scaler.get_scale()
                     set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_loss.backward()
             total_steps += 1
@@ -280,7 +282,7 @@ def compute_pairwise_scores_with_loaders(
                     measurement = task.compute_measurement(batch=query_batch, model=model)
                 scaled_measurement = scaler.scale(measurement)
                 if enable_amp:
-                    gradient_scale = 1. / scaler.get_scale()
+                    gradient_scale = 1.0 / scaler.get_scale()
                     set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_measurement.backward()
 
