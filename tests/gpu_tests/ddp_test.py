@@ -198,6 +198,7 @@ class DDPTest(unittest.TestCase):
             score_dtype=torch.float64,
             per_sample_gradient_dtype=torch.float64,
             precondition_dtype=torch.float64,
+            query_gradient_svd_dtype=torch.float64,
         )
         self.analyzer.compute_pairwise_scores(
             scores_name="ddp_qb",
