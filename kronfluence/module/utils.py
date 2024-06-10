@@ -167,6 +167,17 @@ def synchronize_lambda_matrices(model: nn.Module) -> None:
         raise TrackedModuleNotFoundError("Tracked modules not found when trying to synchronize lambda matrices.")
 
 
+def aggregate_preconditioned_gradient(model: nn.Module) -> None:
+    """Aggregates preconditioned gradient of all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.aggregate_preconditioned_gradient()
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to truncate preconditioned gradient.")
+
+
 def truncate_preconditioned_gradient(model: nn.Module, keep_size: int) -> None:
     """Truncates preconditioned gradient of all `TrackedModule` instances within a model."""
     tracked_module_count = 0

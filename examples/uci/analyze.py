@@ -71,15 +71,16 @@ class RegressionTask(Task):
         if not sample:
             return F.mse_loss(outputs, targets, reduction="sum")
         with torch.no_grad():
-            sampled_targets = torch.normal(outputs, std=math.sqrt(0.5))
-        return F.mse_loss(outputs, sampled_targets.detach(), reduction="sum")
+            sampled_targets = torch.normal(outputs.detach(), std=math.sqrt(0.5))
+        return F.mse_loss(outputs, sampled_targets, reduction="sum")
 
     def compute_measurement(
         self,
         batch: BATCH_TYPE,
         model: nn.Module,
     ) -> torch.Tensor:
-        # The measurement function is set as a training loss.
+        # The measurement function is set as a training loss. Alternatively, we can
+        # use mean absolute error, as done in https://arxiv.org/abs/2405.12186.
         return self.compute_train_loss(batch, model, sample=False)
 
 

@@ -112,7 +112,8 @@ def test_default_score_arguments() -> None:
     assert factor_args.per_module_score is False
 
     assert factor_args.query_gradient_rank is None
-    assert factor_args.query_gradient_svd_dtype == torch.float64
+    assert factor_args.num_query_gradient_aggregations == 1
+    assert factor_args.query_gradient_svd_dtype == torch.float32
 
     assert factor_args.score_dtype == torch.float32
     assert factor_args.per_sample_gradient_dtype == torch.float32

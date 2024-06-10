@@ -20,6 +20,7 @@ from kronfluence.module.utils import (
     truncate_preconditioned_gradient,
     update_factor_args,
     update_score_args,
+    aggregate_preconditioned_gradient,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -50,7 +51,7 @@ def pairwise_scores_exist(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
-    """Check if the pairwise scores exist at specified path."""
+    """Check if the pairwise scores exist at the specified path."""
     save_path = pairwise_scores_save_path(
         output_dir=output_dir,
         partition=partition,
@@ -92,8 +93,7 @@ def _compute_dot_products_with_loader(
     score_args: ScoreArguments,
     tracked_module_names: List[str],
 ) -> Union[Dict[str, torch.Tensor], torch.Tensor]:
-    """After computing the preconditioned query gradient, compute the dot product with
-    the corresponding loader."""
+    """After computing the preconditioned query gradient, compute dot products with training gradients."""
     with torch.no_grad():
         set_mode(
             model=model,
@@ -155,6 +155,7 @@ def _compute_dot_products_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
+        model.zero_grad(set_to_none=True)
         set_mode(
             model=model,
             mode=ModuleMode.PRECONDITION_GRADIENT,
@@ -195,17 +196,17 @@ def compute_pairwise_scores_with_loaders(
         loaded_factors (FACTOR_TYPE):
             The factor results to load from, before computing the pairwise scores.
         model (nn.Module):
-            The model that pairwise influence scores will be computed.
+            The model for which pairwise influence scores will be computed.
         state (State):
             The current process's information (e.g., device being used).
         task (Task):
             The specific task associated with the model.
         query_loader (data.DataLoader):
-            The data loader that will be used to compute query gradient.
+            The data loader that will be used to compute query gradients.
         per_device_query_batch_size (int):
             Per-device batch size for the query data loader.
         train_loader (data.DataLoader):
-            The data loader that will be used to compute training gradient.
+            The data loader that will be used to compute training gradients.
         score_args (ScoreArguments):
             Arguments related to computing pairwise scores.
         factor_args (FactorArguments):
@@ -222,11 +223,6 @@ def compute_pairwise_scores_with_loaders(
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
         update_score_args(model=model, score_args=score_args)
-        set_mode(
-            model=model,
-            mode=ModuleMode.DEFAULT,
-            keep_factors=False,
-        )
 
         # Loads necessary factors before computing pairwise influence scores.
         if len(loaded_factors) > 0:
@@ -250,13 +246,17 @@ def compute_pairwise_scores_with_loaders(
     total_query_batch_size = per_device_query_batch_size * state.num_processes
     query_remainder = len(query_loader.dataset) % total_query_batch_size
 
+    num_batches = len(query_loader)
+    query_iter = iter(query_loader)
+    num_aggregates = 0
     with tqdm(
-        total=len(query_loader),
+        total=num_batches,
         desc="Computing pairwise scores (query gradient)",
         bar_format=TQDM_BAR_FORMAT,
         disable=not state.is_main_process,
     ) as pbar:
-        for query_index, query_batch in enumerate(query_loader):
+        for query_index in range(num_batches):
+            query_batch = next(query_iter)
             query_batch = send_to_device(
                 tensor=query_batch,
                 device=state.device,
@@ -275,10 +275,17 @@ def compute_pairwise_scores_with_loaders(
                     # by the current batch size.
                     truncate_preconditioned_gradient(model=model, keep_size=query_remainder)
 
-            # Compute the dot product between preconditioning query gradient and all training gradients.
+            aggregate_preconditioned_gradient(model=model)
+            num_aggregates += 1
             del query_batch, measurement
             model.zero_grad(set_to_none=True)
             release_memory()
+
+            if num_aggregates < score_args.num_query_gradient_aggregations and query_index != len(query_loader) - 1:
+                continue
+
+            # Compute the dot product between preconditioning query gradient and all training gradients.
+            num_aggregates = 0
             scores = _compute_dot_products_with_loader(
                 model=model,
                 state=state,

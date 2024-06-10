@@ -24,6 +24,7 @@ from kronfluence.utils.constants import (
     PAIRWISE_SCORE_MATRIX_NAME,
     PRECONDITIONED_GRADIENT_NAME,
     SELF_SCORE_VECTOR_NAME,
+    AGGREGATED_PRECONDITIONED_GRADIENT_NAME,
 )
 from kronfluence.utils.exceptions import FactorsNotFoundError
 
@@ -76,8 +77,14 @@ class TrackedModule(nn.Module):
         self.original_module = original_module
 
         # A way to avoid Autograd computing the gradient with respect to the model parameters.
-        self._constant: Optional[bool] = None
-        self._is_leaf: bool = False
+        self._constant: torch.Tensor = nn.Parameter(
+            torch.zeros(
+                1,
+                requires_grad=True,
+                device=self.original_module.weight.device,
+                dtype=torch.float16,
+            )
+        )
 
         if factor_args is None:
             factor_args = FactorArguments()
@@ -109,6 +116,7 @@ class TrackedModule(nn.Module):
 
         # Storage for preconditioned query gradients and influence scores. #
         self._storage[PRECONDITIONED_GRADIENT_NAME] = None
+        self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = None
         self._storage[PAIRWISE_SCORE_MATRIX_NAME] = None
         self._storage[SELF_SCORE_VECTOR_NAME] = None
 
@@ -134,9 +142,7 @@ class TrackedModule(nn.Module):
     def forward(self, inputs: torch.Tensor, *args, **kwargs) -> Any:
         """A forward pass of the tracked module. This should have identical behavior to
         the original module."""
-        if self._is_leaf:
-            return self.original_module(inputs + self._constant, *args, **kwargs)
-        return self.original_module(inputs, *args, **kwargs)
+        return self.original_module(inputs + self._constant, *args, **kwargs)
 
     def set_mode(self, mode: ModuleMode, keep_factors: bool = True) -> None:
         """Sets the module mode of all `TrackedModule` instances within a model."""
@@ -198,18 +204,6 @@ class TrackedModule(nn.Module):
             handle = self._cached_hooks.pop()
             handle.remove()
         self._cached_hooks = []
-
-    def _register_constant(self):
-        """Register a constant term to avoid Autograd computing gradients with respect to the model parameters."""
-        self._is_leaf = True
-        self._constant = nn.Parameter(
-            torch.zeros(
-                1,
-                requires_grad=True,
-                device=self.original_module.weight.device,
-                dtype=torch.float16,
-            )
-        )
 
     ##############################################
     # Methods for computing covariance matrices. #
@@ -324,12 +318,7 @@ class TrackedModule(nn.Module):
                 # Compute and update activation covariance matrix in the forward pass.
                 self._update_activation_covariance_matrix(inputs[0].detach())
             # Register backward hook to obtain gradient with respect to the output.
-            try:
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
-            except RuntimeError:
-                self._register_constant()
-                outputs.requires_grad_(True)
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -486,12 +475,7 @@ class TrackedModule(nn.Module):
                 else:
                     self._cached_activations.append(cached_activation)
             # Register backward hook to obtain gradient with respect to the output.
-            try:
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
-            except RuntimeError:
-                self._register_constant()
-                outputs.requires_grad_(True)
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -593,12 +577,7 @@ class TrackedModule(nn.Module):
                 else:
                     self._cached_activations.append(cached_activation)
             # Register backward hook to obtain gradient with respect to the output.
-            try:
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
-            except RuntimeError:
-                self._register_constant()
-                outputs.requires_grad_(True)
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -645,8 +624,51 @@ class TrackedModule(nn.Module):
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
 
+    def aggregate_preconditioned_gradient(self):
+        """Aggregates the preconditioned per-sample-gradients."""
+        if self._storage[PRECONDITIONED_GRADIENT_NAME] is None:
+            return
+
+        if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
+            if self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] is not None:
+                self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = [
+                    torch.cat(
+                        (
+                            self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME][0],
+                            self._storage[PRECONDITIONED_GRADIENT_NAME][0],
+                        ),
+                        dim=0,
+                    ),
+                    torch.cat(
+                        (
+                            self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME][1],
+                            self._storage[PRECONDITIONED_GRADIENT_NAME][1],
+                        ),
+                        dim=0,
+                    ),
+                ]
+                del self._storage[PRECONDITIONED_GRADIENT_NAME]
+                self._storage[PRECONDITIONED_GRADIENT_NAME] = None
+            else:
+                self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = self._storage[PRECONDITIONED_GRADIENT_NAME]
+        else:
+            if self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] is not None:
+                self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = torch.cat(
+                    (
+                        self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME],
+                        self._storage[PRECONDITIONED_GRADIENT_NAME],
+                    ),
+                    dim=0,
+                )
+                del self._storage[PRECONDITIONED_GRADIENT_NAME]
+                self._storage[PRECONDITIONED_GRADIENT_NAME] = None
+            else:
+                self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = self._storage[PRECONDITIONED_GRADIENT_NAME]
+
     def _release_preconditioned_gradient(self) -> None:
         """Clears the preconditioned per-sample-gradient from memory."""
+        del self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME]
+        self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = None
         del self._storage[PRECONDITIONED_GRADIENT_NAME]
         self._storage[PRECONDITIONED_GRADIENT_NAME] = None
         self._cached_activations = []
@@ -698,7 +720,10 @@ class TrackedModule(nn.Module):
                         input_tensor=self._storage[PRECONDITIONED_GRADIENT_NAME][i].contiguous(),
                     )
                     self._storage[PRECONDITIONED_GRADIENT_NAME][i] = (
-                        stacked_matrix.transpose(0, 1).reshape(num_processes * size[0], size[1], size[2]).contiguous()
+                        stacked_matrix.transpose(0, 1)
+                        .reshape(num_processes * size[0], size[1], size[2])
+                        .contiguous()
+                        .clone()
                     )
             else:
                 size = self._storage[PRECONDITIONED_GRADIENT_NAME].size()
@@ -715,6 +740,7 @@ class TrackedModule(nn.Module):
                     stacked_preconditioned_gradient.transpose(0, 1)
                     .reshape(num_processes * size[0], size[1], size[2])
                     .contiguous()
+                    .clone()
                 )
 
     ###########################################
@@ -732,12 +758,7 @@ class TrackedModule(nn.Module):
                 else:
                     self._cached_activations.append(cached_activation)
             # Register backward hook to obtain gradient with respect to the output.
-            try:
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
-            except RuntimeError:
-                self._register_constant()
-                outputs.requires_grad_(True)
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -762,9 +783,9 @@ class TrackedModule(nn.Module):
             # If the module was used multiple times throughout the forward pass,
             # only compute scores after aggregating all per-sample-gradients.
             if len(self._cached_activations) == 0:
-                if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
+                if isinstance(self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME], list):
                     # The preconditioned gradient is stored as a low-rank approximation.
-                    left_mat, right_mat = self._storage[PRECONDITIONED_GRADIENT_NAME]
+                    left_mat, right_mat = self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME]
 
                     input_dim = right_mat.size(2)
                     output_dim = left_mat.size(1)
@@ -792,7 +813,7 @@ class TrackedModule(nn.Module):
                 else:
                     self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
                         "qio,tio->qt",
-                        self._storage[PRECONDITIONED_GRADIENT_NAME],
+                        self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME],
                         self._cached_per_sample_gradient,
                     )
                 del self._cached_per_sample_gradient
@@ -812,12 +833,7 @@ class TrackedModule(nn.Module):
                 else:
                     self._cached_activations.append(cached_activation)
             # Register backward hook to obtain gradient with respect to the output.
-            try:
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
-            except RuntimeError:
-                self._register_constant()
-                outputs.requires_grad_(True)
-                self._cached_hooks.append(outputs.register_hook(backward_hook))
+            self._cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
