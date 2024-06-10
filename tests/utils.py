@@ -14,7 +14,8 @@ from tests.testable_tasks.classification import (
     ClassificationTask,
     make_classification_dataset,
     make_conv_bn_model,
-    make_conv_model, WrongClassificationTask,
+    make_conv_model,
+    WrongClassificationTask,
 )
 from tests.testable_tasks.language_modeling import (
     LanguageModelingTask,

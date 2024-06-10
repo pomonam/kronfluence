@@ -522,12 +522,7 @@ def test_compute_self_scores_with_diagonal_pairwise_equivalence(
 
 @pytest.mark.parametrize(
     "test_name",
-    [
-        "mlp",
-        "conv",
-        "conv_bn",
-        "wrong_conv"
-    ],
+    ["mlp", "conv", "conv_bn", "wrong_conv"],
 )
 @pytest.mark.parametrize("train_size", [24])
 @pytest.mark.parametrize("seed", [7])
