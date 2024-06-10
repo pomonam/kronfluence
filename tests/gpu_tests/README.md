@@ -30,12 +30,6 @@ To test if running with `torch.compile` obtains the same result, run:
 python compile_test.py
 ```
 
-### AMP Tests
-To test if running with Automatic Mixed Precision (AMP) obtains similar result, run:
-```bash
-python amp_test.py
-```
-
 ### CPU Offload Test
 To test if `cached_activation_cpu_offload` option is properly implemented, run:
 ```bash

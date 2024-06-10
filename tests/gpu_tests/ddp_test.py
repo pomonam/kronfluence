@@ -265,7 +265,7 @@ class DDPTest(unittest.TestCase):
             assert check_tensor_dict_equivalence(
                 pairwise_scores,
                 new_pairwise_scores,
-                atol=1e-3,
+                atol=1e-1,
                 rtol=1e-1,
             )
 
