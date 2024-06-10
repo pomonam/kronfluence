@@ -4,7 +4,8 @@ from typing import Dict, List, Optional
 import torch
 from accelerate.utils import find_batch_size, send_to_device
 from safetensors.torch import load_file, save_file
-from torch import nn
+from torch import nn, autocast
+from torch.cuda.amp import GradScaler
 from torch.utils import data
 from tqdm import tqdm
 
@@ -17,7 +18,7 @@ from kronfluence.module.utils import (
     set_factors,
     set_mode,
     update_factor_args,
-    update_score_args,
+    update_score_args, set_gradient_scale, remove_gradient_scale,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -152,6 +153,8 @@ def compute_self_scores_with_loaders(
     else:
         score_chunks[ALL_MODULE_NAME] = []
     total_steps = 0
+    enable_amp = score_args.amp_dtype is not None
+    scaler = GradScaler(enabled=enable_amp)
 
     with tqdm(
         total=len(train_loader),
@@ -167,12 +170,17 @@ def compute_self_scores_with_loaders(
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
-                loss = task.compute_train_loss(
-                    batch=batch,
-                    model=model,
-                    sample=False,
-                )
-                loss.backward()
+                with autocast(device_type=state.device.type, enabled=enable_amp, dtype=score_args.amp_dtype):
+                    loss = task.compute_train_loss(
+                        batch=batch,
+                        model=model,
+                        sample=False,
+                    )
+                scaled_loss = scaler.scale(loss)
+                if enable_amp:
+                    gradient_scale = 1. / scaler.get_scale()
+                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
+                scaled_loss.backward()
             total_steps += 1
 
             with torch.no_grad():
@@ -203,6 +211,8 @@ def compute_self_scores_with_loaders(
             pbar.update(1)
 
     with torch.no_grad():
+        model.zero_grad(set_to_none=True)
+        remove_gradient_scale(model=model)
         set_mode(
             model=model,
             mode=ModuleMode.DEFAULT,

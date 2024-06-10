@@ -160,8 +160,8 @@ def fit_covariance_matrices_with_loader(
                         sample=not factor_args.use_empirical_fisher,
                     )
                 scaled_loss = scaler.scale(loss)
-                gradient_scale = 1. / scaler.get_scale()
-                if gradient_scale != 1.:
+                if enable_amp:
+                    gradient_scale = 1. / scaler.get_scale()
                     set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_loss.backward()
 

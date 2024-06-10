@@ -132,8 +132,8 @@ def _compute_dot_products_with_loader(
                         sample=False,
                     )
                 scaled_loss = scaler.scale(loss)
-                gradient_scale = 1. / scaler.get_scale()
-                if gradient_scale != 1.:
+                if enable_amp:
+                    gradient_scale = 1. / scaler.get_scale()
                     set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_loss.backward()
             total_steps += 1
@@ -279,8 +279,8 @@ def compute_pairwise_scores_with_loaders(
                 with autocast(device_type=state.device.type, enabled=enable_amp, dtype=score_args.amp_dtype):
                     measurement = task.compute_measurement(batch=query_batch, model=model)
                 scaled_measurement = scaler.scale(measurement)
-                gradient_scale = 1. / scaler.get_scale()
-                if gradient_scale != 1.:
+                if enable_amp:
+                    gradient_scale = 1. / scaler.get_scale()
                     set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_measurement.backward()
 
