@@ -286,7 +286,6 @@ def fit_lambda_matrices_with_loader(
                     )
                 scaled_loss = scaler.scale(loss)
                 gradient_scale = 1. / scaler.get_scale()
-                print(gradient_scale)
                 if gradient_scale != 1.:
                     set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_loss.backward()
