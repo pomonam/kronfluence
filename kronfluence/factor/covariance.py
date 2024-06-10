@@ -5,7 +5,8 @@ import torch
 import torch.distributed as dist
 from accelerate.utils import find_batch_size, send_to_device
 from safetensors.torch import load_file, save_file
-from torch import nn
+from torch import nn, autocast
+from torch.cuda.amp import GradScaler
 from torch.utils import data
 from tqdm import tqdm
 
@@ -17,7 +18,7 @@ from kronfluence.module.utils import (
     set_attention_mask,
     set_mode,
     synchronize_covariance_matrices,
-    update_factor_args,
+    update_factor_args, set_gradient_scale, remove_gradient_scale,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -134,6 +135,8 @@ def fit_covariance_matrices_with_loader(
         )
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
+    enable_amp = factor_args.amp_dtype is not None
+    scaler = GradScaler(enabled=enable_amp)
 
     with tqdm(
         total=len(loader),
@@ -150,12 +153,18 @@ def fit_covariance_matrices_with_loader(
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
-                loss = task.compute_train_loss(
-                    batch=batch,
-                    model=model,
-                    sample=not factor_args.use_empirical_fisher,
-                )
-                loss.backward()
+                with autocast(device_type=state.device.type, enabled=enable_amp, dtype=factor_args.amp_dtype):
+                    loss = task.compute_train_loss(
+                        batch=batch,
+                        model=model,
+                        sample=not factor_args.use_empirical_fisher,
+                    )
+                scaled_loss = scaler.scale(loss)
+                gradient_scale = 1. / scaler.get_scale()
+                if gradient_scale != 1.:
+                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
+                scaled_loss.backward()
+
             num_data_processed += find_batch_size(data=batch)
             total_steps += 1
 
@@ -173,6 +182,7 @@ def fit_covariance_matrices_with_loader(
         del loss
         model.zero_grad(set_to_none=True)
         remove_attention_mask(model=model)
+        remove_gradient_scale(model=model)
 
         if state.use_distributed:
             # Aggregate covariance matrices across multiple devices or nodes.

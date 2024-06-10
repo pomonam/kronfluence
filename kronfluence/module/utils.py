@@ -306,3 +306,28 @@ def remove_attention_mask(model: nn.Module) -> None:
             tracked_module_count += 1
     if tracked_module_count == 0:
         raise TrackedModuleNotFoundError("Tracked modules not found when trying to remove `attention_mask`.")
+
+
+def set_gradient_scale(
+    model: nn.Module,
+    gradient_scale: float = 1.0,
+) -> None:
+    """Sets the gradient scale for all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.set_gradient_scale(scale=gradient_scale)
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to set `gradient_scale`.")
+
+
+def remove_gradient_scale(model: nn.Module) -> None:
+    """Resets the gradient scale for all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.remove_gradient_scale()
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to remove `gradient_scale`.")

@@ -97,6 +97,7 @@ class TrackedModule(nn.Module):
         self._cached_activations: List[torch.Tensor] = []
         self._cached_per_sample_gradient: Optional[torch.Tensor] = None
         self._attention_mask: Optional[torch.Tensor] = None
+        self._gradient_scale: float = 1.0
         self._registered_hooks: List[RemovableHandle] = []
         self._cached_hooks: List[RemovableHandle] = []
         self._storage: Dict[str, Optional[Any]] = {}
@@ -205,6 +206,14 @@ class TrackedModule(nn.Module):
             handle.remove()
         self._cached_hooks = []
 
+    def set_gradient_scale(self, scale: float = 1.0) -> None:
+        """Sets the scale of the gradient obtained from `GradScaler`."""
+        self._gradient_scale = scale
+
+    def remove_gradient_scale(self) -> None:
+        """Resets the scale of the gradient."""
+        self._gradient_scale = 1.0
+
     ##############################################
     # Methods for computing covariance matrices. #
     ##############################################
@@ -296,6 +305,9 @@ class TrackedModule(nn.Module):
         """
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
         flattened_gradient = self._get_flattened_gradient(output_gradient)
+        if self._gradient_scale != 1.:
+            # Avoiding in-place operation here.
+            flattened_gradient = self._gradient_scale * flattened_gradient
 
         if self._storage[GRADIENT_COVARIANCE_MATRIX_NAME] is None:
             # Initialize pseudo-gradient covariance matrix if it does not exist.
