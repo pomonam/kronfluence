@@ -21,7 +21,7 @@ torchrun --nnodes=1 --nproc_per_node=3 ddp_test.py
 ### FSDP Tests
 To test if running with Fully Sharded Data Parallel (FSDP) with 3 GPUs obtains the same result, run:
 ```bash
-torchrun --nnodes=1 --nproc_per_node=4 fsdp_test.py
+torchrun --nnodes=1 --nproc_per_node=3 fsdp_test.py
 ```
 
 ### torch.compile Tests
