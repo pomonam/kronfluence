@@ -92,3 +92,17 @@ class ClassificationTask(Task):
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
+
+
+class WrongClassificationTask(ClassificationTask):
+    def compute_measurement(
+        self,
+        batch: BATCH_TYPE,
+        model: nn.Module,
+    ) -> torch.Tensor:
+        inputs, labels = batch
+
+        if list(model.parameters())[1].dtype == torch.float64:
+            inputs = inputs.to(dtype=torch.float64)
+        logits = model(inputs)
+        return logits.sum() * 10000

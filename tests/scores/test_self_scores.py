@@ -1,29 +1,18 @@
 # pylint: skip-file
 
-from typing import Tuple
-
 import pytest
 import torch
-from torch import nn
 
-from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
-from kronfluence.task import Task
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
-from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
-
-
-def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
-    model = prepare_model(model=model, task=task)
-    analyzer = Analyzer(
-        analysis_name=f"pytest_{__name__}",
-        model=model,
-        task=task,
-        disable_model_save=True,
-        cpu=True,
-    )
-    return model, analyzer
+from tests.utils import (
+    ATOL,
+    RTOL,
+    check_tensor_dict_equivalence,
+    prepare_model_and_analyzer,
+    prepare_test,
+)
 
 
 @pytest.mark.parametrize(
@@ -46,6 +35,7 @@ def test_compute_self_scores(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure that the self-influence computations are working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -104,6 +94,7 @@ def test_compute_self_scores_dtype(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure that the self-influence computations are working properly with different dtypes.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=10,
@@ -162,11 +153,13 @@ def test_self_scores_batch_size_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Self-influence scores should be identical regardless of what batch size used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
@@ -188,9 +181,12 @@ def test_self_scores_batch_size_equivalence(
 
     score_args = ScoreArguments(
         per_module_score=False,
+        score_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+        precondition_dtype=torch.float64,
     )
     analyzer.compute_self_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs1",
+        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_bs1",
         factors_name=factors_name,
         train_dataset=train_dataset,
         per_device_train_batch_size=1,
@@ -199,11 +195,11 @@ def test_self_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs1_scores = analyzer.load_self_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs1",
+        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_bs1",
     )
 
     analyzer.compute_self_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs8",
+        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_bs8",
         factors_name=factors_name,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
@@ -212,7 +208,7 @@ def test_self_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs8_scores = analyzer.load_self_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs8",
+        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_bs8",
     )
 
     assert check_tensor_dict_equivalence(
@@ -223,7 +219,7 @@ def test_self_scores_batch_size_equivalence(
     )
 
     analyzer.compute_self_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs_auto",
+        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_auto",
         factors_name=factors_name,
         train_dataset=train_dataset,
         per_device_train_batch_size=None,
@@ -232,7 +228,7 @@ def test_self_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs_auto_scores = analyzer.load_self_scores(
-        scores_name=f"pytest_{test_name}_{strategy}_score_bs_auto",
+        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_auto",
     )
 
     assert check_tensor_dict_equivalence(
@@ -262,11 +258,13 @@ def test_self_scores_partition_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Influence scores should be identical regardless of what the partition used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
@@ -283,12 +281,18 @@ def test_self_scores_partition_equivalence(
     )
 
     scores_name = f"pytest_{test_name}_{test_self_scores_partition_equivalence.__name__}_scores"
+    score_args = ScoreArguments(
+        score_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+    )
     analyzer.compute_self_scores(
         scores_name=scores_name,
         factors_name=factors_name,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
+        score_args=score_args,
         overwrite_output_dir=True,
     )
     scores = analyzer.load_self_scores(scores_name=scores_name)
@@ -296,6 +300,9 @@ def test_self_scores_partition_equivalence(
     score_args = ScoreArguments(
         data_partition_size=data_partition_size,
         module_partition_size=module_partition_size,
+        score_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+        precondition_dtype=torch.float64,
     )
     analyzer.compute_self_scores(
         scores_name=f"pytest_{test_name}_partition_{data_partition_size}_{module_partition_size}",
@@ -333,11 +340,13 @@ def test_per_module_scores_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # Influence scores should be identical with and without per module score computations.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
@@ -401,6 +410,7 @@ def test_compute_self_scores_with_indices(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure the indices selection is correctly implemented.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -444,17 +454,19 @@ def test_compute_self_scores_with_indices(
     ],
 )
 @pytest.mark.parametrize("train_size", [60])
-@pytest.mark.parametrize("seed", [0])
+@pytest.mark.parametrize("seed", [1])
 def test_compute_self_scores_with_diagonal_pairwise_equivalence(
     test_name: str,
     train_size: int,
     seed: int,
 ) -> None:
+    # Self-influence scores should be identical to the diagonal entries of pairwise influence scores.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
@@ -470,17 +482,23 @@ def test_compute_self_scores_with_diagonal_pairwise_equivalence(
     )
 
     scores_name = f"pytest_{test_name}_{test_compute_self_scores_with_diagonal_pairwise_equivalence.__name__}_scores"
+    score_args = ScoreArguments(
+        use_measurement_for_self_influence=False,
+        score_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+    )
     analyzer.compute_self_scores(
         scores_name=scores_name,
         factors_name=factors_name,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
+        score_args=score_args,
         overwrite_output_dir=True,
     )
     self_scores = analyzer.load_self_scores(scores_name=scores_name)
 
-    scores_name = f"pytest_{test_name}_{test_compute_self_scores_with_diagonal_pairwise_equivalence.__name__}_scores"
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         factors_name=factors_name,
@@ -489,11 +507,92 @@ def test_compute_self_scores_with_diagonal_pairwise_equivalence(
         query_dataset=train_dataset,
         per_device_query_batch_size=6,
         dataloader_kwargs=kwargs,
+        score_args=score_args,
         overwrite_output_dir=True,
     )
     pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
 
-    torch.allclose(
+    assert torch.allclose(
+        torch.diag(pairwise_scores[ALL_MODULE_NAME]),
+        self_scores[ALL_MODULE_NAME],
+        atol=ATOL,
+        rtol=RTOL,
+    )
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "conv",
+        "conv_bn",
+        "wrong_conv"
+    ],
+)
+@pytest.mark.parametrize("train_size", [24])
+@pytest.mark.parametrize("seed", [7])
+def test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence(
+    test_name: str,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Self-influence scores should be identical to the diagonal entries of pairwise influence scores.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name=test_name,
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    factors_name = (
+        f"pytest_{test_name}_{test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence.__name__}"
+    )
+    analyzer.fit_all_factors(
+        factors_name=factors_name,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=32,
+        overwrite_output_dir=True,
+    )
+
+    scores_name = (
+        f"pytest_{test_name}_{test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence.__name__}_scores"
+    )
+    score_args = ScoreArguments(
+        use_measurement_for_self_influence=True,
+        score_dtype=torch.float64,
+        per_sample_gradient_dtype=torch.float64,
+        precondition_dtype=torch.float64,
+    )
+    analyzer.compute_self_scores(
+        scores_name=scores_name,
+        factors_name=factors_name,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    self_scores = analyzer.load_self_scores(scores_name=scores_name)
+
+    analyzer.compute_pairwise_scores(
+        scores_name=scores_name,
+        factors_name=factors_name,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        query_dataset=train_dataset,
+        per_device_query_batch_size=6,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+
+    assert torch.allclose(
         torch.diag(pairwise_scores[ALL_MODULE_NAME]),
         self_scores[ALL_MODULE_NAME],
         atol=ATOL,
