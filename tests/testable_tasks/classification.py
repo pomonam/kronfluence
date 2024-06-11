@@ -1,6 +1,6 @@
 # pylint: skip-file
 
-from typing import Dict, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn.functional as F
@@ -58,16 +58,20 @@ class ClassificationTask(Task):
         sample: bool = False,
     ) -> torch.Tensor:
         inputs, labels = batch
+
+        if list(model.parameters())[1].dtype == torch.float64:
+            inputs = inputs.to(dtype=torch.float64)
         logits = model(inputs)
+
         if not sample:
             return F.cross_entropy(logits, labels, reduction="sum")
         with torch.no_grad():
-            probs = torch.nn.functional.softmax(logits, dim=-1)
+            probs = torch.nn.functional.softmax(logits.detach(), dim=-1)
             sampled_labels = torch.multinomial(
                 probs,
                 num_samples=1,
             ).flatten()
-        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
+        return F.cross_entropy(logits, sampled_labels, reduction="sum")
 
     def compute_measurement(
         self,
@@ -75,6 +79,9 @@ class ClassificationTask(Task):
         model: nn.Module,
     ) -> torch.Tensor:
         inputs, labels = batch
+
+        if list(model.parameters())[1].dtype == torch.float64:
+            inputs = inputs.to(dtype=torch.float64)
         logits = model(inputs)
 
         bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
@@ -85,3 +92,17 @@ class ClassificationTask(Task):
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
+
+
+class WrongClassificationTask(ClassificationTask):
+    def compute_measurement(
+        self,
+        batch: BATCH_TYPE,
+        model: nn.Module,
+    ) -> torch.Tensor:
+        inputs, labels = batch
+
+        if list(model.parameters())[1].dtype == torch.float64:
+            inputs = inputs.to(dtype=torch.float64)
+        logits = model(inputs)
+        return logits.sum() * 10000

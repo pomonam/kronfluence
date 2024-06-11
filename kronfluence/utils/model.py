@@ -1,15 +1,12 @@
-from typing import Optional
 import functools
+from typing import Optional
 
 import torch
-from torch import nn
 import torch.distributed as dist
-
-from torch.distributed.fsdp import (
-    FullyShardedDataParallel as FSDP,
-    CPUOffload,
-    ShardingStrategy,
-)
+from torch import nn
+from torch.distributed.fsdp import CPUOffload
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp import ShardingStrategy
 from torch.distributed.fsdp.wrap import (
     size_based_auto_wrap_policy,
     transformer_auto_wrap_policy,
@@ -68,15 +65,15 @@ def apply_fsdp(
         local_rank (int): The local rank of the current process.
         rank (int): The rank of the current process.
         world_size (int): The total number of processes.
-        sharding_strategy (str): The sharding strategy to use. 
+        sharding_strategy (str): The sharding strategy to use.
             Defaults to "FULL_SHARD".
-        cpu_offload (bool): Whether to offload parameters to CPU. Check 
-            https://pytorch.org/docs/2.2/fsdp.html#torch.distributed.fsdp.CPUOffload. 
+        cpu_offload (bool): Whether to offload parameters to CPU. Check
+            https://pytorch.org/docs/2.2/fsdp.html#torch.distributed.fsdp.CPUOffload.
             Defaults to True.
-        is_transformer (bool): Whether the model is a transformer model. 
+        is_transformer (bool): Whether the model is a transformer model.
             Defaults to False.
-        layer_to_wrap (nn.Module, optional): The specific layer to wrap 
-            for transformer models. Required if `is_transformer` is True. 
+        layer_to_wrap (nn.Module, optional): The specific layer to wrap
+            for transformer models. Required if `is_transformer` is True.
             Defaults to None.
 
     Returns:

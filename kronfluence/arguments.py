@@ -37,23 +37,19 @@ class FactorArguments(Arguments):
     use_empirical_fisher: bool = field(
         default=False,
         metadata={
-            "help": "Whether to use empirical fisher (using labels from batch) instead of "
+            "help": "Whether to use empirical Fisher (using labels from batch) instead of "
             "true Fisher (using sampled labels)."
         },
-    )
-    immediate_gradient_removal: bool = field(
-        default=False,
-        metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
-    )
-    ignore_bias: bool = field(
-        default=False,
-        metadata={"help": "Whether to ignore factor computations on bias parameters. Defaults to False."},
     )
     distributed_sync_steps: int = field(
         default=1_000,
         metadata={
             "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
         },
+    )
+    amp_dtype: Optional[torch.dtype] = field(
+        default=None,
+        metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
     )
 
     # Configuration for fitting covariance matrices. #
@@ -69,19 +65,15 @@ class FactorArguments(Arguments):
         metadata={
             "help": "Number of data partitions for computing covariance matrices. "
             "For example, when `covariance_data_partition_size = 2`, the dataset is split "
-            "into 2 chunks and covariance matrices are separately computed for each chunk. "
-            "This is useful with GPU preemption as intermediate covariance matrices are saved "
-            "in disk."
+            "into 2 chunks and covariance matrices are separately computed for each chunk."
         },
     )
     covariance_module_partition_size: int = field(
         default=1,
         metadata={
             "help": "Number of module partitions for computing covariance matrices. "
-            "For example, when `covariance_module_partition_size = 2`, the module is split "
-            "into 2 chunks and covariance matrices are separately computed for each chunk. "
-            "This is useful when the available GPU memory is limited; the total covariance matrices cannot "
-            "fit into memory."
+            "For example, when `covariance_module_partition_size = 2`, the modules (layers) are split "
+            "into 2 chunks and covariance matrices are separately computed for each chunk."
         },
     )
     activation_covariance_dtype: torch.dtype = field(
@@ -96,7 +88,7 @@ class FactorArguments(Arguments):
     # Configuration for performing eigendecomposition. #
     eigendecomposition_dtype: torch.dtype = field(
         default=torch.float64,
-        metadata={"help": "Dtype for performing Eigendecomposition. Recommended to use `torch.float64."},
+        metadata={"help": "Dtype for performing Eigendecomposition. Recommended to use `torch.float64`."},
     )
 
     # Configuration for fitting Lambda matrices. #
@@ -112,38 +104,30 @@ class FactorArguments(Arguments):
         metadata={
             "help": "Number of data partitions for computing Lambda matrices. "
             "For example, when `lambda_data_partition_size = 2`, the dataset is split "
-            "into 2 chunks and Lambda matrices are separately computed for each chunk. "
-            "This is useful with GPU preemption as intermediate Lambda matrices are saved "
-            "in disk."
+            "into 2 chunks and Lambda matrices are separately computed for each chunk."
         },
     )
     lambda_module_partition_size: int = field(
         default=1,
         metadata={
             "help": "Number of module partitions for computing Lambda matrices. "
-            "For example, when `lambda_module_partition_size = 2`, the module is split "
-            "into 2 chunks and Lambda matrices are separately computed for each chunk. "
-            "This is useful when the available GPU memory is limited; the total Lambda matrices cannot "
-            "fit into memory."
+            "For example, when `lambda_module_partition_size = 2`, the modules (layers) are split "
+            "into 2 chunks and Lambda matrices are separately computed for each chunk."
         },
     )
     lambda_iterative_aggregate: bool = field(
         default=False,
         metadata={
-            "help": "Whether to aggregate squared sum of projected per-sample-gradient with for-loop "
-            "iterations. This is helpful when the available GPU memory is limited."
+            "help": "Whether to aggregate squared sum of projected per-sample-gradient with for-loop iterations."
         },
     )
     cached_activation_cpu_offload: bool = field(
         default=False,
-        metadata={
-            "help": "Whether to offload cached activation to CPU for computing the "
-            "per-sample-gradient. This is helpful when the available GPU memory is limited."
-        },
+        metadata={"help": "Whether to offload cached activation to CPU for computing the per-sample-gradient."},
     )
     lambda_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing Lambda matrices. Recommended to use `torch.float32`."},
+        metadata={"help": "Dtype for computing Lambda (corrected eigenvalues) matrices."},
     )
 
 
@@ -153,28 +137,25 @@ class ScoreArguments(Arguments):
 
     # General configuration. #
     damping: Optional[float] = field(
-        default=None,
+        default=1e-08,
         metadata={
-            "help": "A damping factor for the damped matrix-vector product. "
-            "Uses a heuristic based on mean eigenvalues (0.1 x mean eigenvalues) if None."
+            "help": "A damping factor for the damped inverse Hessian-vector product (iHVP). "
+            "Uses a heuristic based on mean eigenvalues (0.1 x mean eigenvalues) if set to None."
         },
-    )
-    immediate_gradient_removal: bool = field(
-        default=False,
-        metadata={"help": "Whether to immediately remove computed `.grad` by Autograd within the backward hook."},
     )
     cached_activation_cpu_offload: bool = field(
         default=False,
-        metadata={
-            "help": "Whether to offload cached activation to CPU for computing the "
-            "per-sample-gradient. This is helpful when the available GPU memory is limited."
-        },
+        metadata={"help": "Whether to offload cached activation to CPU for computing the per-sample-gradient."},
     )
     distributed_sync_steps: int = field(
         default=1_000,
         metadata={
             "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
         },
+    )
+    amp_dtype: Optional[torch.dtype] = field(
+        default=None,
+        metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
     )
 
     # Partition configuration. #
@@ -190,8 +171,8 @@ class ScoreArguments(Arguments):
         default=1,
         metadata={
             "help": "Number of module partitions for computing influence scores. For example, when "
-            "`module_partition_size = 2`, the module is split into 2 modules and scores are separately computed "
-            "for each chunk."
+            "`module_partition_size = 2`, the module (layers) are split into 2 modules and scores are separately "
+            "computed for each chunk."
         },
     )
 
@@ -207,10 +188,18 @@ class ScoreArguments(Arguments):
         default=None,
         metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
     )
+    num_query_gradient_aggregations: int = field(
+        default=1,
+        metadata={"help": "Number of query batches to aggregate over."},
+    )
+    use_measurement_for_self_influence: bool = field(
+        default=False,
+        metadata={"help": "Whether to use the measurement (instead of the loss) for computing self-influence scores."},
+    )
 
     # Dtype configuration. #
     query_gradient_svd_dtype: torch.dtype = field(
-        default=torch.float64,
+        default=torch.float32,
         metadata={"help": "Dtype for performing singular value decomposition (SVD) on the query gradient."},
     )
     score_dtype: torch.dtype = field(

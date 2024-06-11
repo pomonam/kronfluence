@@ -5,7 +5,8 @@ import torch
 import torch.distributed as dist
 from accelerate.utils import find_batch_size, send_to_device
 from safetensors.torch import load_file, save_file
-from torch import nn
+from torch import autocast, nn
+from torch.cuda.amp import GradScaler
 from torch.utils import data
 from tqdm import tqdm
 
@@ -14,8 +15,9 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     get_tracked_module_names,
     load_factors,
-    remove_attention_mask,
+    remove_gradient_scale,
     set_factors,
+    set_gradient_scale,
     set_mode,
     synchronize_lambda_matrices,
     update_factor_args,
@@ -75,7 +77,7 @@ def load_eigendecomposition(
 def eigendecomposition_exist(
     output_dir: Path,
 ) -> bool:
-    """Checks if Eigendecomposition results exist at specified path."""
+    """Checks if Eigendecomposition results exist at the specified path."""
     for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
         save_path = eigendecomposition_save_path(
             output_dir=output_dir,
@@ -108,7 +110,7 @@ def perform_eigendecomposition(
     Returns:
         FACTOR_TYPE:
             The Eigendecomposition results in CPU. The Eigendecomposition results are organized in
-            nested dictionaries, where the first key in the name of the Eigendecomposition factor (e.g.,
+            nested dictionaries, where the first key is the name of the Eigendecomposition factor (e.g.,
             activation eigenvector), and the second key is the module name.
     """
     eigen_factors: FACTOR_TYPE = {}
@@ -206,7 +208,7 @@ def lambda_matrices_exist(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
-    """Check if Lambda matrices exist at specified path."""
+    """Check if Lambda matrices exist at the specified path."""
     for factor_name in LAMBDA_FACTOR_NAMES:
         save_path = lambda_matrices_save_path(
             output_dir=output_dir,
@@ -227,11 +229,11 @@ def fit_lambda_matrices_with_loader(
     eigen_factors: Optional[FACTOR_TYPE] = None,
     tracked_module_names: Optional[List[str]] = None,
 ) -> Tuple[torch.Tensor, FACTOR_TYPE]:
-    """Computes Lambda matrices for a given model and task.
+    """Computes Lambda (corrected eigenvalues) matrices for a given model and task.
 
     Args:
         model (nn.Module):
-            The model that Lambda matrices will be computed.
+            The model for which Lambda matrices will be computed.
         state (State):
             The current process's information (e.g., device being used).
         task (Task):
@@ -243,19 +245,17 @@ def fit_lambda_matrices_with_loader(
         eigen_factors (FACTOR_TYPE, optional):
             The eigendecomposition results to use for computing Lambda matrices.
         tracked_module_names (List[str], optional):
-            A list of module names that Lambda matrices will be computed. If not specified, Lambda
-            matrices will be computed for all available tracked modules.
+            A list of module names for which Lambda matrices will be computed. If not specified,
+            Lambda matrices will be computed for all tracked modules.
 
     Returns:
         Tuple[torch.Tensor, FACTOR_TYPE]:
             A tuple containing the number of data points processed, and computed Lambda matrices in CPU.
-            The Lambda matrices are organized in nested dictionaries, where the first key in the name of
+            The Lambda matrices are organized in nested dictionaries, where the first key is the name of
             the computed variable and the second key is the module name.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
-        remove_attention_mask(model=model)
-        set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
         set_mode(
             model=model,
             tracked_module_names=tracked_module_names,
@@ -266,6 +266,8 @@ def fit_lambda_matrices_with_loader(
                 set_factors(model=model, factor_name=name, factors=eigen_factors[name])
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
+    enable_amp = factor_args.amp_dtype is not None
+    scaler = GradScaler(enabled=enable_amp)
 
     with tqdm(
         total=len(loader),
@@ -278,12 +280,18 @@ def fit_lambda_matrices_with_loader(
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
-                loss = task.compute_train_loss(
-                    batch=batch,
-                    model=model,
-                    sample=not factor_args.use_empirical_fisher,
-                )
-                loss.backward()
+                with autocast(device_type=state.device.type, enabled=enable_amp, dtype=factor_args.amp_dtype):
+                    loss = task.compute_train_loss(
+                        batch=batch,
+                        model=model,
+                        sample=not factor_args.use_empirical_fisher,
+                    )
+                scaled_loss = scaler.scale(loss)
+                if enable_amp:
+                    gradient_scale = 1.0 / scaler.get_scale()
+                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
+                scaled_loss.backward()
+
             num_data_processed += find_batch_size(data=batch)
             total_steps += 1
 
@@ -298,6 +306,10 @@ def fit_lambda_matrices_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
+        del loss
+        remove_gradient_scale(model=model)
+        model.zero_grad(set_to_none=True)
+
         if state.use_distributed:
             # Aggregate Lambda matrices across multiple devices or nodes.
             synchronize_lambda_matrices(model=model)

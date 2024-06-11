@@ -1,25 +1,22 @@
 # Kronfluence: Technical Documentation & FAQs
 
-For a detailed description of the methodology, see the [**paper**](https://arxiv.org/abs/2308.03296) *Studying Large Language Model Generalization with Influence Functions*.
+For a detailed description of the methodology, please refer to the [**paper**](https://arxiv.org/abs/2308.03296) *Studying Large Language Model Generalization with Influence Functions*.
 
 ## Requirements
 
-Kronfluence has been tested on the following versions of [PyTorch](https://pytorch.org/):
-- PyTorch >= 2.1;
-- Python >= 3.9.
+Kronfluence has been tested and is compatible with the following versions of [PyTorch](https://pytorch.org/):
+- PyTorch 2.1 or higher
+- Python 3.9 or higher
 
 ## Supported Modules & Strategies
 
-Kronfluence supports:
-- Computing influence functions on selected PyTorch modules. At the moment, we support `nn.Linear` and `nn.Conv2d`;
-- Computing influence functions with several Hessian approximation strategies: `identity`, `diagonal`, `KFAC`, and `EKFAC`;
-- Computing pairwise and self-influence scores.
+Kronfluence offers support for:
+- Computing influence functions on selected PyTorch modules. Currently, we support `nn.Linear` and `nn.Conv2d`.
+- Computing influence functions with several Hessian approximation strategies, including `identity`, `diagonal`, `KFAC`, and `EKFAC`.
+- Computing pairwise and self-influence (with and without measurement) scores.
 
 > [!NOTE]
-> We are planning to support functionalities to ensemble influence scores in next release.
-
-> [!NOTE]
-> If there are specific modules you would like to see supported, please submit an issue.
+> If there are additional modules you would like to see supported, please submit an issue on our GitHub repository.
 
 ---
 
@@ -103,6 +100,7 @@ After calling `prepare_model`, you can create [DistributedDataParallel (DDP)](ht
 **Set up the Analyzer and Fit Factors.** 
 Initialize the `Analyzer` and execute `fit_all_factors` to compute all factors that aim to approximate the Hessian 
 (or Gauss-Newton Hessian). The computed factors will be stored on disk.
+
 ```python
 from kronfluence.analyzer import Analyzer
 from kronfluence.utils.dataset import DataLoaderKwargs
@@ -121,6 +119,7 @@ analyzer.fit_all_factors(factors_name="initial_factor", dataset=train_dataset)
 **Compute Influence Scores.** 
 Once the factors have been computed, you can compute pairwise and self-influence scores. When computing the scores,
 you can specify the factor name you would like to use. 
+
 ```python
 ...
 scores = analyzer.compute_pairwise_scores(
@@ -139,7 +138,7 @@ You can organize all factors and scores for the specific model with `factors_nam
 
 **What should I do if my model does not have any nn.Linear or nn.Conv2d modules?**
 Currently, the implementation does not support influence computations for modules other than `nn.Linear` or `nn.Conv2d`.
-Try rewriting the model so that it uses supported modules (as done for the `conv1d` module in [GPT-2](https://github.com/pomonam/kronfluence/tree/documentation/examples/wikitext)).
+Try rewriting the model so that it uses supported modules (as done for the `conv1d` module in [GPT-2 example](https://github.com/pomonam/kronfluence/tree/documentation/examples/wikitext)).
 Alternatively, you can create a subclass of `TrackedModule` to compute influence scores for your custom module.
 If there are specific modules you would like to see supported, please submit an issue.
 
@@ -150,11 +149,11 @@ inspect `model.named_modules()` to determine what modules to use. You can specif
 
 > [!NOTE]
 > If the embedding layer for transformers are defined with `nn.Linear`, you must write
-> `task.tracked_modules` to avoid influence computations embedding matrices (it is too expensive).
+> `task.tracked_modules` to avoid influence computations embedding matrices.
 
 **How should I implement Task.compute_train_loss?**
 Implement the loss function used to train the model. Note that the function should return 
-the summed loss (over batches and tokens) and should not include regularizations. 
+the summed loss (over batches and tokens). 
 
 **How should I implement Task.compute_measurement?**
 It depends on the analysis you would like to perform. Influence functions approximate the [effect of downweighting/upweighting
@@ -167,7 +166,8 @@ cause `TrackedModuleNotFoundError`.
 
 **My model uses supported modules, but influence scores are not computed.**
 Kronfluence uses module hooks to compute factors and influence scores. For these to be tracked and computed,
-the model should directly call the module.
+the model's forward pass should directly call the module.
+
 ```python
 import torch
 from torch import nn
@@ -180,12 +180,11 @@ def forward(x: torch.Tensor) -> torch.Tensor:
 ```
 
 **I get X error when fitting factors/computing scores.**
-Please feel free to contact us by [filing an issue](https://github.com/pomonam/kronfluence/issues) or [through email](mailto:jbae@cs.toronto.edu).
+Please feel free to contact me by [filing an issue](https://github.com/pomonam/kronfluence/issues) or [through email](mailto:jbae@cs.toronto.edu).
 
 ---
 
 ## Configuring Factors with FactorArguments
-
 
 ```python
 import torch
@@ -194,8 +193,8 @@ from kronfluence.arguments import FactorArguments
 factor_args = FactorArguments(
     strategy="ekfac",  # Choose from "identity", "diagonal", "kfac", or "ekfac".
     use_empirical_fisher=False,
-    immediate_gradient_removal=False,
-    ignore_bias=False,
+    distributed_sync_steps=1000,
+    amp_dtype=None,
 
     # Settings for covariance matrix fitting.
     covariance_max_examples=100_000,
@@ -221,17 +220,14 @@ analyzer.fit_all_factors(factors_name="initial_factor", dataset=train_dataset, f
 ```
 
 You can change:
-- `strategy`:  Selects the Hessian approximation strategy (`identity`, `diagonal`, `KFAC`, or `EKFAC`).
+- `strategy`: Selects the Hessian approximation strategy (`identity`, `diagonal`, `kfac`, or `ekfac`).
 - `use_empirical_fisher`: Determines whether to use the [empirical Fisher](https://arxiv.org/abs/1905.12558) (using actual labels from batch) 
 instead of the true Fisher (using sampled labels from model's predictions). It is recommended to be `False`.
-- `immediate_gradient_removal`: Specifies whether to instantly set `param.grad = None` within module hooks. Generally,
-recommended to be `False`, as it requires installing additional hooks. This should not affect the fitted factors, but
-can potentially reduce peak memory.
-- `ignore_bias`: Specifies whether to ignore factor computations on bias.
+- `amp_dtype`: Selects the dtype for [automatic mixed precision (AMP)](https://pytorch.org/docs/stable/amp.html). Disables AMP if set to `None`.
 
 ### Fitting Covariance Matrices
 
-`KFAC` and `EKFAC` require computing the uncentered activation and pre-activation pseudo-gradient covariance matrices. 
+`kfac` and `ekfac` require computing the uncentered activation and pre-activation pseudo-gradient covariance matrices. 
 To fit covariance matrices, you can use `analyzer.fit_covariance_matrices`.
 ```python
 # Fitting covariance matrices.
@@ -260,13 +256,11 @@ or `torch.float16`.
 **Dealing with OOMs.** Here are some steps to fix Out of Memory (OOM) errors.
 1. Try reducing the `per_device_batch_size` when fitting covariance matrices.
 2. Try using lower precision for `activation_covariance_dtype` and `gradient_covariance_dtype`.
-3. Try setting `immediate_gradient_removal=True`.
-4. Try setting `covariance_module_partition_size > 1`.
-
+3. Try setting `covariance_module_partition_size > 1`.
 
 ### Performing Eigendecomposition
 
-After computing the covariance matrices, `KFAC` and `EKFAC` require performing eigendecomposition.
+After computing the covariance matrices, `kfac` and `ekfac` require performing eigendecomposition.
 
 ```python
 # Performing Eigendecomposition.
@@ -281,7 +275,7 @@ but `torch.float64` is recommended.
 
 ### Fitting Lambda Matrices
 
-`EKFAC` and `diagonal` require computing the Lambda (eigenvalue) matrices for all modules.
+`ekfac` and `diagonal` require computing the Lambda (eigenvalue) matrices for all modules.
 
 ```python
 # Fitting Lambda matrices.
@@ -306,8 +300,7 @@ or `torch.float16`.
 1. Try reducing the `per_device_batch_size` when fitting Lambda matrices.
 2. Try setting `lambda_iterative_aggregate=True` or `cached_activation_cpu_offload=True`.
 3. Try using lower precision for `lambda_dtype`. 
-4. Try setting `immediate_gradient_removal=True`.
-5. Try using `lambda_module_partition_size > 1`. 
+4. Try using `lambda_module_partition_size > 1`. 
 
 ### FAQs
 
@@ -329,8 +322,10 @@ import torch
 from kronfluence.arguments import ScoreArguments
 
 score_args = ScoreArguments(
-    damping=None,
-    immediate_gradient_removal=False,
+    damping=1e-08,
+    cached_activation_cpu_offload=False,
+    distributed_sync_steps=1000,
+    amp_dtype=None,
 
     data_partition_size=1,
     module_partition_size=1,
@@ -338,27 +333,30 @@ score_args = ScoreArguments(
     
     # Configuration for query batching.
     query_gradient_rank=None,
-    query_gradient_svd_dtype=torch.float64,
+    query_gradient_svd_dtype=torch.float32,
+    num_query_gradient_aggregations=1,
+    use_measurement_for_self_influence=False,
     
-    cached_activation_cpu_offload=False,
     score_dtype=torch.float32,
     per_sample_gradient_dtype=torch.float32,
     precondition_dtype=torch.float32,
 )
 ```
 
-- `damping`: A damping factor for the damped matrix-vector product. Uses a heuristic based on mean eigenvalues 
+- `damping`: A damping factor for the damped inverse Hessian-vector product (iHVP). Uses a heuristic based on mean eigenvalues 
 (0.1 x mean eigenvalues) if None.
-- `immediate_gradient_removal`: Whether to immediately remove `param.grad` within a hook.
+- `cached_activation_cpu_offload`: Whether to offload cached activations to CPU.
+- `amp_dtype`: Selects the dtype for [automatic mixed precision (AMP)](https://pytorch.org/docs/stable/amp.html). Disables AMP if set to `None`.
 - `data_partition_size`: Number of data partitions for computing influence scores.
 - `module_partition_size`: Number of module partitions for computing influence scores.
 - `per_module_score`: Whether to return a per-module influence scores. Instead of summing over influences across
 all modules, this will keep track of intermediate module-wise scores. 
 
 - `query_gradient_rank`: The rank for the query batching (low-rank approximation to the query gradient; see Section 3.2.2). If `None`, no query batching will be used.
-- `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can also use `torch.float32`.
+- `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can also use `torch.float64`.
+- `num_query_gradient_aggregations`: Number of query gradients to aggregate over.
+- `use_measurement_for_self_influence`: Whether to use the measurement (instead of the loss) when computing self-influence scores.
 
-- `cached_activation_cpu_offload`: Whether to offload cached activations to CPU.
 - `score_dtype`: `dtype` for computing influence scores. You can use `torch.bfloat16` or `torch.float16`.
 - `per_sample_gradient_dtype`: `dtype` for computing per-sample-gradient. You can use `torch.bfloat16` or `torch.float16`.
 - `precondition_dtype`: `dtype` for performing preconditioning. You can use `torch.bfloat16` or `torch.float16`,
@@ -367,6 +365,7 @@ but `torch.float32` is recommended.
 ### Computing Influence Scores
 
 To compute pairwise influence scores (Equation 5 in the paper), you can run:
+
 ```python
 # Computing pairwise influence scores.
 analyzer.compute_pairwise_scores(scores_name="pairwise", factors_name="ekfac", score_args=score_args)
@@ -375,10 +374,11 @@ scores = analyzer.load_pairwise_scores(scores_name="pairwise")
 ```
 
 To compute self-influence scores (see Section 5.4 from [paper](https://arxiv.org/pdf/1703.04730.pdf)), you can run:
+
 ```python
-# Computing pairwise influence scores.
+# Computing self-influence scores.
 analyzer.compute_self_scores(scores_name="self", factors_name="ekfac", score_args=score_args)
-# Loading pairwise influence scores.
+# Loading self-influence scores.
 scores = analyzer.load_self_scores(scores_name="self")
 ```
 
@@ -386,10 +386,9 @@ scores = analyzer.load_self_scores(scores_name="self")
 1. Try reducing the `per_device_query_batch_size` or `per_device_train_batch_size`.
 2. Try setting `cached_activation_cpu_offload=True`.
 3. Try using lower precision for `per_sample_gradient_dtype` and `score_dtype`. 
-4. Try setting `immediate_gradient_removal=True`.
-5. Try setting `query_gradient_rank > 1`. The recommended values are `16`, `32`, `64`, `128`, and `256`. Note that query
-batching is only supported for computing pairwise influence scores, not self-infleucen scores.
-6. Try setting `module_partition_size > 1`.
+4. Try setting `query_gradient_rank > 1`. The recommended values are `16`, `32`, `64`, `128`, and `256`. Note that query
+batching is only supported for computing pairwise influence scores, not self-influence scores.
+5. Try setting `module_partition_size > 1`.
 
 ### FAQs
 

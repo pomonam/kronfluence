@@ -74,7 +74,6 @@ def wrap_tracked_modules(
                 factor_args=factor_args,
                 score_args=score_args,
             )
-            tracked_module.requires_grad_(True)
             parent, target_name = _get_submodules(model=model, key=module_name)
             setattr(parent, target_name, tracked_module)
             tracked_module_count += 1
@@ -166,6 +165,17 @@ def synchronize_lambda_matrices(model: nn.Module) -> None:
             tracked_module_count += 1
     if tracked_module_count == 0:
         raise TrackedModuleNotFoundError("Tracked modules not found when trying to synchronize lambda matrices.")
+
+
+def aggregate_preconditioned_gradient(model: nn.Module) -> None:
+    """Aggregates preconditioned gradient of all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.aggregate_preconditioned_gradient()
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to truncate preconditioned gradient.")
 
 
 def truncate_preconditioned_gradient(model: nn.Module, keep_size: int) -> None:
@@ -296,3 +306,28 @@ def remove_attention_mask(model: nn.Module) -> None:
             tracked_module_count += 1
     if tracked_module_count == 0:
         raise TrackedModuleNotFoundError("Tracked modules not found when trying to remove `attention_mask`.")
+
+
+def set_gradient_scale(
+    model: nn.Module,
+    gradient_scale: float = 1.0,
+) -> None:
+    """Sets the gradient scale for all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.set_gradient_scale(scale=gradient_scale)
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to set `gradient_scale`.")
+
+
+def remove_gradient_scale(model: nn.Module) -> None:
+    """Resets the gradient scale for all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.remove_gradient_scale()
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to remove `gradient_scale`.")

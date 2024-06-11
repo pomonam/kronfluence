@@ -2,7 +2,6 @@
 <a href="#"><img width="380" img src="https://raw.githubusercontent.com/pomonam/kronfluence/main/.assets/kronfluence.svg" alt="Kronfluence"/></a>
 </p>
 
-
 <p align="center">
     <a href="https://pypi.org/project/kronfluence">
         <img alt="License" src="https://img.shields.io/pypi/v/kronfluence.svg?style=flat-square">
@@ -38,13 +37,13 @@ For a detailed description of the methodology, see the [**paper**](https://arxiv
 > - Python: Version 3.9 or later
 > - PyTorch: Version 2.1 or later
 
-To install the latest version, use the following `pip` command:
+To install the latest stable version, use the following `pip` command:
 
 ```bash
 pip install kronfluence
 ```
 
-Alternatively, you can install the library directly from the source:
+Alternatively, you can install directly from source:
 
 ```bash
 git clone https://github.com/pomonam/kronfluence.git
@@ -54,13 +53,11 @@ pip install -e .
 
 ## Getting Started
 
-Kronfluence supports influence computations on `nn.Linear` and `nn.Conv2d` modules. See the [**Technical Documentation**](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) 
-page for a comprehensive guide.
+Kronfluence supports influence computations on `nn.Linear` and `nn.Conv2d` modules. See the [**Technical Documentation**](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) page for a comprehensive guide.
 
 ### Learn More
 
-The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples demonstrating how to use Kronfluence.
-More examples will be added in the future. 
+The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples demonstrating how to use Kronfluence. More examples will be added in the future.
 **TL;DR** You need to prepare a trained model and datasets, and pass them into the `Analyzer` class.
 
 ```python
@@ -95,7 +92,7 @@ eval_dataset = torchvision.datasets.MNIST(
     train=True,
 )
 
-# Define the task.
+# Define the task. See the Technical Documentation page for details.
 task = MnistTask()
 
 # Prepare the model for influence computation.
@@ -120,12 +117,12 @@ scores = analyzer.load_pairwise_scores(scores_name="my_scores")
 
 ## Contributing
 
-Your contributions are welcome! For bug fixes, please submit a pull request without prior discussion. For proposing 
-new features, examples, or extensions, kindly start a discussion through an issue before proceeding.
+Contributions are welcome! To get started, please review our [Code of Conduct](https://github.com/pomonam/kronfluence/blob/main/CODE_OF_CONDUCT.md). For bug fixes, please submit a pull request. 
+If you would like to propose new features or extensions, we kindly request that you open an issue first to discuss your ideas.
 
 ### Setting Up Development Environment
 
-To contribute, you will need to set up a development environment on your machine. 
+To contribute to Kronfluence, you will need to set up a development environment on your machine. 
 This setup includes installing all the dependencies required for linting and testing.
 
 ```bash
@@ -134,10 +131,10 @@ cd kronfluence
 pip install -e ."[dev]"
 ```
 
-### Contributors
-[Juhan Bae](https://github.com/pomonam/kronfluence), [Omkar Dige](https://github.com/xeon27), and [Adil Asif](https://github.com/adil-a/) 
-are the main contributors to this repository.
-We thank Lev McKinney, Sang Keun Choe, Hwijeen Ahn, Minsoo Kang, Youngseog Chung, Kewen Zhao, and Laura Ruis for their feedback during the development process.
+## Acknowledgements
+
+[Omkar Dige](https://github.com/xeon27) contributed to the profiling, DDP, and FSDP utilities, and [Adil Asif](https://github.com/adil-a/) provided valuable insights and suggestions on structuring the DDP and FSDP implementations.
+I also thank Hwijeen Ahn, Sang Keun Choe, Youngseog Chung, Minsoo Kang, Lev McKinney, Laura Ruis, Andrew Wang, and Kewen Zhao for their feedback.
 
 ## License
 

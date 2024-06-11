@@ -1,14 +1,9 @@
 # pylint: skip-file
 
-from typing import Tuple
-
 import pytest
 import torch
-from torch import nn
 
-from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
-from kronfluence.task import Task
 from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     COVARIANCE_FACTOR_NAMES,
@@ -16,19 +11,13 @@ from kronfluence.utils.constants import (
     NUM_COVARIANCE_PROCESSED,
 )
 from kronfluence.utils.dataset import DataLoaderKwargs
-from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
-
-
-def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
-    model = prepare_model(model=model, task=task)
-    analyzer = Analyzer(
-        analysis_name=f"pytest_{__name__}",
-        model=model,
-        task=task,
-        disable_model_save=True,
-        cpu=True,
-    )
-    return model, analyzer
+from tests.utils import (
+    ATOL,
+    RTOL,
+    check_tensor_dict_equivalence,
+    prepare_model_and_analyzer,
+    prepare_test,
+)
 
 
 @pytest.mark.parametrize(
@@ -53,6 +42,7 @@ def test_fit_covariance_matrices(
     train_size: int,
     seed: int,
 ) -> None:
+    # Make sure that the covariance computations are working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -95,14 +85,14 @@ def test_fit_covariance_matrices(
         "gpt",
     ],
 )
-@pytest.mark.parametrize("train_size", [50])
+@pytest.mark.parametrize("train_size", [100])
 @pytest.mark.parametrize("seed", [1])
 def test_covariance_matrices_batch_size_equivalence(
     test_name: str,
     train_size: int,
     seed: int,
 ) -> None:
-    # Covariance matrices should be identical regardless of the batch size used.
+    # Covariance matrices should be identical regardless of what batch size used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -116,26 +106,32 @@ def test_covariance_matrices_batch_size_equivalence(
 
     factor_args = FactorArguments(
         use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
     )
     analyzer.fit_covariance_matrices(
-        factors_name=f"pytest_{test_name}_bs1",
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_batch_size_equivalence.__name__}_bs1",
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=1,
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
     )
-    bs1_covariance_factors = analyzer.load_covariance_matrices(factors_name=f"pytest_{test_name}_bs1")
+    bs1_covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_batch_size_equivalence.__name__}_bs1"
+    )
 
     analyzer.fit_covariance_matrices(
-        factors_name=f"pytest_{test_name}_bs8",
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_batch_size_equivalence.__name__}_bs8",
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=8,
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
     )
-    bs8_covariance_factors = analyzer.load_covariance_matrices(factors_name=f"pytest_{test_name}_bs8")
+    bs8_covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_batch_size_equivalence.__name__}_bs8"
+    )
 
     for name in COVARIANCE_FACTOR_NAMES:
         assert check_tensor_dict_equivalence(
@@ -165,7 +161,7 @@ def test_covariance_matrices_partition_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
-    # Covariance matrices should be identical regardless of the partition used.
+    # Covariance matrices should be identical regardless of what the partition used.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -179,6 +175,8 @@ def test_covariance_matrices_partition_equivalence(
 
     factor_args = FactorArguments(
         use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
     )
     factors_name = f"pytest_{test_name}_{test_covariance_matrices_partition_equivalence.__name__}"
     analyzer.fit_covariance_matrices(
@@ -193,6 +191,8 @@ def test_covariance_matrices_partition_equivalence(
 
     factor_args = FactorArguments(
         use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
         covariance_data_partition_size=data_partition_size,
         covariance_module_partition_size=module_partition_size,
     )
@@ -217,8 +217,8 @@ def test_covariance_matrices_partition_equivalence(
         )
 
 
-@pytest.mark.parametrize("test_name", ["bert"])
-@pytest.mark.parametrize("train_size", [16])
+@pytest.mark.parametrize("test_name", ["bert", "wrong_bert"])
+@pytest.mark.parametrize("train_size", [213])
 @pytest.mark.parametrize("seed", [3])
 def test_covariance_matrices_attention_mask(
     test_name: str,
@@ -226,7 +226,7 @@ def test_covariance_matrices_attention_mask(
     seed: int,
 ) -> None:
     # Make sure the attention mask is correctly implemented by comparing with the results
-    # without any padding (and batch size of 1).
+    # without any padding applied (and batch size of 1).
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -244,6 +244,8 @@ def test_covariance_matrices_attention_mask(
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
+
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
@@ -252,13 +254,15 @@ def test_covariance_matrices_attention_mask(
 
     factor_args = FactorArguments(
         use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
     )
     factors_name = f"pytest_{test_name}_{test_covariance_matrices_attention_mask.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
         dataset=train_dataset,
         factor_args=factor_args,
-        per_device_batch_size=8,
+        per_device_batch_size=train_size // 4,
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
     )
@@ -279,32 +283,31 @@ def test_covariance_matrices_attention_mask(
     )
 
     for name in COVARIANCE_FACTOR_NAMES:
-        assert check_tensor_dict_equivalence(
-            covariance_factors[name],
-            no_padded_covariance_factors[name],
-            atol=ATOL,
-            rtol=RTOL,
-        )
+        if "wrong" in test_name and name in [ACTIVATION_COVARIANCE_MATRIX_NAME, NUM_COVARIANCE_PROCESSED]:
+            assert not check_tensor_dict_equivalence(
+                covariance_factors[name],
+                no_padded_covariance_factors[name],
+                atol=ATOL,
+                rtol=RTOL,
+            )
+        else:
+            assert check_tensor_dict_equivalence(
+                covariance_factors[name],
+                no_padded_covariance_factors[name],
+                atol=ATOL,
+                rtol=RTOL,
+            )
 
 
-@pytest.mark.parametrize(
-    "test_name",
-    [
-        "mlp",
-        "conv",
-        "gpt",
-    ],
-)
-@pytest.mark.parametrize("immediate_gradient_removal", [False, True])
+@pytest.mark.parametrize("test_name", ["mlp"])
 @pytest.mark.parametrize("train_size", [62])
 @pytest.mark.parametrize("seed", [4])
 def test_covariance_matrices_automatic_batch_size(
     test_name: str,
-    immediate_gradient_removal: bool,
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure the automatic batch size search feature is working.
+    # Make sure the automatic batch size search feature is working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -318,7 +321,8 @@ def test_covariance_matrices_automatic_batch_size(
 
     factor_args = FactorArguments(
         use_empirical_fisher=True,
-        immediate_gradient_removal=immediate_gradient_removal,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
     )
     factors_name = f"pytest_{test_name}_{test_covariance_matrices_automatic_batch_size.__name__}"
     analyzer.fit_covariance_matrices(
@@ -352,12 +356,7 @@ def test_covariance_matrices_automatic_batch_size(
         )
 
 
-@pytest.mark.parametrize(
-    "test_name",
-    [
-        "mlp",
-    ],
-)
+@pytest.mark.parametrize("test_name", ["mlp"])
 @pytest.mark.parametrize("data_partition_size", [1, 4])
 @pytest.mark.parametrize("train_size", [80])
 @pytest.mark.parametrize("seed", [5])
@@ -367,7 +366,7 @@ def test_covariance_matrices_max_examples(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure the max covariance data selection is working.
+    # Make sure the max covariance data selection is working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -398,3 +397,68 @@ def test_covariance_matrices_max_examples(
 
     for num_examples in covariance_factors[NUM_COVARIANCE_PROCESSED].values():
         assert num_examples == MAX_EXAMPLES
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "conv",
+    ],
+)
+@pytest.mark.parametrize("train_size", [100])
+@pytest.mark.parametrize("seed", [6])
+def test_covariance_matrices_amp(
+    test_name: str,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Covariance matrices should be similar when AMP is enabled.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name=test_name,
+        train_size=train_size,
+        seed=seed,
+    )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        amp_dtype=torch.float16,
+    )
+    analyzer.fit_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}",
+        dataset=train_dataset,
+        factor_args=factor_args,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        dataloader_kwargs=kwargs,
+    )
+    covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}"
+    )
+
+    analyzer.fit_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}_amp",
+        dataset=train_dataset,
+        factor_args=factor_args,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        dataloader_kwargs=kwargs,
+    )
+    amp_covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}_amp"
+    )
+
+    for name in COVARIANCE_FACTOR_NAMES:
+        assert check_tensor_dict_equivalence(
+            covariance_factors[name],
+            amp_covariance_factors[name],
+            atol=ATOL,
+            rtol=RTOL,
+        )

@@ -5,7 +5,8 @@ import torch
 import torch.distributed as dist
 from accelerate.utils import find_batch_size, send_to_device
 from safetensors.torch import load_file, save_file
-from torch import nn
+from torch import autocast, nn
+from torch.cuda.amp import GradScaler
 from torch.utils import data
 from tqdm import tqdm
 
@@ -14,7 +15,9 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     load_factors,
     remove_attention_mask,
+    remove_gradient_scale,
     set_attention_mask,
+    set_gradient_scale,
     set_mode,
     synchronize_covariance_matrices,
     update_factor_args,
@@ -81,7 +84,7 @@ def covariance_matrices_exist(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
-    """Checks if covariance matrices exist at specified directory."""
+    """Checks if covariance matrices exist at the specified directory."""
     for factor_name in COVARIANCE_FACTOR_NAMES:
         save_path = covariance_matrices_save_path(
             output_dir=output_dir,
@@ -105,7 +108,7 @@ def fit_covariance_matrices_with_loader(
 
     Args:
         model (nn.Module):
-            The model that covariance matrices will be computed.
+            The model for which covariance matrices will be computed.
         state (State):
             The current process's information (e.g., device being used).
         task (Task):
@@ -115,20 +118,18 @@ def fit_covariance_matrices_with_loader(
         factor_args (FactorArguments):
             Arguments for computing covariance matrices.
         tracked_module_names (List[str], optional):
-            A list of module names that covariance matrices will be computed. If not specified, covariance
-            matrices will be computed for all tracked modules.
+            A list of module names for which covariance matrices will be computed. If not specified,
+            covariance matrices will be computed for all tracked modules.
 
     Returns:
         Tuple[torch.Tensor, FACTOR_TYPE]:
-            A tuple containing the number of data points processed, and computed covariance matrices in CPU.
-            The covariance matrices are organized in nested dictionaries, where the first key in the name of the
-            covariance matrix (e.g., activation covariance and gradient covariance) and the second key is
+            A tuple containing the number of data points processed and computed covariance matrices in CPU.
+            The covariance matrices are organized in nested dictionaries, where the first key is the name of the
+            covariance matrix (e.g., activation covariance and pseudo-gradient covariance) and the second key is
             the module name.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
-        remove_attention_mask(model=model)
-        set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
         set_mode(
             model=model,
             tracked_module_names=tracked_module_names,
@@ -136,6 +137,8 @@ def fit_covariance_matrices_with_loader(
         )
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
+    enable_amp = factor_args.amp_dtype is not None
+    scaler = GradScaler(enabled=enable_amp)
 
     with tqdm(
         total=len(loader),
@@ -152,12 +155,18 @@ def fit_covariance_matrices_with_loader(
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
-                loss = task.compute_train_loss(
-                    batch=batch,
-                    model=model,
-                    sample=not factor_args.use_empirical_fisher,
-                )
-                loss.backward()
+                with autocast(device_type=state.device.type, enabled=enable_amp, dtype=factor_args.amp_dtype):
+                    loss = task.compute_train_loss(
+                        batch=batch,
+                        model=model,
+                        sample=not factor_args.use_empirical_fisher,
+                    )
+                scaled_loss = scaler.scale(loss)
+                if enable_amp:
+                    gradient_scale = 1.0 / scaler.get_scale()
+                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
+                scaled_loss.backward()
+
             num_data_processed += find_batch_size(data=batch)
             total_steps += 1
 
@@ -172,7 +181,10 @@ def fit_covariance_matrices_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
+        del loss
+        model.zero_grad(set_to_none=True)
         remove_attention_mask(model=model)
+        remove_gradient_scale(model=model)
 
         if state.use_distributed:
             # Aggregate covariance matrices across multiple devices or nodes.

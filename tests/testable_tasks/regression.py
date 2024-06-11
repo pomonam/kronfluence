@@ -57,12 +57,17 @@ class RegressionTask(Task):
         sample: bool = False,
     ) -> torch.Tensor:
         inputs, targets = batch
+
+        if list(model.parameters())[1].dtype == torch.float64:
+            inputs = inputs.to(dtype=torch.float64)
+            targets = targets.to(dtype=torch.float64)
         outputs = model(inputs)
+
         if not sample:
             return F.mse_loss(outputs, targets, reduction="sum")
         with torch.no_grad():
-            sampled_targets = torch.normal(outputs, std=math.sqrt(0.5))
-        return F.mse_loss(outputs, sampled_targets.detach(), reduction="sum")
+            sampled_targets = torch.normal(outputs.detach(), std=math.sqrt(0.5))
+        return F.mse_loss(outputs, sampled_targets, reduction="sum")
 
     def compute_measurement(
         self,
