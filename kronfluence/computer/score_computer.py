@@ -17,6 +17,7 @@ from kronfluence.score.pairwise import (
     save_pairwise_scores,
 )
 from kronfluence.score.self import (
+    compute_self_measurement_scores_with_loaders,
     compute_self_scores_with_loaders,
     load_self_scores,
     save_self_scores,
@@ -498,7 +499,11 @@ class ScoreComputer(Computer):
                 allow_duplicates=True,
                 stack=True,
             )
-            compute_self_scores_with_loaders(
+            if score_args.use_measurement_for_self_influence:
+                func = compute_self_measurement_scores_with_loaders
+            else:
+                func = compute_self_scores_with_loaders
+            func(
                 model=self.model,
                 state=self.state,
                 task=self.task,
@@ -673,7 +678,11 @@ class ScoreComputer(Computer):
                         allow_duplicates=True,
                         stack=True,
                     )
-                    scores = compute_self_scores_with_loaders(
+                    if score_args.use_measurement_for_self_influence:
+                        func = compute_self_measurement_scores_with_loaders
+                    else:
+                        func = compute_self_scores_with_loaders
+                    scores = func(
                         model=self.model,
                         state=self.state,
                         task=self.task,

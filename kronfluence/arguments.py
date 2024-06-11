@@ -192,6 +192,10 @@ class ScoreArguments(Arguments):
         default=1,
         metadata={"help": "Number of query batches to aggregate over."},
     )
+    use_measurement_for_self_influence: bool = field(
+        default=False,
+        metadata={"help": "Whether to use the measurement (instead of the loss) for computing self-influence scores."},
+    )
 
     # Dtype configuration. #
     query_gradient_svd_dtype: torch.dtype = field(
