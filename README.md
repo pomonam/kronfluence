@@ -2,7 +2,6 @@
 <a href="#"><img width="380" img src="https://raw.githubusercontent.com/pomonam/kronfluence/main/.assets/kronfluence.svg" alt="Kronfluence"/></a>
 </p>
 
-
 <p align="center">
     <a href="https://pypi.org/project/kronfluence">
         <img alt="License" src="https://img.shields.io/pypi/v/kronfluence.svg?style=flat-square">

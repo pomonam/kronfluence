@@ -1,6 +1,7 @@
 # Kronfluence: Technical Documentation & FAQs
 
 For a detailed description of the methodology, please refer to the [**paper**](https://arxiv.org/abs/2308.03296) *Studying Large Language Model Generalization with Influence Functions*.
+
 ## Requirements
 
 Kronfluence has been tested and is compatible with the following versions of [PyTorch](https://pytorch.org/):
@@ -99,6 +100,7 @@ After calling `prepare_model`, you can create [DistributedDataParallel (DDP)](ht
 **Set up the Analyzer and Fit Factors.** 
 Initialize the `Analyzer` and execute `fit_all_factors` to compute all factors that aim to approximate the Hessian 
 (or Gauss-Newton Hessian). The computed factors will be stored on disk.
+
 ```python
 from kronfluence.analyzer import Analyzer
 from kronfluence.utils.dataset import DataLoaderKwargs
@@ -117,6 +119,7 @@ analyzer.fit_all_factors(factors_name="initial_factor", dataset=train_dataset)
 **Compute Influence Scores.** 
 Once the factors have been computed, you can compute pairwise and self-influence scores. When computing the scores,
 you can specify the factor name you would like to use. 
+
 ```python
 ...
 scores = analyzer.compute_pairwise_scores(
@@ -164,6 +167,7 @@ cause `TrackedModuleNotFoundError`.
 **My model uses supported modules, but influence scores are not computed.**
 Kronfluence uses module hooks to compute factors and influence scores. For these to be tracked and computed,
 the model's forward pass should directly call the module.
+
 ```python
 import torch
 from torch import nn
@@ -181,7 +185,6 @@ Please feel free to contact me by [filing an issue](https://github.com/pomonam/k
 ---
 
 ## Configuring Factors with FactorArguments
-
 
 ```python
 import torch
@@ -362,6 +365,7 @@ but `torch.float32` is recommended.
 ### Computing Influence Scores
 
 To compute pairwise influence scores (Equation 5 in the paper), you can run:
+
 ```python
 # Computing pairwise influence scores.
 analyzer.compute_pairwise_scores(scores_name="pairwise", factors_name="ekfac", score_args=score_args)
@@ -370,6 +374,7 @@ scores = analyzer.load_pairwise_scores(scores_name="pairwise")
 ```
 
 To compute self-influence scores (see Section 5.4 from [paper](https://arxiv.org/pdf/1703.04730.pdf)), you can run:
+
 ```python
 # Computing self-influence scores.
 analyzer.compute_self_scores(scores_name="self", factors_name="ekfac", score_args=score_args)
