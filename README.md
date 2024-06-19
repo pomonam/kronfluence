@@ -22,13 +22,13 @@
 
 ---
 
-> **Kronfluence** is a research repository designed to compute [influence functions](https://arxiv.org/abs/1703.04730) using [Kronecker-factored Approximate Curvature (KFAC)](https://arxiv.org/abs/1503.05671) or [Eigenvalue-corrected KFAC (EKFAC)](https://arxiv.org/abs/1806.03884).
+> **Kronfluence** is a PyTorch package designed to compute [influence functions](https://arxiv.org/abs/1703.04730) using [Kronecker-factored Approximate Curvature (KFAC)](https://arxiv.org/abs/1503.05671) or [Eigenvalue-corrected KFAC (EKFAC)](https://arxiv.org/abs/1806.03884).
 For a detailed description of the methodology, see the [**paper**](https://arxiv.org/abs/2308.03296) *Studying Large Language Model Generalization with Influence Functions*.
 
 ---
 
 > [!WARNING]
-> This repository is under active development and has not reached its first stable release.
+> This repository is under development and has not reached its first stable release.
 
 ## Installation
 
@@ -53,11 +53,9 @@ pip install -e .
 
 ## Getting Started
 
-Kronfluence supports influence computations on `nn.Linear` and `nn.Conv2d` modules. See the [**Technical Documentation**](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) page for a comprehensive guide.
+Kronfluence supports influence computations on [`nn.Linear`](https://pytorch.org/docs/stable/generated/torch.nn.Linear.html) and [`nn.Conv2d`](https://pytorch.org/docs/stable/generated/torch.nn.Conv2d.html) modules. 
+See the [**Technical Documentation**](https://github.com/pomonam/kronfluence/blob/main/DOCUMENTATION.md) page for a comprehensive guide.
 
-### Learn More
-
-The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples demonstrating how to use Kronfluence. More examples will be added in the future.
 **TL;DR** You need to prepare a trained model and datasets, and pass them into the `Analyzer` class.
 
 ```python
@@ -115,6 +113,8 @@ analyzer.compute_pairwise_scores(
 scores = analyzer.load_pairwise_scores(scores_name="my_scores")
 ```
 
+The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples demonstrating how to use Kronfluence. 
+
 ## Contributing
 
 Contributions are welcome! To get started, please review our [Code of Conduct](https://github.com/pomonam/kronfluence/blob/main/CODE_OF_CONDUCT.md). For bug fixes, please submit a pull request. 
@@ -130,6 +130,14 @@ git clone https://github.com/pomonam/kronfluence.git
 cd kronfluence
 pip install -e ."[dev]"
 ```
+
+## LogIX
+
+While Kronfluence supports influence function computations on large-scale models like `Meta-Llama-3-8B-Instruct`, for those 
+interested in running influence analysis on even larger models or with a high number of query data points, our another
+project [LogIX](https://github.com/logix-project/logix) may be worth exploring. It integrates with frameworks like 
+[HuggingFace Trainer](https://huggingface.co/docs/transformers/en/main_classes/trainer) and [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) 
+and is compatible with many existing PyTorch features (DDP & FSDP). 
 
 ## Acknowledgements
 
