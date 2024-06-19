@@ -400,10 +400,10 @@ scores = analyzer.load_self_scores(scores_name="self")
 
 By default, self-influence score computations only use the loss function for gradient calculations. 
 In this case, the method returns a vector of size `len(train_dataset)`, where each value corresponds 
-to `g_l ⋅ H^{-1} ⋅ g_l`. Here, `g_l` denotes the gradient of the loss function with respect to the model parameters, 
+to `g_l^T ⋅ H^{-1} ⋅ g_l`. Here, `g_l` denotes the gradient of the loss function with respect to the model parameters, 
 and `H^{-1}` represents the inverse Hessian matrix. If you want to use the measurement function instead of the loss function 
 for self-influence calculations, set `use_measurement_for_self_influence=True`. In this case, each value in the returned 
-vector will correspond to `g_m ⋅ H^{-1} ⋅ g_l`, where `g_m` is the gradient of the measurement function with respect to the model parameters.
+vector will correspond to `g_m^T ⋅ H^{-1} ⋅ g_l`, where `g_m` is the gradient of the measurement function with respect to the model parameters.
 
 **Dealing with OOMs.** Here are some steps to fix Out of Memory (OOM) errors.
 1. Try reducing the `per_device_query_batch_size` or `per_device_train_batch_size`.
