@@ -63,7 +63,7 @@ class CompileTest(unittest.TestCase):
             overwrite_output_dir=True,
         )
         new_covariance_factors = self.analyzer.load_covariance_matrices(factors_name=NEW_FACTOR_NAME)
-
+        print(new_covariance_factors)
         for name in COVARIANCE_FACTOR_NAMES:
             for module_name in covariance_factors[name]:
                 print(f"Name: {name, module_name}")
