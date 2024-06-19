@@ -95,7 +95,7 @@ def wrap_tracked_modules(
             "custom layers, consider rewriting your model to use the supported modules, "
             "or define your own custom module by subclassing `TrackedModule`."
         )
-        error_msg += f"\n{model}"
+        error_msg += f"\nCurrent Model:\n{model}"
         raise IllegalTaskConfigurationError(error_msg)
 
     return model
@@ -247,6 +247,7 @@ def set_mode(
 def load_factors(
     model: nn.Module,
     factor_name: str,
+    clone: bool = False,
 ) -> Dict[str, torch.Tensor]:
     """Loads factors with the given name from all `TrackedModule` instances within a model."""
     loaded_factors = {}
@@ -254,7 +255,7 @@ def load_factors(
         if isinstance(module, TrackedModule):
             factor = module.get_factor(factor_name=factor_name)
             if factor is not None:
-                loaded_factors[module.name] = factor
+                loaded_factors[module.name] = factor.clone() if clone else factor
     if len(loaded_factors) == 0:
         raise TrackedModuleNotFoundError(
             f"Tracked modules not found when trying to load factors with name `{factor_name}`."

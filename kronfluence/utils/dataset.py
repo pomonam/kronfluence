@@ -17,7 +17,7 @@ T_co = TypeVar("T_co", covariant=True)
 @dataclass
 class DataLoaderKwargs(KwargsHandler):
     """The object used to customize `DataLoader`. Please refer to https://pytorch.org/docs/stable/data.html for
-    detailed information of each argument. The default arguments are copied from PyTorch version 2.2.
+    detailed information of each argument. The default arguments are copied from PyTorch version 2.3.
     """
 
     num_workers: int = 0
@@ -115,7 +115,7 @@ class DistributedSamplerWithStack(Sampler[T_co]):
     """DistributedSampleWithStack is different from `DistributedSampler`. Instead of subsampling,
     it stacks the dataset. For example, when `num_replicas` is 3, and the dataset of [0, ..., 9] is given,
     the first, second, and third rank should have [0, 1, 2], [3, 4, 5], and [6, 7, 8], respectively. However,
-    it still adds extra samples to make the dataset evenly divisible.
+    it still adds extra samples to make the dataset evenly divisible (different from DistributedEvalSampler).
     """
 
     def __init__(  # pylint: disable=super-init-not-called

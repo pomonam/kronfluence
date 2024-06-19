@@ -38,6 +38,7 @@ from kronfluence.utils.exceptions import (
     TrackedModuleNotFoundError,
 )
 from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger
+from kronfluence.utils.model import apply_ddp
 from kronfluence.utils.save import (
     FACTOR_ARGUMENTS_NAME,
     FACTOR_SAVE_PREFIX,
@@ -90,11 +91,11 @@ class Computer(ABC):
                 "for DDP, please pass in the model after the manual DDP wrapping."
             )
             self.logger.warning(warning_msg)
-            self.model.to(self.state.device)
-            self.model = DDP(
-                self.model,
-                device_ids=[self.state.local_process_index],
-                output_device=self.state.local_process_index,
+            self.model = apply_ddp(
+                model=self.model,
+                local_rank=self.state.local_process_index,
+                rank=self.state.process_index,
+                world_size=self.state.num_processes,
             )
 
         if cpu and isinstance(model, (DataParallel, DDP, FSDP)):
@@ -396,7 +397,7 @@ class Computer(ABC):
             covariance_factors = self.load_covariance_matrices(factors_name=factors_name)
             if covariance_factors is None:
                 error_msg = (
-                    f"Strategy `{factor_args.strategy}` computing covariance matrices. "
+                    f"Strategy `{factor_args.strategy}` requires computing covariance matrices. "
                     f"However, the covariance matrices were not found."
                 )
                 self.logger.error(error_msg)
@@ -407,7 +408,7 @@ class Computer(ABC):
             eigen_factors = self.load_eigendecomposition(factors_name=factors_name)
             if eigen_factors is None:
                 error_msg = (
-                    f"Strategy `{factor_args.strategy}` computing Eigendecomposition. "
+                    f"Strategy `{factor_args.strategy}` requires computing Eigendecomposition. "
                     f"However, the Eigendecomposition results were not found."
                 )
                 self.logger.error(error_msg)
@@ -418,7 +419,7 @@ class Computer(ABC):
             lambda_factors = self.load_lambda_matrices(factors_name=factors_name)
             if lambda_factors is None:
                 error_msg = (
-                    f"Strategy `{factor_args.strategy}` computing Lambda matrices. "
+                    f"Strategy `{factor_args.strategy}` requires computing Lambda matrices. "
                     f"However, the Lambda matrices were not found."
                 )
                 self.logger.error(error_msg)

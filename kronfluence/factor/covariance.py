@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.distributed as dist
@@ -8,6 +8,7 @@ from safetensors.torch import load_file, save_file
 from torch import autocast, nn
 from torch.cuda.amp import GradScaler
 from torch.utils import data
+from torch.utils.checkpoint import checkpoint_sequential
 from tqdm import tqdm
 
 from kronfluence.arguments import FactorArguments
@@ -135,10 +136,16 @@ def fit_covariance_matrices_with_loader(
             tracked_module_names=tracked_module_names,
             mode=ModuleMode.COVARIANCE,
         )
+
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
     enable_amp = factor_args.amp_dtype is not None
     scaler = GradScaler(enabled=enable_amp)
+    if enable_amp:
+        gradient_scale = 1.0 / scaler.get_scale()
+        set_gradient_scale(model=model, gradient_scale=gradient_scale)
+    if factor_args.compile_mode is not None:
+        model = torch.compile(model, mode=factor_args.compile_mode)
 
     with tqdm(
         total=len(loader),
@@ -162,9 +169,6 @@ def fit_covariance_matrices_with_loader(
                         sample=not factor_args.use_empirical_fisher,
                     )
                 scaled_loss = scaler.scale(loss)
-                if enable_amp:
-                    gradient_scale = 1.0 / scaler.get_scale()
-                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_loss.backward()
 
             num_data_processed += find_batch_size(data=batch)
@@ -181,11 +185,6 @@ def fit_covariance_matrices_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
-        del loss
-        model.zero_grad(set_to_none=True)
-        remove_attention_mask(model=model)
-        remove_gradient_scale(model=model)
-
         if state.use_distributed:
             # Aggregate covariance matrices across multiple devices or nodes.
             synchronize_covariance_matrices(model=model)
@@ -194,7 +193,13 @@ def fit_covariance_matrices_with_loader(
 
         saved_factors: FACTOR_TYPE = {}
         for factor_name in COVARIANCE_FACTOR_NAMES:
-            saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name)
+            saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=True)
         state.wait_for_everyone()
+
+        # Clean up the memory.
+        model.zero_grad(set_to_none=True)
+        remove_attention_mask(model=model)
+        remove_gradient_scale(model=model)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
+
     return num_data_processed, saved_factors

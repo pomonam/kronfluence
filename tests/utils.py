@@ -12,10 +12,10 @@ from kronfluence.task import Task
 from kronfluence.utils.exceptions import UnsupportableModuleError
 from tests.testable_tasks.classification import (
     ClassificationTask,
+    WrongClassificationTask,
     make_classification_dataset,
     make_conv_bn_model,
     make_conv_model,
-    WrongClassificationTask,
 )
 from tests.testable_tasks.language_modeling import (
     LanguageModelingTask,
@@ -23,6 +23,7 @@ from tests.testable_tasks.language_modeling import (
     make_tiny_gpt,
 )
 from tests.testable_tasks.regression import (
+    GradientCheckpointRegressionTask,
     RegressionTask,
     make_mlp_model,
     make_regression_dataset,
@@ -69,6 +70,12 @@ def prepare_test(
         train_dataset = make_regression_dataset(num_data=train_size, seed=seed)
         query_dataset = make_regression_dataset(num_data=query_size, seed=seed + 1)
         task = RegressionTask()
+        data_collator = None
+    elif test_name == "mlp_checkpoint":
+        model = make_mlp_model(seed=seed)
+        train_dataset = make_regression_dataset(num_data=train_size, seed=seed)
+        query_dataset = make_regression_dataset(num_data=query_size, seed=seed + 1)
+        task = GradientCheckpointRegressionTask()
         data_collator = None
     elif test_name == "conv":
         model = make_conv_model(seed=seed)

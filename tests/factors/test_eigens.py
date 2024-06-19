@@ -27,6 +27,7 @@ from tests.utils import (
     [
         "mlp",
         "repeated_mlp",
+        "mlp_checkpoint",
         "conv",
         "conv_bn",
         "bert",
@@ -387,3 +388,70 @@ def test_lambda_matrices_max_examples(
     )
     for num_examples in lambda_factors[NUM_LAMBDA_PROCESSED].values():
         assert num_examples == MAX_EXAMPLES
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "conv",
+    ],
+)
+@pytest.mark.parametrize("train_size", [100])
+@pytest.mark.parametrize("seed", [8])
+def test_lambda_matrices_amp(
+    test_name: str,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Lambda matrices should be similar when AMP is enabled.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name=test_name,
+        train_size=train_size,
+        seed=seed,
+    )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        lambda_dtype=torch.float64,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}",
+        dataset=train_dataset,
+        factor_args=factor_args,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        dataloader_kwargs=kwargs,
+    )
+    lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}"
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        amp_dtype=torch.float16,
+        lambda_dtype=torch.float64,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}_amp",
+        dataset=train_dataset,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+        dataloader_kwargs=kwargs,
+    )
+    amp_lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}_amp",
+    )
+
+    for name in LAMBDA_FACTOR_NAMES:
+        assert check_tensor_dict_equivalence(lambda_factors[name], amp_lambda_factors[name], atol=1e-01, rtol=1e-02)

@@ -51,6 +51,10 @@ class FactorArguments(Arguments):
         default=None,
         metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
     )
+    compile_mode: Optional[str] = field(
+        default=None,
+        metadata={"help": "Mode for torch compile. Disables torch compile if None."},
+    )
 
     # Configuration for fitting covariance matrices. #
     covariance_max_examples: Optional[int] = field(
@@ -156,6 +160,10 @@ class ScoreArguments(Arguments):
     amp_dtype: Optional[torch.dtype] = field(
         default=None,
         metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
+    )
+    compile_mode: Optional[str] = field(
+        default=None,
+        metadata={"help": "Mode for torch compile. Disables torch compile if None."},
     )
 
     # Partition configuration. #

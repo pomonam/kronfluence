@@ -132,7 +132,7 @@ The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder
 ## LogIX
 
 While Kronfluence supports influence function computations on large-scale models like `Meta-Llama-3-8B-Instruct`, for those 
-interested in running influence analysis on even larger models or with a high number of query data points, our
+interested in running influence analysis on even larger models or with a large number of query data points, our
 project [LogIX](https://github.com/logix-project/logix) may be worth exploring. It integrates with frameworks like 
 [HuggingFace Trainer](https://huggingface.co/docs/transformers/en/main_classes/trainer) and [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) 
 and is compatible with many PyTorch features (DDP & FSDP & DeepSpeed). 

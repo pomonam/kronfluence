@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple
 import torch
 import torch.distributed as dist
 from accelerate.utils import find_batch_size, send_to_device
+from accelerate.utils.memory import should_reduce_batch_size
 from safetensors.torch import load_file, save_file
 from torch import autocast, nn
 from torch.cuda.amp import GradScaler
@@ -37,7 +38,7 @@ from kronfluence.utils.constants import (
     PARTITION_TYPE,
 )
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
-from kronfluence.utils.state import State, no_sync
+from kronfluence.utils.state import State, no_sync, release_memory
 
 
 def eigendecomposition_save_path(
@@ -147,11 +148,24 @@ def perform_eigendecomposition(
                     covariance_factors[NUM_COVARIANCE_PROCESSED][module_name].to(device=state.device)
                 )
                 # In cases where covariance matrices are not exactly symmetric due to numerical issues.
-                covariance_matrix = 0.5 * (covariance_matrix + covariance_matrix.t())
-                eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
-                eigen_factors[eigenvalues_name][module_name] = eigenvalues.to(dtype=original_dtype).contiguous().cpu()
-                eigen_factors[eigenvectors_name][module_name] = eigenvectors.to(dtype=original_dtype).contiguous().cpu()
-                del eigenvalues, eigenvectors
+                covariance_matrix = covariance_matrix + covariance_matrix.t()
+                covariance_matrix.mul_(0.5)
+                try:
+                    eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    # If we get OOM error, release the memory and try again.
+                    if should_reduce_batch_size(exception=e):  # pylint: disable=no-else-continue
+                        release_memory()
+                        eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
+                    else:
+                        raise
+                eigen_factors[eigenvalues_name][module_name] = (
+                    eigenvalues.to(dtype=original_dtype).contiguous().cpu().clone()
+                )
+                eigen_factors[eigenvectors_name][module_name] = (
+                    eigenvectors.to(dtype=original_dtype).contiguous().cpu().clone()
+                )
+                del covariance_matrix, eigenvalues, eigenvectors
             pbar.update(1)
     return eigen_factors
 
@@ -264,10 +278,16 @@ def fit_lambda_matrices_with_loader(
         if eigen_factors is not None:
             for name in eigen_factors:
                 set_factors(model=model, factor_name=name, factors=eigen_factors[name])
+
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
     enable_amp = factor_args.amp_dtype is not None
     scaler = GradScaler(enabled=enable_amp)
+    if enable_amp:
+        gradient_scale = 1.0 / scaler.get_scale()
+        set_gradient_scale(model=model, gradient_scale=gradient_scale)
+    if factor_args.compile_mode is not None:
+        model = torch.compile(model, mode=factor_args.compile_mode)
 
     with tqdm(
         total=len(loader),
@@ -287,9 +307,6 @@ def fit_lambda_matrices_with_loader(
                         sample=not factor_args.use_empirical_fisher,
                     )
                 scaled_loss = scaler.scale(loss)
-                if enable_amp:
-                    gradient_scale = 1.0 / scaler.get_scale()
-                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_loss.backward()
 
             num_data_processed += find_batch_size(data=batch)
@@ -306,10 +323,6 @@ def fit_lambda_matrices_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
-        del loss
-        remove_gradient_scale(model=model)
-        model.zero_grad(set_to_none=True)
-
         if state.use_distributed:
             # Aggregate Lambda matrices across multiple devices or nodes.
             synchronize_lambda_matrices(model=model)
@@ -319,7 +332,12 @@ def fit_lambda_matrices_with_loader(
         saved_factors: FACTOR_TYPE = {}
         if state.is_main_process:
             for factor_name in LAMBDA_FACTOR_NAMES:
-                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name)
+                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=True)
         state.wait_for_everyone()
+
+        # Clean up the memory.
+        model.zero_grad(set_to_none=True)
+        remove_gradient_scale(model=model)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
+
     return num_data_processed, saved_factors

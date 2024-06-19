@@ -272,7 +272,7 @@ class TrackedModule(nn.Module):
         if self._storage[NUM_COVARIANCE_PROCESSED] is None:
             device = None
             if isinstance(count, torch.Tensor):
-                # When using attention masks, `count` can be tensor.
+                # When using attention masks, `count` can be a tensor.
                 device = count.device
             self._storage[NUM_COVARIANCE_PROCESSED] = torch.zeros(
                 size=(1,),
@@ -392,7 +392,7 @@ class TrackedModule(nn.Module):
     def _compute_per_sample_gradient(
         self, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
-        """Returns the flattened per-sample-gradient tensor. For the brief introduction to
+        """Returns the flattened per-sample-gradient tensor. For a brief introduction to
         per-sample-gradients, see https://pytorch.org/functorch/stable/notebooks/per_sample_grads.html.
 
         Args:
@@ -577,12 +577,12 @@ class TrackedModule(nn.Module):
         )
         rank = self.score_args.query_gradient_rank
         # Avoid holding the full memory of the original tensor before indexing.
-        U_k = U[:, :, :rank].clone()
-        S_k = S[:, :rank].clone()
-        V_k = V[:, :rank, :].clone()
+        U_k = U[:, :, :rank]
+        S_k = S[:, :rank]
+        V_k = V[:, :rank, :].contiguous().clone()
         return [
-            torch.matmul(U_k, torch.diag_embed(S_k)).to(dtype=self.score_args.score_dtype).contiguous(),
-            V_k.to(dtype=self.score_args.score_dtype).contiguous(),
+            torch.matmul(U_k, torch.diag_embed(S_k)).to(dtype=self.score_args.score_dtype).contiguous().clone(),
+            V_k.to(dtype=self.score_args.score_dtype),
         ]
 
     def _register_precondition_gradient_hooks(self) -> None:
@@ -647,6 +647,7 @@ class TrackedModule(nn.Module):
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
 
+    @torch.no_grad()
     def aggregate_preconditioned_gradient(self):
         """Aggregates the preconditioned per-sample-gradients."""
         if self._storage[PRECONDITIONED_GRADIENT_NAME] is None:
@@ -670,8 +671,6 @@ class TrackedModule(nn.Module):
                         dim=0,
                     ),
                 ]
-                del self._storage[PRECONDITIONED_GRADIENT_NAME]
-                self._storage[PRECONDITIONED_GRADIENT_NAME] = None
             else:
                 self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = self._storage[PRECONDITIONED_GRADIENT_NAME]
         else:
@@ -688,6 +687,9 @@ class TrackedModule(nn.Module):
             else:
                 self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = self._storage[PRECONDITIONED_GRADIENT_NAME]
 
+        del self._storage[PRECONDITIONED_GRADIENT_NAME]
+        self._storage[PRECONDITIONED_GRADIENT_NAME] = None
+
     def _release_preconditioned_gradient(self) -> None:
         """Clears the preconditioned per-sample-gradient from memory."""
         del self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME]
@@ -697,14 +699,6 @@ class TrackedModule(nn.Module):
         self._cached_activations = []
         del self._cached_per_sample_gradient
         self._cached_per_sample_gradient = None
-
-    def get_preconditioned_gradient_batch_size(self) -> Optional[int]:
-        """Returns the saved batch dimension for the preconditioned gradient."""
-        if self._storage[PRECONDITIONED_GRADIENT_NAME] is not None:
-            if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
-                return self._storage[PRECONDITIONED_GRADIENT_NAME][0].size(0)
-            return self._storage[PRECONDITIONED_GRADIENT_NAME].size(0)
-        return None
 
     @torch.no_grad()
     def truncate_preconditioned_gradient(self, keep_size: int) -> None:

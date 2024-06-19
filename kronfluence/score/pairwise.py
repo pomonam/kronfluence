@@ -104,6 +104,7 @@ def _compute_dot_products_with_loader(
             tracked_module_names=tracked_module_names,
             keep_factors=True,
         )
+
     dataset_size = len(train_loader.dataset)
     score_chunks: Dict[str, List[torch.Tensor]] = {}
     if score_args.per_module_score:
@@ -112,9 +113,15 @@ def _compute_dot_products_with_loader(
                 score_chunks[module.name] = []
     else:
         score_chunks[ALL_MODULE_NAME] = []
+
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
     scaler = GradScaler(enabled=enable_amp)
+    if enable_amp:
+        gradient_scale = 1.0 / scaler.get_scale()
+        set_gradient_scale(model=model, gradient_scale=gradient_scale)
+    if score_args.compile_mode is not None:
+        model = torch.compile(model, mode=score_args.compile_mode)
 
     with tqdm(
         total=len(train_loader),
@@ -134,10 +141,8 @@ def _compute_dot_products_with_loader(
                         sample=False,
                     )
                 scaled_loss = scaler.scale(loss)
-                if enable_amp:
-                    gradient_scale = 1.0 / scaler.get_scale()
-                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_loss.backward()
+
             total_steps += 1
 
             with torch.no_grad():
@@ -153,18 +158,20 @@ def _compute_dot_products_with_loader(
                     for module in model.modules():
                         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
                             if pairwise_scores is None:
-                                pairwise_scores = module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME)
+                                pairwise_scores = module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME).clone()
                             else:
                                 pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
                     score_chunks[ALL_MODULE_NAME].append(pairwise_scores.cpu())
                 release_scores(model=model)
 
             if state.use_distributed and total_steps % score_args.distributed_sync_steps == 0:
+                # Periodically synchronize all processes to avoid timeout at the final synchronization.
                 state.wait_for_everyone()
 
             pbar.update(1)
 
     with torch.no_grad():
+        # Clean up the memory.
         model.zero_grad(set_to_none=True)
         remove_gradient_scale(model=model)
         set_mode(
@@ -173,11 +180,12 @@ def _compute_dot_products_with_loader(
             tracked_module_names=tracked_module_names,
             keep_factors=False,
         )
+        release_memory()
+
         total_scores: SCORE_TYPE = {}
         for module_name, chunks in score_chunks.items():
             total_scores[module_name] = torch.cat(chunks, dim=1)
             if state.use_distributed:
-                release_memory()
                 total_scores[module_name] = total_scores[module_name].to(device=state.device)
                 gather_list = None
                 if state.is_main_process:
@@ -185,7 +193,7 @@ def _compute_dot_products_with_loader(
                 torch.distributed.gather(total_scores[module_name], gather_list)
                 if state.is_main_process:
                     total_scores[module_name] = torch.cat(gather_list, dim=1)[:, :dataset_size].cpu()
-    state.wait_for_everyone()
+        state.wait_for_everyone()
     return total_scores
 
 
@@ -262,6 +270,9 @@ def compute_pairwise_scores_with_loaders(
     num_aggregates = 0
     enable_amp = score_args.amp_dtype is not None
     scaler = GradScaler(enabled=enable_amp)
+    if enable_amp:
+        gradient_scale = 1.0 / scaler.get_scale()
+        set_gradient_scale(model=model, gradient_scale=gradient_scale)
 
     with tqdm(
         total=num_batches,
@@ -281,9 +292,6 @@ def compute_pairwise_scores_with_loaders(
                 with autocast(device_type=state.device.type, enabled=enable_amp, dtype=score_args.amp_dtype):
                     measurement = task.compute_measurement(batch=query_batch, model=model)
                 scaled_measurement = scaler.scale(measurement)
-                if enable_amp:
-                    gradient_scale = 1.0 / scaler.get_scale()
-                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
                 scaled_measurement.backward()
 
             if state.use_distributed:
@@ -296,12 +304,13 @@ def compute_pairwise_scores_with_loaders(
 
             aggregate_preconditioned_gradient(model=model)
             num_aggregates += 1
-            del query_batch, measurement
+            del query_batch, measurement, scaled_measurement
             model.zero_grad(set_to_none=True)
             remove_gradient_scale(model=model)
             release_memory()
 
             if num_aggregates < score_args.num_query_gradient_aggregations and query_index != len(query_loader) - 1:
+                pbar.update(1)
                 continue
 
             # Compute the dot product between preconditioning query gradient and all training gradients.
@@ -325,9 +334,13 @@ def compute_pairwise_scores_with_loaders(
             pbar.update(1)
 
     with torch.no_grad():
-        set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
         if state.is_main_process:
             for module_name in total_scores_chunks:
                 total_scores_chunks[module_name] = torch.cat(total_scores_chunks[module_name], dim=0)
         state.wait_for_everyone()
+
+        # Clean up the memory.
+        model.zero_grad(set_to_none=True)
+        set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
+
     return total_scores_chunks
