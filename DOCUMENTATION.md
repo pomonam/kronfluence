@@ -181,7 +181,7 @@ def forward(x: torch.Tensor) -> torch.Tensor:
 
 **Why are there so many arguments?**
 Kronfluence was originally developed to compute influence scores on large-scale models, which is why `FactorArguments` and `ScoreArguments` 
-have numerous parameters to support these use cases. However, for most standard applications, the default argument values 
+have many parameters to support these use cases. However, for most standard applications, the default argument values 
 should suffice. Feel free to use the default settings unless you have specific requirements that necessitate customization.
 
 **I get X error when fitting factors/computing scores.**
@@ -357,7 +357,7 @@ score_args = ScoreArguments(
 ```
 
 - `damping`: A damping factor for the damped inverse Hessian-vector product (iHVP). Uses a heuristic based on mean eigenvalues 
-(0.1 x mean eigenvalues) if None, as done for the paper.
+`(0.1 x mean eigenvalues)` if `None`, as done in [this paper](https://arxiv.org/abs/2308.03296).
 - `cached_activation_cpu_offload`: Whether to offload cached activations to CPU.
 - `amp_dtype`: Selects the dtype for [automatic mixed precision (AMP)](https://pytorch.org/docs/stable/amp.html). Disables AMP if set to `None`.
 - `compile_model`: Selects the mode for [torch compile](https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html). Disables torch compile if set to `None`.
@@ -365,7 +365,8 @@ score_args = ScoreArguments(
 - `module_partition_size`: Number of module partitions for computing influence scores.
 - `per_module_score`: Whether to return a per-module influence scores. Instead of summing over influences across
 all modules, this will keep track of intermediate module-wise scores. 
-- `per_token_score`: Whether to return a per-token influence scores.
+- `per_token_score`: Whether to return a per-token influence scores. Instead of summing over influence scores across
+all tokens, this will keep track of influence scores for each token. Note that this is only supported for Transformer-based models (language modeling).
 - `query_gradient_rank`: The rank for the query batching (low-rank approximation to the query gradient; see Section 3.2.2). If `None`, no query batching will be used.
 - `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can also use `torch.float64`.
 - `num_query_gradient_aggregations`: Number of query gradients to aggregate over. For example, when `num_query_gradient_aggregations = 2` with 

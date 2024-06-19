@@ -37,11 +37,8 @@ if __name__ == "__main__":
         },
         packages=find_packages(),
         keywords=[
-            "PyTorch",
             "Training Data Attribution",
             "Influence Functions",
-            "KFAC",
-            "EKFAC",
         ],
         classifiers=[
             "Development Status :: 3 - Alpha",
