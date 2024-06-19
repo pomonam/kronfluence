@@ -349,7 +349,6 @@ class TrackedModule(nn.Module):
         self._update_activation_covariance_matrix(inputs.detach())
 
     def _covariance_post_forward(self, outputs: Any) -> Any:
-        @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             # Compute and update pseudo-gradient covariance matrix in the backward pass.
             self._update_gradient_covariance_matrix(output_gradient.detach())
