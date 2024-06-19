@@ -389,7 +389,7 @@ analyzer.compute_pairwise_scores(scores_name="pairwise", factors_name="ekfac", s
 scores = analyzer.load_pairwise_scores(scores_name="pairwise")
 ```
 
-To compute self-influence scores (see **Section 5.4** from [paper](https://arxiv.org/pdf/1703.04730.pdf)), you can run:
+To compute self-influence scores (see **Section 5.4** from [this paper](https://arxiv.org/pdf/1703.04730.pdf)), you can run:
 
 ```python
 # Computing self-influence scores.
