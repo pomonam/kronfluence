@@ -42,7 +42,7 @@ query_dataset = prepare_query_dataset()
 **Define a Task.**
 To compute influence scores, you need to define a [`Task`](https://github.com/pomonam/kronfluence/blob/main/kronfluence/task.py) class.
 This class contains information about the trained model and how influence scores will be computed:
-(1) how to compute the training loss; (2) how to compute the measurable quantity (f(θ) in the [paper](https://arxiv.org/abs/2308.03296); see Equation 5);
+(1) how to compute the training loss; (2) how to compute the measurable quantity (f(θ) in the [paper](https://arxiv.org/abs/2308.03296); see **Equation 5**);
 (3) which modules to use for influence function computations; and (4) whether the model used [attention mask](https://huggingface.co/docs/transformers/en/glossary#attention-mask).
 
 ```python
@@ -245,7 +245,7 @@ analyzer.fit_covariance_matrices(factors_name="initial_factor", dataset=train_da
 covariance_matrices = analyzer.load_covariance_matrices(factors_name="initial_factor")
 ```
 
-This step corresponds to Equation 16 in the paper. You can tune:
+This step corresponds to **Equation 16** in the paper. You can tune:
 - `covariance_max_examples`: Controls the maximum number of data points for fitting covariance matrices. Setting it to `None`,
 Kronfluence computes covariance matrices for all data points.
 - `covariance_data_partition_size`: Number of data partitions to use for computing covariance matrices. 
@@ -278,7 +278,7 @@ analyzer.perform_eigendecomposition(factors_name="initial_factor", factor_args=f
 eigen_factors = analyzer.load_eigendecomposition(factors_name="initial_factor")
 ```
 
-This corresponds to Equation 18 in the paper. You can tune:
+This corresponds to **Equation 18** in the paper. You can tune:
 - `eigendecomposition_dtype`: `dtype` for performing eigendecomposition. You can also use `torch.float32`,
 but `torch.float64` is strongly recommended.
 
@@ -293,7 +293,7 @@ analyzer.fit_lambda_matrices(factors_name="initial_factor", dataset=train_datase
 lambda_matrices = analyzer.load_lambda_matrices(factors_name="initial_factor")
 ```
 
-This corresponds to Equation 20 in the paper. You can tune:
+This corresponds to **Equation 20** in the paper. You can tune:
 - `lambda_max_examples`: Controls the maximum number of data points for fitting Lambda matrices.
 - `lambda_data_partition_size`: Number of data partitions to use for computing Lambda matrices. 
 - `lambda_module_partition_size`: Number of module partitions to use for computing Lambda matrices. 
@@ -368,7 +368,7 @@ score_args = ScoreArguments(
 all modules, this will keep track of intermediate module-wise scores. 
 - `per_token_score`: Whether to return a per-token influence scores. Instead of summing over influence scores across
 all tokens, this will keep track of influence scores for each token. Note that this is only supported for Transformer-based models (language modeling).
-- `query_gradient_rank`: The rank for the query batching (low-rank approximation to the query gradient; see Section 3.2.2). If `None`, no query batching will be used.
+- `query_gradient_rank`: The rank for the query batching (low-rank approximation to the query gradient; see **Section 3.2.2**). If `None`, no query batching will be used.
 - `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can also use `torch.float64`.
 - `num_query_gradient_aggregations`: Number of query gradients to aggregate over. For example, when `num_query_gradient_aggregations = 2` with 
 `query_batch_size = 16`, a total of 32 query gradients will be stored in memory when computing dot products with training gradients.
@@ -380,7 +380,7 @@ but `torch.float32` is recommended.
 
 ### Computing Influence Scores
 
-To compute pairwise influence scores (Equation 5 in the paper), you can run:
+To compute pairwise influence scores (**Equation 5** in the paper), you can run:
 
 ```python
 # Computing pairwise influence scores.
@@ -389,7 +389,7 @@ analyzer.compute_pairwise_scores(scores_name="pairwise", factors_name="ekfac", s
 scores = analyzer.load_pairwise_scores(scores_name="pairwise")
 ```
 
-To compute self-influence scores (see Section 5.4 from [paper](https://arxiv.org/pdf/1703.04730.pdf)), you can run:
+To compute self-influence scores (see **Section 5.4** from [paper](https://arxiv.org/pdf/1703.04730.pdf)), you can run:
 
 ```python
 # Computing self-influence scores.
@@ -397,6 +397,13 @@ analyzer.compute_self_scores(scores_name="self", factors_name="ekfac", score_arg
 # Loading self-influence scores.
 scores = analyzer.load_self_scores(scores_name="self")
 ```
+
+By default, self-influence score computations only use the loss function for gradient calculations. 
+In this case, the method returns a vector of size `len(train_dataset)`, where each value corresponds 
+to `g_l ⋅ H^{-1} ⋅ g_l`. Here, `g_l` denotes the gradient of the loss function with respect to the model parameters, 
+and `H^{-1}` represents the inverse Hessian matrix. If you want to use the measurement function instead of the loss function 
+for self-influence calculations, set `use_measurement_for_self_influence=True`. In this case, each value in the returned 
+vector will correspond to `g_m ⋅ H^{-1} ⋅ g_l`, where `g_m` is the gradient of the measurement function with respect to the model parameters.
 
 **Dealing with OOMs.** Here are some steps to fix Out of Memory (OOM) errors.
 1. Try reducing the `per_device_query_batch_size` or `per_device_train_batch_size`.
