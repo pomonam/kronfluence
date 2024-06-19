@@ -501,8 +501,8 @@ class TrackedModule(nn.Module):
         else:
             self._cached_activations.append(cached_activation)
 
+    @torch.no_grad()
     def _lambda_post_forward(self, outputs: torch.Tensor) -> Any:
-        @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             cached_activation = self._cached_activations.pop()
             if self.factor_args.cached_activation_cpu_offload:
