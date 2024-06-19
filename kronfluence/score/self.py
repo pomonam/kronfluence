@@ -202,7 +202,6 @@ def compute_self_scores_with_loaders(
                     self_scores = None
                     for module in model.modules():
                         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                            self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
                             if self_scores is None:
                                 self_scores = module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).clone()
                             else:
