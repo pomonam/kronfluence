@@ -27,6 +27,7 @@ See [UCI Regression example](https://github.com/pomonam/kronfluence/blob/main/ex
 **Prepare Your Model and Dataset.** 
 Before computing influence scores, you need to prepare the trained model and dataset. You can use any frameworks to 
 train the model (e.g., [Pytorch Lightning](https://lightning.ai/docs/pytorch/stable/) or [HuggingFace Trainer](https://huggingface.co/docs/transformers/main_classes/trainer)); you just need to prepare the final model parameters.
+
 ```python
 ...
 # Get the model with the trained parameters.
