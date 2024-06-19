@@ -113,7 +113,29 @@ analyzer.compute_pairwise_scores(
 scores = analyzer.load_pairwise_scores(scores_name="my_scores")
 ```
 
+Kronfluence supports various PyTorch features to enhance performance and scalability. The following table summarizes the supported features:
+
+<div align="center">
+
+| Feature                            | Supported |
+|------------------------------------|:---------:|
+| Distributed Data Parallel (DDP)    |     ✅    |
+| Automatic Mixed Precision (AMP)    |     ✅    |
+| Torch Compile                      |     ✅    |
+| Gradient Checkpointing             |     ✅    |
+| Fully Sharded Data Parallel (FSDP) |     ✅    |
+
+</div>
+
 The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples demonstrating how to use Kronfluence. 
+
+## LogIX
+
+While Kronfluence supports influence function computations on large-scale models like `Meta-Llama-3-8B-Instruct`, for those 
+interested in running influence analysis on even larger models or with a high number of query data points, our
+project [LogIX](https://github.com/logix-project/logix) may be worth exploring. It integrates with frameworks like 
+[HuggingFace Trainer](https://huggingface.co/docs/transformers/en/main_classes/trainer) and [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) 
+and is compatible with many PyTorch features (DDP & FSDP & DeepSpeed). 
 
 ## Contributing
 
@@ -131,13 +153,31 @@ cd kronfluence
 pip install -e ."[dev]"
 ```
 
-## LogIX
+### Style Testing
 
-While Kronfluence supports influence function computations on large-scale models like `Meta-Llama-3-8B-Instruct`, for those 
-interested in running influence analysis on even larger models or with a high number of query data points, our another
-project [LogIX](https://github.com/logix-project/logix) may be worth exploring. It integrates with frameworks like 
-[HuggingFace Trainer](https://huggingface.co/docs/transformers/en/main_classes/trainer) and [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) 
-and is compatible with many existing PyTorch features (DDP & FSDP). 
+To maintain code quality and consistency, we run Ruff and linting tests on pull requests. Before submitting a 
+pull request, please ensure that your code adheres to our formatting and linting guidelines. The following commands will 
+modify your code. It is recommended to create a Git commit before running them to easily revert any unintended changes.
+
+Sort import orderings using isort:
+
+```bash
+isort kronfluence
+```
+
+Format code using Ruff:
+
+```bash
+ruff format kronfluence
+```
+
+To view all Pylint complaints, run the following command:
+
+```bash
+pylint kronfluence
+```
+
+Please address any reported issues before submitting your PR.
 
 ## Acknowledgements
 
