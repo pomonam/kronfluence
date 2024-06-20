@@ -145,6 +145,17 @@ def get_tracked_module_names(model: nn.Module) -> List[str]:
     return tracked_modules
 
 
+def finalize_covariance_matrices(model: nn.Module) -> None:
+    """Finalizes covariance matrices of all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.finalize_covariance_matrices()
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to finalize covariance matrices.")
+
+
 def synchronize_covariance_matrices(model: nn.Module) -> None:
     """Synchronizes covariance matrices of all `TrackedModule` instances within a model."""
     tracked_module_count = 0
