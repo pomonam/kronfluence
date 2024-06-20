@@ -188,6 +188,9 @@ def fit_covariance_matrices_with_loader(
 
     with torch.no_grad():
         finalize_covariance_matrices(model=model)
+        if factor_args.compile_mode is not None:
+            model = original_model
+
         if state.use_distributed:
             # Aggregate covariance matrices across multiple devices or nodes.
             synchronize_covariance_matrices(model=model)

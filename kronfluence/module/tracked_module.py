@@ -291,7 +291,7 @@ class TrackedModule(nn.Module):
             )
         # Keeps track of total number of elements used to aggregate covariance matrices.
         self._storage[NUM_COVARIANCE_PROCESSED].add_(count)
-        self._num_forward_passes += 1
+        self._num_forward_passes.add_(1)
 
     def _get_flattened_gradient(self, output_gradient: torch.Tensor) -> torch.Tensor:
         """Returns the flattened gradient tensor.
@@ -333,7 +333,7 @@ class TrackedModule(nn.Module):
             )
         # Adds the current batch's pseudo-gradient covariance to the stored pseudo-gradient covariance matrix.
         self._storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(flattened_gradient.t(), flattened_gradient)
-        self._num_backward_passes += 1
+        self._num_backward_passes.add_(1)
 
     def _covariance_pre_forward(self, inputs: torch.Tensor) -> None:
         """Computes and updates activation covariance matrix in the forward pass."""
