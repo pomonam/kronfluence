@@ -94,8 +94,16 @@ class TrackedModule(nn.Module):
         # Operations that will be performed before and after a forward pass.
         self._pre_forward = do_nothing
         self._post_forward = do_nothing
-        self._num_forward_passes = 0
-        self._num_backward_passes = 0
+        self._num_forward_passes = torch.zeros(
+                1,
+                requires_grad=False,
+                dtype=torch.int64,
+            )
+        self._num_backward_passes = torch.zeros(
+                1,
+                requires_grad=False,
+                dtype=torch.int64,
+            )
 
         if factor_args is None:
             factor_args = FactorArguments()
@@ -170,8 +178,16 @@ class TrackedModule(nn.Module):
         """Sets the module mode of all `TrackedModule` instances within a model."""
         self.remove_attention_mask()
         self.remove_gradient_scale()
-        self._num_forward_passes = 0
-        self._num_backward_passes = 0
+        self._num_forward_passes = torch.zeros(
+                1,
+                requires_grad=False,
+                dtype=torch.int64,
+            )
+        self._num_backward_passes = torch.zeros(
+                1,
+                requires_grad=False,
+                dtype=torch.int64,
+            )
 
         if not keep_factors:
             self._release_covariance_matrices()
