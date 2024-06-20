@@ -53,7 +53,7 @@ class CompileTest(unittest.TestCase):
             activation_covariance_dtype=torch.float64,
             gradient_covariance_dtype=torch.float64,
             lambda_dtype=torch.float64,
-            compile_mode="default",
+            compile_mode="max-autotune",
         )
         self.analyzer.fit_covariance_matrices(
             factors_name=NEW_FACTOR_NAME,

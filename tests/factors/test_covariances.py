@@ -8,7 +8,8 @@ from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     COVARIANCE_FACTOR_NAMES,
     GRADIENT_COVARIANCE_MATRIX_NAME,
-    NUM_COVARIANCE_PROCESSED,
+    NUM_ACTIVATION_COVARIANCE_PROCESSED,
+    NUM_GRADIENT_COVARIANCE_PROCESSED,
 )
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import (
@@ -284,7 +285,11 @@ def test_covariance_matrices_attention_mask(
     )
 
     for name in COVARIANCE_FACTOR_NAMES:
-        if "wrong" in test_name and name in [ACTIVATION_COVARIANCE_MATRIX_NAME, NUM_COVARIANCE_PROCESSED]:
+        if "wrong" in test_name and name in [
+            ACTIVATION_COVARIANCE_MATRIX_NAME,
+            NUM_ACTIVATION_COVARIANCE_PROCESSED,
+            NUM_GRADIENT_COVARIANCE_PROCESSED,
+        ]:
             assert not check_tensor_dict_equivalence(
                 covariance_factors[name],
                 no_padded_covariance_factors[name],
@@ -396,7 +401,10 @@ def test_covariance_matrices_max_examples(
     )
     covariance_factors = analyzer.load_covariance_matrices(factors_name=factors_name)
 
-    for num_examples in covariance_factors[NUM_COVARIANCE_PROCESSED].values():
+    for num_examples in covariance_factors[NUM_ACTIVATION_COVARIANCE_PROCESSED].values():
+        assert num_examples == MAX_EXAMPLES
+
+    for num_examples in covariance_factors[NUM_GRADIENT_COVARIANCE_PROCESSED].values():
         assert num_examples == MAX_EXAMPLES
 
 

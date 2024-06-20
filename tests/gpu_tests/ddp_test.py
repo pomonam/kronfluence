@@ -236,7 +236,7 @@ class DDPTest(unittest.TestCase):
             per_sample_gradient_dtype=torch.float64,
             precondition_dtype=torch.float64,
             query_gradient_svd_dtype=torch.float64,
-            per_module_score=True
+            per_module_score=True,
         )
         self.analyzer.compute_pairwise_scores(
             scores_name="ddp_per_module",

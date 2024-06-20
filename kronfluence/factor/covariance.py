@@ -185,6 +185,7 @@ def fit_covariance_matrices_with_loader(
 
     with torch.no_grad():
         if factor_args.compile_mode is not None:
+            del model
             model = original_model
 
         if state.use_distributed:
@@ -195,7 +196,7 @@ def fit_covariance_matrices_with_loader(
 
         saved_factors: FACTOR_TYPE = {}
         for factor_name in COVARIANCE_FACTOR_NAMES:
-            saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=True)
+            saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name)
         state.wait_for_everyone()
 
         # Clean up the memory.

@@ -46,6 +46,7 @@ def do_nothing(_: Any) -> None:
     """Does not perform any operations."""
     pass
 
+
 class TrackedModule(nn.Module):
     """A wrapper class for PyTorch modules to compute preconditioning factors and influence scores."""
 
@@ -332,8 +333,10 @@ class TrackedModule(nn.Module):
 
     def _covariance_post_forward(self, outputs: torch.Tensor) -> None:
         """Computes and updates pseudo-gradient covariance matrix in the backward pass."""
+
         def backward_hook(output_gradient: torch.Tensor) -> None:
             self._update_gradient_covariance_matrix(output_gradient.detach())
+
         # Registers backward hook to obtain gradient with respect to the output.
         outputs.register_hook(backward_hook)
 
@@ -610,8 +613,8 @@ class TrackedModule(nn.Module):
                 self._cached_per_sample_gradient = None
 
                 if (
-                        self.score_args.query_gradient_rank is not None
-                        and min(preconditioned_gradient.size()[1:]) > self.score_args.query_gradient_rank
+                    self.score_args.query_gradient_rank is not None
+                    and min(preconditioned_gradient.size()[1:]) > self.score_args.query_gradient_rank
                 ):
                     # Apply low-rank approximation to the preconditioned gradient.
                     preconditioned_gradient = self._compute_low_rank_preconditioned_gradient(
@@ -777,8 +780,8 @@ class TrackedModule(nn.Module):
                     train_batch_size = self._cached_per_sample_gradient.size(0)
                     rank = self.score_args.query_gradient_rank
                     if (
-                            train_batch_size * query_batch_size * rank * min((input_dim, output_dim))
-                            > query_batch_size * input_dim * output_dim
+                        train_batch_size * query_batch_size * rank * min((input_dim, output_dim))
+                        > query_batch_size * input_dim * output_dim
                     ):
                         # If reconstructing the gradient is more memory efficient, reconstruct and compute the score.
                         self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
@@ -852,6 +855,7 @@ class TrackedModule(nn.Module):
                 preconditioned_gradient.mul_(self._cached_per_sample_gradient)
                 self._storage[SELF_SCORE_VECTOR_NAME] = preconditioned_gradient.sum(dim=(1, 2))
                 self._cached_per_sample_gradient = None
+
         # Register backward hook to obtain gradient with respect to the output.
         outputs.register_hook(backward_hook)
 
@@ -895,6 +899,7 @@ class TrackedModule(nn.Module):
                 self._cached_per_sample_gradient = None
                 del self._storage[PRECONDITIONED_GRADIENT_NAME]
                 self._storage[PRECONDITIONED_GRADIENT_NAME] = None
+
         # Register backward hook to obtain gradient with respect to the output.
         outputs.register_hook(backward_hook)
 
