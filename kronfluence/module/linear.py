@@ -57,7 +57,12 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                 The flattened output gradient tensor. The flattened gradient is a 2-dimensional matrix
                 with dimension `gradient_num x gradient_dim`.
         """
-        return rearrange(tensor=output_gradient, pattern="b ... d_out -> (b ...) d_out")
+        flattened_gradient = rearrange(tensor=output_gradient, pattern="b ... d_out -> (b ...) d_out")
+        if self._attention_mask is not None and flattened_gradient.size(0) == self._attention_mask.numel():
+            count = self._attention_mask.sum()
+        else:
+            count = flattened_gradient.size(0)
+        return flattened_gradient, count
 
     def _compute_per_sample_gradient(
         self, input_activation: torch.Tensor, output_gradient: torch.Tensor

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.distributed as dist
@@ -8,20 +8,17 @@ from safetensors.torch import load_file, save_file
 from torch import autocast, nn
 from torch.cuda.amp import GradScaler
 from torch.utils import data
-from torch.utils.checkpoint import checkpoint_sequential
 from tqdm import tqdm
 
 from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     load_factors,
-    remove_attention_mask,
-    remove_gradient_scale,
     set_attention_mask,
     set_gradient_scale,
     set_mode,
     synchronize_covariance_matrices,
-    update_factor_args, finalize_covariance_matrices,
+    update_factor_args,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -187,7 +184,6 @@ def fit_covariance_matrices_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
-        finalize_covariance_matrices(model=model)
         if factor_args.compile_mode is not None:
             model = original_model
 

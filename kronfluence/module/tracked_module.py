@@ -6,7 +6,6 @@ import torch.distributed as dist
 from accelerate.utils.dataclasses import BaseEnum
 from opt_einsum import contract
 from torch import nn
-from torch.utils.hooks import RemovableHandle
 
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.factor.config import FactorConfig
@@ -20,7 +19,8 @@ from kronfluence.utils.constants import (
     GRADIENT_EIGENVECTORS_NAME,
     LAMBDA_FACTOR_NAMES,
     LAMBDA_MATRIX_NAME,
-    NUM_COVARIANCE_PROCESSED,
+    NUM_ACTIVATION_COVARIANCE_PROCESSED,
+    NUM_GRADIENT_COVARIANCE_PROCESSED,
     NUM_LAMBDA_PROCESSED,
     PAIRWISE_SCORE_MATRIX_NAME,
     PRECONDITIONED_GRADIENT_NAME,
@@ -45,15 +45,6 @@ class ModuleMode(str, BaseEnum):
 def do_nothing(_: Any) -> None:
     """Does not perform any operations."""
     pass
-
-
-def scalar_tensor() -> torch.Tensor:
-    return torch.zeros(
-        1,
-        requires_grad=False,
-        dtype=torch.int64,
-    )
-
 
 class TrackedModule(nn.Module):
     """A wrapper class for PyTorch modules to compute preconditioning factors and influence scores."""
@@ -102,8 +93,6 @@ class TrackedModule(nn.Module):
         # Operations that will be performed before and after a forward pass.
         self._pre_forward = do_nothing
         self._post_forward = do_nothing
-        self._num_forward_passes = scalar_tensor()
-        self._num_backward_passes = scalar_tensor()
 
         if factor_args is None:
             factor_args = FactorArguments()
@@ -178,8 +167,6 @@ class TrackedModule(nn.Module):
         """Sets the module mode of all `TrackedModule` instances within a model."""
         self.remove_attention_mask()
         self.remove_gradient_scale()
-        self._num_forward_passes = scalar_tensor()
-        self._num_backward_passes = scalar_tensor()
 
         if not keep_factors:
             self._release_covariance_matrices()
@@ -243,7 +230,7 @@ class TrackedModule(nn.Module):
                 The input tensor to the module.
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor]:
+            Tuple[torch.Tensor, Union[torch.Tensor, int]]:
                 The flattened activation tensor and the number of stacked activations. The flattened
                 activation is a 2-dimensional matrix with dimension `activation_num x activation_dim`.
         """
@@ -270,22 +257,21 @@ class TrackedModule(nn.Module):
         # Adds the current batch's activation covariance to the stored activation covariance matrix.
         self._storage[ACTIVATION_COVARIANCE_MATRIX_NAME].addmm_(flattened_activation.t(), flattened_activation)
 
-        if self._storage[NUM_COVARIANCE_PROCESSED] is None:
+        if self._storage[NUM_ACTIVATION_COVARIANCE_PROCESSED] is None:
             device = None
             if isinstance(count, torch.Tensor):
                 # When using attention masks, `count` can be a tensor.
                 device = count.device
-            self._storage[NUM_COVARIANCE_PROCESSED] = torch.zeros(
+            self._storage[NUM_ACTIVATION_COVARIANCE_PROCESSED] = torch.zeros(
                 size=(1,),
                 dtype=torch.int64,
                 device=device,
                 requires_grad=False,
             )
         # Keeps track of total number of elements used to aggregate covariance matrices.
-        self._storage[NUM_COVARIANCE_PROCESSED].add_(count)
-        self._num_forward_passes.add_(1)
+        self._storage[NUM_ACTIVATION_COVARIANCE_PROCESSED].add_(count)
 
-    def _get_flattened_gradient(self, output_gradient: torch.Tensor) -> torch.Tensor:
+    def _get_flattened_gradient(self, output_gradient: torch.Tensor) -> Tuple[torch.Tensor, Union[torch.Tensor, int]]:
         """Returns the flattened gradient tensor.
 
         Args:
@@ -294,9 +280,9 @@ class TrackedModule(nn.Module):
                 PyTorch's backward hook.
 
         Returns:
-            torch.Tensor:
-                The flattened output gradient tensor. The flattened gradient is a 2-dimensional matrix
-                with dimension `gradient_num x gradient_dim`.
+            Tuple[torch.Tensor, Union[torch.Tensor, int]]:
+                The flattened output gradient tensor and the number of stacked gradients. The flattened
+                gradient is a 2-dimensional matrix  with dimension `gradient_num x gradient_dim`.
         """
         raise NotImplementedError("Subclasses must implement the `_get_flattened_gradient` method.")
 
@@ -309,7 +295,7 @@ class TrackedModule(nn.Module):
                 PyTorch's backward hook.
         """
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
-        flattened_gradient = self._get_flattened_gradient(output_gradient)
+        flattened_gradient, count = self._get_flattened_gradient(output_gradient)
         if self._gradient_scale != 1.0:
             # Avoiding in-place operation here.
             flattened_gradient = self._gradient_scale * flattened_gradient
@@ -325,7 +311,20 @@ class TrackedModule(nn.Module):
             )
         # Adds the current batch's pseudo-gradient covariance to the stored pseudo-gradient covariance matrix.
         self._storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(flattened_gradient.t(), flattened_gradient)
-        self._num_backward_passes.add_(1)
+
+        if self._storage[NUM_GRADIENT_COVARIANCE_PROCESSED] is None:
+            device = None
+            if isinstance(count, torch.Tensor):
+                # When using attention masks, `count` can be a tensor.
+                device = count.device
+            self._storage[NUM_GRADIENT_COVARIANCE_PROCESSED] = torch.zeros(
+                size=(1,),
+                dtype=torch.int64,
+                device=device,
+                requires_grad=False,
+            )
+        # Keeps track of total number of elements used to aggregate covariance matrices.
+        self._storage[NUM_GRADIENT_COVARIANCE_PROCESSED].add_(count)
 
     def _covariance_pre_forward(self, inputs: torch.Tensor) -> None:
         """Computes and updates activation covariance matrix in the forward pass."""
@@ -350,16 +349,6 @@ class TrackedModule(nn.Module):
             if self._storage[covariance_factor_name] is None:
                 return False
         return True
-
-    def finalize_covariance_matrices(self) -> None:
-        """Rescales the activation covariance matrix if the number of forward and backward passes do not match. This
-        could happen when using gradient checkpointing or torch.compile."""
-        if self._num_forward_passes == self._num_backward_passes:
-            return
-        assert self._num_forward_passes % self._num_backward_passes == 0
-        mismatch_ratio = self._num_forward_passes // self._num_backward_passes
-        self._storage[ACTIVATION_COVARIANCE_MATRIX_NAME].div_(mismatch_ratio)
-        self._storage[NUM_COVARIANCE_PROCESSED].div_(mismatch_ratio)
 
     @torch.no_grad()
     def synchronize_covariance_matrices(self) -> None:

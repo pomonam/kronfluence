@@ -34,7 +34,8 @@ from kronfluence.utils.constants import (
     GRADIENT_EIGENVALUES_NAME,
     GRADIENT_EIGENVECTORS_NAME,
     LAMBDA_FACTOR_NAMES,
-    NUM_COVARIANCE_PROCESSED,
+    NUM_ACTIVATION_COVARIANCE_PROCESSED,
+    NUM_GRADIENT_COVARIANCE_PROCESSED,
     PARTITION_TYPE,
 )
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
@@ -126,14 +127,16 @@ def perform_eigendecomposition(
         disable=not state.is_main_process,
     ) as pbar:
         for module_name in tracked_module_names:
-            for covariance_name, eigenvectors_name, eigenvalues_name in [
+            for covariance_name, num_processed_name, eigenvectors_name, eigenvalues_name in [
                 (
                     ACTIVATION_COVARIANCE_MATRIX_NAME,
+                    NUM_ACTIVATION_COVARIANCE_PROCESSED,
                     ACTIVATION_EIGENVECTORS_NAME,
                     ACTIVATION_EIGENVALUES_NAME,
                 ),
                 (
                     GRADIENT_COVARIANCE_MATRIX_NAME,
+                    NUM_GRADIENT_COVARIANCE_PROCESSED,
                     GRADIENT_EIGENVECTORS_NAME,
                     GRADIENT_EIGENVALUES_NAME,
                 ),
@@ -145,7 +148,7 @@ def perform_eigendecomposition(
                 )
                 # Normalize covariance matrices.
                 covariance_matrix.div_(
-                    covariance_factors[NUM_COVARIANCE_PROCESSED][module_name].to(device=state.device)
+                    covariance_factors[num_processed_name][module_name].to(device=state.device)
                 )
                 # In cases where covariance matrices are not exactly symmetric due to numerical issues.
                 covariance_matrix = covariance_matrix + covariance_matrix.t()
