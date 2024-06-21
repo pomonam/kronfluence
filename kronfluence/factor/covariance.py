@@ -141,10 +141,6 @@ def fit_covariance_matrices_with_loader(
     if enable_amp:
         gradient_scale = 1.0 / scaler.get_scale()
         set_gradient_scale(model=model, gradient_scale=gradient_scale)
-    original_model = None
-    if factor_args.compile_mode is not None:
-        original_model = model
-        model = torch.compile(model, mode=factor_args.compile_mode)
 
     with tqdm(
         total=len(loader),
@@ -184,10 +180,6 @@ def fit_covariance_matrices_with_loader(
             pbar.update(1)
 
     with torch.no_grad():
-        if factor_args.compile_mode is not None:
-            del model
-            model = original_model
-
         if state.use_distributed:
             # Aggregate covariance matrices across multiple devices or nodes.
             synchronize_covariance_matrices(model=model)

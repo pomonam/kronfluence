@@ -22,6 +22,7 @@ from kronfluence.module.utils import (
     set_mode,
     synchronize_lambda_matrices,
     update_factor_args,
+    update_aggregated_lambda_matrices,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -287,8 +288,6 @@ def fit_lambda_matrices_with_loader(
     if enable_amp:
         gradient_scale = 1.0 / scaler.get_scale()
         set_gradient_scale(model=model, gradient_scale=gradient_scale)
-    if factor_args.compile_mode is not None:
-        model = torch.compile(model, mode=factor_args.compile_mode)
 
     with tqdm(
         total=len(loader),
@@ -309,6 +308,9 @@ def fit_lambda_matrices_with_loader(
                     )
                 scaled_loss = scaler.scale(loss)
                 scaled_loss.backward()
+
+            if factor_args.shared_parameters_exist:
+                update_aggregated_lambda_matrices(model=model)
 
             num_data_processed += find_batch_size(data=batch)
             total_steps += 1
@@ -338,7 +340,6 @@ def fit_lambda_matrices_with_loader(
 
         # Clean up the memory.
         model.zero_grad(set_to_none=True)
-        remove_gradient_scale(model=model)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
 
     return num_data_processed, saved_factors

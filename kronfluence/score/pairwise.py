@@ -120,8 +120,6 @@ def _compute_dot_products_with_loader(
     if enable_amp:
         gradient_scale = 1.0 / scaler.get_scale()
         set_gradient_scale(model=model, gradient_scale=gradient_scale)
-    if score_args.compile_mode is not None:
-        model = torch.compile(model, mode=score_args.compile_mode)
 
     with tqdm(
         total=len(train_loader),

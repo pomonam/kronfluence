@@ -1,3 +1,4 @@
+import functools
 from abc import abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
@@ -42,13 +43,13 @@ class ModuleMode(str, BaseEnum):
     SELF_MEASUREMENT_SCORE = "self_measurement_score"
 
 
-def do_nothing(_: Any) -> None:
-    """Does not perform any operations."""
+def do_nothing(*_) -> None:
+    """A dummy function that does not perform any operations."""
     pass
 
 
 class TrackedModule(nn.Module):
-    """A wrapper class for PyTorch modules to compute preconditioning factors and influence scores."""
+    """A wrapper class for PyTorch modules to compute influence factors and scores."""
 
     SUPPORTED_MODULES: Dict[Type[nn.Module], Any] = {}
 
@@ -71,11 +72,11 @@ class TrackedModule(nn.Module):
             name (str):
                 The original name of the module.
             original_module (nn.Module):
-                The original module that will be wrapped with this module.
+                The original module to be wrapped.
             factor_args (FactorArguments, optional):
-                Arguments related to computing the influence factors.
+                Arguments for computing influence factors.
             score_args (ScoreArguments, optional):
-                Arguments related to computing the influence scores.
+                Arguments for computing influence scores.
         """
         super().__init__()
 
@@ -87,7 +88,6 @@ class TrackedModule(nn.Module):
             torch.zeros(
                 1,
                 requires_grad=True,
-                device=self.original_module.weight.device,
                 dtype=torch.float16,
             )
         )
@@ -103,12 +103,11 @@ class TrackedModule(nn.Module):
         self.score_args = score_args
 
         self._mode: ModuleMode = ModuleMode.DEFAULT
-        self._cached_activations: List[torch.Tensor] = []
         self._cached_per_sample_gradient: Optional[torch.Tensor] = None
         self._attention_mask: Optional[torch.Tensor] = None
         self._gradient_scale: float = 1.0
         self._storage: Dict[str, Optional[Any]] = {}
-        self._storge_at_current_device: bool = False
+        self._storage_at_current_device: bool = False
 
         # Storage for activation and pseudo-gradient covariance matrices. #
         for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
@@ -129,12 +128,12 @@ class TrackedModule(nn.Module):
         self._storage[SELF_SCORE_VECTOR_NAME] = None
 
     def forward(self, inputs: torch.Tensor, *args, **kwargs) -> torch.Tensor:
-        """A forward pass of the tracked module. This should have identical behavior to the original module."""
+        """Performs forward pass of the tracked module. This should have identical behavior to the original module."""
         with torch.no_grad():
             self._pre_forward(inputs)
         outputs = self.original_module(inputs + self._constant, *args, **kwargs)
         with torch.no_grad():
-            self._post_forward(outputs)
+            self._post_forward(inputs, outputs)
         return outputs
 
     def update_factor_args(self, factor_args: FactorArguments) -> None:
@@ -152,20 +151,28 @@ class TrackedModule(nn.Module):
         return self._storage[factor_name]
 
     def set_factor(self, factor_name: str, factor: Any) -> None:
-        """Sets the factor with the given name."""
+        """Registers the factor to the storage."""
         if factor_name in self._storage:
             self._storage[factor_name] = factor
+
+    def set_attention_mask(self, attention_mask: Optional[torch.Tensor] = None) -> None:
+        """Sets the attention mask for the covariance computations."""
+        self._attention_mask = attention_mask
+
+    def remove_attention_mask(self) -> None:
+        """Removes the currently set attention mask."""
+        self._attention_mask = None
 
     def set_gradient_scale(self, scale: float = 1.0) -> None:
         """Sets the scale of the gradient obtained from `GradScaler`."""
         self._gradient_scale = scale
 
     def remove_gradient_scale(self) -> None:
-        """Resets the scale of the gradient."""
+        """Resets the scale of the gradient (defaults to 1.0)."""
         self._gradient_scale = 1.0
 
     def set_mode(self, mode: ModuleMode, keep_factors: bool = True) -> None:
-        """Sets the module mode of all `TrackedModule` instances within a model."""
+        """Sets the module mode of the current `TrackedModule` instance."""
         self.remove_attention_mask()
         self.remove_gradient_scale()
 
@@ -185,15 +192,15 @@ class TrackedModule(nn.Module):
             self._post_forward = self._covariance_post_forward
 
         elif mode == ModuleMode.LAMBDA:
-            self._pre_forward = self._lambda_pre_forward
+            self._pre_forward = do_nothing
             self._post_forward = self._lambda_post_forward
 
         elif mode == ModuleMode.PRECONDITION_GRADIENT:
-            self._pre_forward = self._activation_cache_pre_forward
+            self._pre_forward = do_nothing
             self._post_forward = self._precondition_post_forward
 
         elif mode == ModuleMode.PAIRWISE_SCORE:
-            self._pre_forward = self._activation_cache_pre_forward
+            self._pre_forward = do_nothing
             self._post_forward = self._pairwise_post_forward
 
         elif mode == ModuleMode.SELF_SCORE:
@@ -212,17 +219,10 @@ class TrackedModule(nn.Module):
     ##############################################
     # Methods for computing covariance matrices. #
     ##############################################
-    def set_attention_mask(self, attention_mask: Optional[torch.Tensor] = None) -> None:
-        """Sets the attention mask for the activation covariance computation."""
-        self._attention_mask = attention_mask
-
-    def remove_attention_mask(self) -> None:
-        """Removes the currently set attention mask."""
-        self._attention_mask = None
-
     @abstractmethod
     def _get_flattened_activation(
-        self, input_activation: torch.Tensor
+        self,
+        input_activation: torch.Tensor,
     ) -> Tuple[torch.Tensor, Union[torch.Tensor, int]]:
         """Returns the flattened activation tensor and the number of stacked activations.
 
@@ -313,10 +313,12 @@ class TrackedModule(nn.Module):
         # Adds the current batch's pseudo-gradient covariance to the stored pseudo-gradient covariance matrix.
         self._storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(flattened_gradient.t(), flattened_gradient)
 
+        # This is not necessary as `NUM_GRADIENT_COVARIANCE_PROCESSED` should be identical to
+        # `NUM_ACTIVATION_COVARIANCE_PROCESSED` in most cases. However, they can be different when using
+        # gradient checkpointing and torch compile.
         if self._storage[NUM_GRADIENT_COVARIANCE_PROCESSED] is None:
             device = None
             if isinstance(count, torch.Tensor):
-                # When using attention masks, `count` can be a tensor.
                 device = count.device
             self._storage[NUM_GRADIENT_COVARIANCE_PROCESSED] = torch.zeros(
                 size=(1,),
@@ -328,17 +330,16 @@ class TrackedModule(nn.Module):
         self._storage[NUM_GRADIENT_COVARIANCE_PROCESSED].add_(count)
 
     def _covariance_pre_forward(self, inputs: torch.Tensor) -> None:
-        """Computes and updates activation covariance matrix in the forward pass."""
+        """Computes and updates activation covariance matrix before the module's forward pass."""
         self._update_activation_covariance_matrix(inputs.detach())
 
-    def _covariance_post_forward(self, outputs: torch.Tensor) -> None:
-        """Computes and updates pseudo-gradient covariance matrix in the backward pass."""
+    def _covariance_backward_hook(self, output_gradient: torch.Tensor) -> None:
+        """Computes and updates pseudo-gradient covariance matrix during the backward pass."""
+        self._update_gradient_covariance_matrix(output_gradient.detach())
 
-        def backward_hook(output_gradient: torch.Tensor) -> None:
-            self._update_gradient_covariance_matrix(output_gradient.detach())
-
-        # Registers backward hook to obtain gradient with respect to the output.
-        outputs.register_hook(backward_hook)
+    def _covariance_post_forward(self, _, outputs: torch.Tensor) -> None:
+        """Registers backward hook to obtain gradient with respect to the output for covariance computations."""
+        outputs.register_hook(self._covariance_backward_hook)
 
     def _release_covariance_matrices(self) -> None:
         """Clears the stored activation and pseudo-gradient covariance matrices from memory."""
@@ -391,7 +392,7 @@ class TrackedModule(nn.Module):
 
         Args:
             input_activation (torch.Tensor):
-                The input tensor to the module, provided by the PyTorch's forward hook.
+                The input tensor to the module.
             output_gradient (torch.Tensor):
                 The gradient tensor with respect to the output of the module, provided by the
                 PyTorch's backward hook.
@@ -404,18 +405,19 @@ class TrackedModule(nn.Module):
         """
         raise NotImplementedError("Subclasses must implement the `_compute_per_sample_gradient` method.")
 
-    @torch.no_grad()
     def _update_lambda_matrix(self, per_sample_gradient: torch.Tensor) -> None:
-        """Updates the Lambda matrix using the per-sample-gradient.
+        """Updates the Lambda matrix.
 
         Args:
             per_sample_gradient (torch.Tensor):
                 The per-sample-gradient tensor for the given batch.
         """
         batch_size = per_sample_gradient.size(0)
+        if self._gradient_scale != 1.0:
+            per_sample_gradient.mul_(self._gradient_scale)
 
         if self._storage[LAMBDA_MATRIX_NAME] is None:
-            # Initialize Lambda matrix if it does not exist.
+            # Initializes Lambda matrix if it does not exist.
             self._storage[LAMBDA_MATRIX_NAME] = torch.zeros(
                 size=(per_sample_gradient.size(1), per_sample_gradient.size(2)),
                 dtype=per_sample_gradient.dtype,
@@ -432,7 +434,7 @@ class TrackedModule(nn.Module):
                     )
                     raise FactorsNotFoundError(error_msg)
 
-                # Move activation and pseudo-gradient eigenvectors to appropriate devices.
+                # Moves activation and pseudo-gradient eigenvectors to appropriate devices.
                 self._storage[ACTIVATION_EIGENVECTORS_NAME] = self._storage[ACTIVATION_EIGENVECTORS_NAME].to(
                     dtype=self.factor_args.lambda_dtype,
                     device=per_sample_gradient.device,
@@ -442,19 +444,9 @@ class TrackedModule(nn.Module):
                     device=per_sample_gradient.device,
                 )
 
-        if self._storage[NUM_LAMBDA_PROCESSED] is None:
-            self._storage[NUM_LAMBDA_PROCESSED] = torch.zeros(
-                size=(1,),
-                dtype=torch.int64,
-                requires_grad=False,
-            )
-
-        if self._gradient_scale != 1.0:
-            per_sample_gradient.mul_(self._gradient_scale)
-
         if FactorConfig.CONFIGS[self.factor_args.strategy].requires_eigendecomposition_for_lambda:
             if self.factor_args.lambda_iterative_aggregate:
-                # This batch-wise iterative update can be useful when the GPU memory is limited.
+                # This batch-wise iterative update can be helpful when the GPU memory is limited.
                 per_sample_gradient = torch.matmul(
                     per_sample_gradient,
                     self._storage[ACTIVATION_EIGENVECTORS_NAME],
@@ -472,54 +464,62 @@ class TrackedModule(nn.Module):
                 )
                 self._storage[LAMBDA_MATRIX_NAME].add_(per_sample_gradient.square_().sum(dim=0))
         else:
-            # Assume that the eigenbasis is identity.
+            # Approximates the eigenbasis as identity.
             self._storage[LAMBDA_MATRIX_NAME].add_(per_sample_gradient.square_().sum(dim=0))
 
+        if self._storage[NUM_LAMBDA_PROCESSED] is None:
+            self._storage[NUM_LAMBDA_PROCESSED] = torch.zeros(
+                size=(1,),
+                dtype=torch.int64,
+                requires_grad=False,
+            )
         self._storage[NUM_LAMBDA_PROCESSED].add_(batch_size)
 
-    @torch.no_grad()
-    def _lambda_pre_forward(self, inputs: Any) -> Any:
-        cached_activation = inputs.detach().to(dtype=self.factor_args.lambda_dtype)
-        if self.factor_args.cached_activation_cpu_offload:
-            self._cached_activations.append(cached_activation.cpu())
+    def _lambda_backward_hook(self, output_gradient: torch.Tensor, input_activation: torch.Tensor) -> None:
+        """Computes and updates Lambda matrix during the backward pass."""
+        per_sample_gradient = self._compute_per_sample_gradient(
+            input_activation=input_activation.to(device=output_gradient.device),
+            output_gradient=output_gradient.detach().to(dtype=self.factor_args.per_sample_gradient_dtype),
+        ).to(dtype=self.factor_args.lambda_dtype)
+        del input_activation
+        self._update_lambda_matrix(per_sample_gradient=per_sample_gradient)
+
+    def _lambda_aggregate_backward_hook(self, output_gradient: torch.Tensor, input_activation: torch.Tensor) -> None:
+        """Computes and aggregates per-sample-gradient during the backward pass. This is different from
+        `_lambda_backward_hook`, as Lambda matrix will not be immediately updated."""
+        per_sample_gradient = self._compute_per_sample_gradient(
+            input_activation=input_activation.to(device=output_gradient.device),
+            output_gradient=output_gradient.detach().to(dtype=self.factor_args.per_sample_gradient_dtype),
+        )
+        del input_activation
+        if self._cached_per_sample_gradient is None:
+            self._cached_per_sample_gradient = per_sample_gradient
         else:
-            self._cached_activations.append(cached_activation)
+            self._cached_per_sample_gradient.add_(per_sample_gradient)
 
-    @torch.no_grad()
-    def _lambda_post_forward(self, outputs: torch.Tensor) -> Any:
-        def backward_hook(output_gradient: torch.Tensor) -> None:
-            cached_activation = self._cached_activations.pop()
-            if self.factor_args.cached_activation_cpu_offload:
-                cached_activation = cached_activation.to(device=output_gradient.device)
+    def update_aggregated_lambda_matrix(self) -> None:
+        """Updates the Lambda matrix using the cached per-sample-gradient."""
+        self._update_lambda_matrix(
+            per_sample_gradient=self._cached_per_sample_gradient.to(dtype=self.factor_args.lambda_dtype)
+        )
+        del self._cached_per_sample_gradient
+        self._cached_per_sample_gradient = None
 
-            per_sample_gradient = self._compute_per_sample_gradient(
-                input_activation=cached_activation,
-                output_gradient=output_gradient.detach().to(dtype=self.factor_args.lambda_dtype),
-            )
-            del cached_activation
-
-            if self._cached_per_sample_gradient is None:
-                self._cached_per_sample_gradient = per_sample_gradient
-            else:
-                self._cached_per_sample_gradient.add_(per_sample_gradient)
-                del per_sample_gradient
-
-            if len(self._cached_activations) == 0:
-                self._update_lambda_matrix(per_sample_gradient=self._cached_per_sample_gradient)
-                del self._cached_per_sample_gradient
-                self._cached_per_sample_gradient = None
-
-        # Register backward hook to obtain gradient with respect to the output.
-        outputs.register_hook(backward_hook)
+    def _lambda_post_forward(self, inputs: torch.Tensor, outputs: torch.Tensor) -> Any:
+        """Registers backward hook to obtain gradient with respect to the output."""
+        inputs = inputs.detach().to(dtype=self.factor_args.per_sample_gradient_dtype)
+        if self.factor_args.cached_activation_cpu_offload:
+            inputs = inputs.cpu()
+        func = self._lambda_backward_hook
+        if self.factor_args.shared_parameters_exist:
+            func = self._lambda_aggregate_backward_hook
+        outputs.register_hook(functools.partial(func, input_activation=inputs))
 
     def _release_lambda_matrix(self) -> None:
         """Clears the stored Lambda matrix from memory."""
         for lambda_factor_name in LAMBDA_FACTOR_NAMES:
             del self._storage[lambda_factor_name]
             self._storage[lambda_factor_name] = None
-        self._cached_activations = []
-        del self._cached_per_sample_gradient
-        self._cached_per_sample_gradient = None
 
     def _lambda_matrix_available(self) -> bool:
         """Checks if the Lamda matrix is currently stored in storage."""
@@ -575,59 +575,66 @@ class TrackedModule(nn.Module):
 
     @torch.no_grad()
     def _activation_cache_pre_forward(self, inputs: Any) -> Any:
-        cached_activation = inputs.detach().to(dtype=self.score_args.per_sample_gradient_dtype)
-        if self.factor_args.cached_activation_cpu_offload:
-            self._cached_activations.append(cached_activation.cpu())
+        # cached_activation = inputs.detach().to(dtype=self.score_args.per_sample_gradient_dtype)
+        # if self.factor_args.cached_activation_cpu_offload:
+        #     self._cached_activations.append(cached_activation.cpu())
+        # else:
+        #     self._cached_activations.append(cached_activation)
+        pass
+
+    def _precondition_backward_hook(
+        self, output_gradient: torch.Tensor, input_activation: torch.Tensor, update: bool
+    ) -> None:
+        if self.score_args.cached_activation_cpu_offload:
+            input_activation = input_activation.to(device=output_gradient.device)
+
+        per_sample_gradient = self._compute_per_sample_gradient(
+            input_activation=input_activation,
+            output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
+        )
+        del input_activation
+
+        if self._cached_per_sample_gradient is None:
+            self._cached_per_sample_gradient = per_sample_gradient
         else:
-            self._cached_activations.append(cached_activation)
+            self._cached_per_sample_gradient.add_(per_sample_gradient)
+            del per_sample_gradient
 
-    @torch.no_grad()
-    def _precondition_post_forward(self, outputs: torch.Tensor) -> Any:
-        def backward_hook(output_gradient: torch.Tensor) -> None:
-            cached_activation = self._cached_activations.pop()
-            if self.score_args.cached_activation_cpu_offload:
-                cached_activation = cached_activation.to(device=output_gradient.device)
+        if update:
+            if self._gradient_scale != 1.0:
+                self._cached_per_sample_gradient.mul_(self._gradient_scale)
 
-            per_sample_gradient = self._compute_per_sample_gradient(
-                input_activation=cached_activation,
-                output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
+            preconditioned_gradient = FactorConfig.CONFIGS[self.factor_args.strategy].precondition_gradient(
+                gradient=self._cached_per_sample_gradient.to(dtype=self.score_args.precondition_dtype),
+                storage=self._storage,
+                damping=self.score_args.damping,
             )
-            del cached_activation
+            del self._cached_per_sample_gradient
+            self._cached_per_sample_gradient = None
 
-            if self._cached_per_sample_gradient is None:
-                self._cached_per_sample_gradient = per_sample_gradient
-            else:
-                self._cached_per_sample_gradient.add_(per_sample_gradient)
-                del per_sample_gradient
-
-            if len(self._cached_activations) == 0:
-                if self._gradient_scale != 1.0:
-                    self._cached_per_sample_gradient.mul_(self._gradient_scale)
-
-                preconditioned_gradient = FactorConfig.CONFIGS[self.factor_args.strategy].precondition_gradient(
-                    gradient=self._cached_per_sample_gradient.to(dtype=self.score_args.precondition_dtype),
-                    storage=self._storage,
-                    damping=self.score_args.damping,
+            if (
+                self.score_args.query_gradient_rank is not None
+                and min(preconditioned_gradient.size()[1:]) > self.score_args.query_gradient_rank
+            ):
+                # Apply low-rank approximation to the preconditioned gradient.
+                preconditioned_gradient = self._compute_low_rank_preconditioned_gradient(
+                    preconditioned_gradient=preconditioned_gradient
                 )
-                del self._cached_per_sample_gradient
-                self._cached_per_sample_gradient = None
+                self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient
+            else:
+                self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient.to(
+                    dtype=self.score_args.score_dtype
+                )
+            self._update_flag = False
 
-                if (
-                    self.score_args.query_gradient_rank is not None
-                    and min(preconditioned_gradient.size()[1:]) > self.score_args.query_gradient_rank
-                ):
-                    # Apply low-rank approximation to the preconditioned gradient.
-                    preconditioned_gradient = self._compute_low_rank_preconditioned_gradient(
-                        preconditioned_gradient=preconditioned_gradient
-                    )
-                    self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient
-                else:
-                    self._storage[PRECONDITIONED_GRADIENT_NAME] = preconditioned_gradient.to(
-                        dtype=self.score_args.score_dtype
-                    )
-
-        # Register backward hook to obtain gradient with respect to the output.
-        outputs.register_hook(backward_hook)
+    def _precondition_post_forward(self, inputs: torch.Tensor, outputs: torch.Tensor) -> Any:
+        inputs = inputs.detach().to(dtype=self.score_args.per_sample_gradient_dtype)
+        if self.factor_args.cached_activation_cpu_offload:
+            inputs = inputs.cpu()
+        outputs.register_hook(
+            functools.partial(self._precondition_backward_hook, input_activation=inputs, update=not self._update_flag)
+        )
+        self._update_flag = True
 
     @torch.no_grad()
     def aggregate_preconditioned_gradient(self):
@@ -678,7 +685,6 @@ class TrackedModule(nn.Module):
         self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME] = None
         del self._storage[PRECONDITIONED_GRADIENT_NAME]
         self._storage[PRECONDITIONED_GRADIENT_NAME] = None
-        self._cached_activations = []
         del self._cached_per_sample_gradient
         self._cached_per_sample_gradient = None
 
@@ -745,69 +751,56 @@ class TrackedModule(nn.Module):
     ###########################################
     # Methods for computing influence scores. #
     ###########################################
-    @torch.no_grad()
-    def _pairwise_post_forward(self, outputs: torch.Tensor) -> Any:
-        def backward_hook(output_gradient: torch.Tensor) -> None:
-            cached_activation = self._cached_activations.pop()
-            if self.score_args.cached_activation_cpu_offload:
-                cached_activation = cached_activation.to(device=output_gradient.device)
+    def _pairwise_backward_hook(self, output_gradient: torch.Tensor, input_activation: torch.Tensor) -> None:
+        per_sample_gradient = self._compute_per_sample_gradient(
+            input_activation=input_activation.to(device=output_gradient.device),
+            output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
+        ).to(dtype=self.score_args.score_dtype)
+        del input_activation
 
-            per_sample_gradient = self._compute_per_sample_gradient(
-                input_activation=cached_activation,
-                output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
-            ).to(dtype=self.score_args.score_dtype)
-            del cached_activation
+        if self._gradient_scale != 1.0:
+            per_sample_gradient.mul_(self._gradient_scale)
 
-            if self._cached_per_sample_gradient is None:
-                self._cached_per_sample_gradient = per_sample_gradient
+        if isinstance(self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME], list):
+            # The preconditioned gradient is stored as a low-rank approximation.
+            left_mat, right_mat = self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME]
+
+            input_dim = right_mat.size(2)
+            output_dim = left_mat.size(1)
+            query_batch_size = left_mat.size(0)
+            train_batch_size = self._cached_per_sample_gradient.size(0)
+            rank = self.score_args.query_gradient_rank
+            if (
+                train_batch_size * query_batch_size * rank * min((input_dim, output_dim))
+                > query_batch_size * input_dim * output_dim
+            ):
+                # If reconstructing the gradient is more memory efficient, reconstruct and compute the score.
+                self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
+                    "qki,toi,qok->qt",
+                    right_mat,
+                    per_sample_gradient,
+                    left_mat,
+                )
+            # Otherwise, try to avoid reconstructing the full per-sample-gradient.
+            elif output_dim >= input_dim:
+                intermediate = contract("toi,qok->qtik", per_sample_gradient, left_mat)
+                self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract("qki,qtik->qt", right_mat, intermediate)
             else:
-                self._cached_per_sample_gradient.add_(per_sample_gradient)
-                del per_sample_gradient
+                intermediate = contract("qki,toi->qtko", right_mat, per_sample_gradient)
+                self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract("qtko,qok->qt", intermediate, left_mat)
+        else:
+            self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
+                "qio,tio->qt",
+                self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME],
+                per_sample_gradient,
+            )
 
-            # If the module was used multiple times throughout the forward pass,
-            # only compute scores after aggregating all per-sample-gradients.
-            if len(self._cached_activations) == 0:
-                if self._gradient_scale != 1.0:
-                    self._cached_per_sample_gradient.mul_(self._gradient_scale)
-
-                if isinstance(self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME], list):
-                    # The preconditioned gradient is stored as a low-rank approximation.
-                    left_mat, right_mat = self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME]
-
-                    input_dim = right_mat.size(2)
-                    output_dim = left_mat.size(1)
-                    query_batch_size = left_mat.size(0)
-                    train_batch_size = self._cached_per_sample_gradient.size(0)
-                    rank = self.score_args.query_gradient_rank
-                    if (
-                        train_batch_size * query_batch_size * rank * min((input_dim, output_dim))
-                        > query_batch_size * input_dim * output_dim
-                    ):
-                        # If reconstructing the gradient is more memory efficient, reconstruct and compute the score.
-                        self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
-                            "qki,toi,qok->qt",
-                            right_mat,
-                            self._cached_per_sample_gradient,
-                            left_mat,
-                        )
-                    # Otherwise, try to avoid reconstructing the full per-sample-gradient.
-                    elif output_dim >= input_dim:
-                        intermediate = contract("toi,qok->qtik", self._cached_per_sample_gradient, left_mat)
-                        self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract("qki,qtik->qt", right_mat, intermediate)
-                    else:
-                        intermediate = contract("qki,toi->qtko", right_mat, self._cached_per_sample_gradient)
-                        self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract("qtko,qok->qt", intermediate, left_mat)
-                else:
-                    self._storage[PAIRWISE_SCORE_MATRIX_NAME] = contract(
-                        "qio,tio->qt",
-                        self._storage[AGGREGATED_PRECONDITIONED_GRADIENT_NAME],
-                        self._cached_per_sample_gradient,
-                    )
-                del self._cached_per_sample_gradient
-                self._cached_per_sample_gradient = None
-
+    @torch.no_grad()
+    def _pairwise_post_forward(self, inputs: torch.Tensor, outputs: torch.Tensor) -> Any:
         # Register backward hook to obtain gradient with respect to the output.
-        outputs.register_hook(backward_hook)
+        if self.factor_args.cached_activation_cpu_offload:
+            inputs = inputs.cpu()
+        outputs.register_hook(functools.partial(self._pairwise_backward_hook, input_activation=inputs))
 
     @torch.no_grad()
     def _self_post_forward(self, outputs: torch.Tensor) -> Any:

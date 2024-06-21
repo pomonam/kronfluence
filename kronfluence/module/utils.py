@@ -156,6 +156,17 @@ def synchronize_covariance_matrices(model: nn.Module) -> None:
         raise TrackedModuleNotFoundError("Tracked modules not found when trying to synchronize covariance matrices.")
 
 
+def update_aggregated_lambda_matrices(model: nn.Module) -> None:
+    """Updates Lambda matrices of all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.update_aggregated_lambda_matrix()
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to update lambda matrices.")
+
+
 def synchronize_lambda_matrices(model: nn.Module) -> None:
     """Synchronizes Lambda matrices of all `TrackedModule` instances within a model."""
     tracked_module_count = 0

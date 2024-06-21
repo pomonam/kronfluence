@@ -18,10 +18,10 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
 
         Args:
             input_activation (torch.Tensor):
-                The input tensor to the module, provided by the PyTorch's forward hook.
+                The input tensor to the module.
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor]:
+            Tuple[torch.Tensor, Union[torch.Tensor, int]]:
                 The flattened activation tensor and the number of stacked activations. The flattened
                 activation is a 2-dimensional matrix with dimension `activation_num x activation_dim`.
         """
@@ -44,7 +44,7 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
         count = flattened_activation.size(0) if flattened_attention_mask is None else flattened_attention_mask.sum()
         return flattened_activation, count
 
-    def _get_flattened_gradient(self, output_gradient: torch.Tensor) -> torch.Tensor:
+    def _get_flattened_gradient(self, output_gradient: torch.Tensor) -> Tuple[torch.Tensor, Union[torch.Tensor, int]]:
         """Returns the flattened gradient tensor.
 
         Args:
@@ -53,9 +53,9 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                 PyTorch's backward hook.
 
         Returns:
-            torch.Tensor:
-                The flattened output gradient tensor. The flattened gradient is a 2-dimensional matrix
-                with dimension `gradient_num x gradient_dim`.
+            Tuple[torch.Tensor, Union[torch.Tensor, int]]:
+                The flattened output gradient tensor and the number of stacked gradients. The flattened
+                gradient is a 2-dimensional matrix  with dimension `gradient_num x gradient_dim`.
         """
         flattened_gradient = rearrange(tensor=output_gradient, pattern="b ... d_out -> (b ...) d_out")
         if self._attention_mask is not None and flattened_gradient.size(0) == self._attention_mask.numel():
@@ -67,11 +67,12 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
     def _compute_per_sample_gradient(
         self, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
-        """Returns the flattened per-sample-gradient tensor.
+        """Returns the flattened per-sample-gradient tensor. For a brief introduction to
+        per-sample-gradients, see https://pytorch.org/functorch/stable/notebooks/per_sample_grads.html.
 
         Args:
             input_activation (torch.Tensor):
-                The input tensor to the module, provided by the PyTorch's forward hook.
+                The input tensor to the module.
             output_gradient (torch.Tensor):
                 The gradient tensor with respect to the output of the module, provided by the
                 PyTorch's backward hook.
