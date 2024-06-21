@@ -104,11 +104,6 @@ class State:
 
 def release_memory() -> None:
     """Releases the memory by calling `gc.collect()` and `torch.cuda.empty_cache()`."""
-    try:
-        torch._C._cuda_clearCublasWorkspaces()
-    except AttributeError:
-        pass
-    torch._dynamo.reset()
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

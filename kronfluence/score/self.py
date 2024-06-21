@@ -20,7 +20,7 @@ from kronfluence.module.utils import (
     set_gradient_scale,
     set_mode,
     update_factor_args,
-    update_score_args,
+    update_score_args, release_preconditioned_gradient,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (
@@ -94,6 +94,7 @@ def compute_self_scores_with_loaders(
     score_args: ScoreArguments,
     factor_args: FactorArguments,
     tracked_module_names: Optional[List[str]],
+    disable_tqdm: bool = False,
 ) -> Dict[str, torch.Tensor]:
     """Computes self-influence scores for a given model and task.
 
@@ -115,21 +116,24 @@ def compute_self_scores_with_loaders(
         tracked_module_names (List[str], optional):
             A list of module names that self-influence scores will be computed. If not specified, scores
             will be computed for all available tracked modules.
+        disable_tqdm (bool, optional):
+            Disables TQDM progress bars. Defaults to False.
 
     Returns:
         Dict[str, torch.Tensor]:
-            A dictionary containing the module name and its self-influence scores. If
-            `score_args.per_module_score` is False, the self-influence scores will be aggregated across all modules.
+            A dictionary containing the module name and its self-influence scores.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
         update_score_args(model=model, score_args=score_args)
+        if tracked_module_names is None:
+            tracked_module_names = get_tracked_module_names(model=model)
         set_mode(
             model=model,
-            mode=ModuleMode.DEFAULT,
+            mode=ModuleMode.SELF_SCORE,
+            tracked_module_names=tracked_module_names,
             keep_factors=False,
         )
-
         # Loads necessary factors before computing self-influence scores.
         if len(loaded_factors) > 0:
             for name in loaded_factors:
@@ -138,14 +142,6 @@ def compute_self_scores_with_loaders(
                     factor_name=name,
                     factors=loaded_factors[name],
                 )
-        if tracked_module_names is None:
-            tracked_module_names = get_tracked_module_names(model=model)
-        set_mode(
-            model=model,
-            mode=ModuleMode.SELF_SCORE,
-            tracked_module_names=tracked_module_names,
-            keep_factors=True,
-        )
 
     dataset_size = len(train_loader.dataset)
     score_chunks: Dict[str, List[torch.Tensor]] = {}
@@ -162,14 +158,12 @@ def compute_self_scores_with_loaders(
     if enable_amp:
         gradient_scale = 1.0 / scaler.get_scale()
         set_gradient_scale(model=model, gradient_scale=gradient_scale)
-    if score_args.compile_mode is not None:
-        model = torch.compile(model, mode=score_args.compile_mode)
 
     with tqdm(
         total=len(train_loader),
         desc="Computing self-influence scores",
         bar_format=TQDM_BAR_FORMAT,
-        disable=not state.is_main_process,
+        disable=not state.is_main_process or disable_tqdm,
     ) as pbar:
         for batch in train_loader:
             batch = send_to_device(
@@ -198,7 +192,7 @@ def compute_self_scores_with_loaders(
                                 module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).cpu()
                             )
                 else:
-                    # Aggregate the self-influence scores across all modules.
+                    # Aggregates the self-influence scores across all modules.
                     self_scores = None
                     for module in model.modules():
                         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
@@ -210,7 +204,7 @@ def compute_self_scores_with_loaders(
                 release_scores(model=model)
 
             if state.use_distributed and total_steps % score_args.distributed_sync_steps == 0:
-                # Periodically synchronize all processes to avoid timeout at the final synchronization.
+                # Periodically synchronizes all processes to avoid timeout at the final synchronization.
                 state.wait_for_everyone()
 
             pbar.update(1)
@@ -239,6 +233,7 @@ def compute_self_scores_with_loaders(
                 if state.is_main_process:
                     total_scores[module_name] = torch.cat(gather_list, dim=0)[:dataset_size].cpu()
         state.wait_for_everyone()
+
     return total_scores
 
 
@@ -251,6 +246,7 @@ def compute_self_measurement_scores_with_loaders(
     score_args: ScoreArguments,
     factor_args: FactorArguments,
     tracked_module_names: Optional[List[str]],
+    disable_tqdm: bool = False,
 ) -> Dict[str, torch.Tensor]:
     """Computes self-influence scores with measurement (instead of the loss) for a given model and task.
 
@@ -272,21 +268,23 @@ def compute_self_measurement_scores_with_loaders(
         tracked_module_names (List[str], optional):
             A list of module names that self-influence scores will be computed. If not specified, scores
             will be computed for all available tracked modules.
+        disable_tqdm (bool, optional):
+            Disables TQDM progress bars. Defaults to False.
 
     Returns:
         Dict[str, torch.Tensor]:
-            A dictionary containing the module name and its self-influence scores. If
-            `score_args.per_module_score` is False, the self-influence scores will be aggregated across all modules.
+            A dictionary containing the module name and its self-influence scores.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
         update_score_args(model=model, score_args=score_args)
+        if tracked_module_names is None:
+            tracked_module_names = get_tracked_module_names(model=model)
         set_mode(
             model=model,
             mode=ModuleMode.DEFAULT,
             keep_factors=False,
         )
-
         # Loads necessary factors before computing self-influence scores.
         if len(loaded_factors) > 0:
             for name in loaded_factors:
@@ -295,8 +293,6 @@ def compute_self_measurement_scores_with_loaders(
                     factor_name=name,
                     factors=loaded_factors[name],
                 )
-        if tracked_module_names is None:
-            tracked_module_names = get_tracked_module_names(model=model)
 
     dataset_size = len(train_loader.dataset)
     score_chunks: Dict[str, List[torch.Tensor]] = {}
@@ -313,14 +309,12 @@ def compute_self_measurement_scores_with_loaders(
     if enable_amp:
         gradient_scale = 1.0 / scaler.get_scale()
         set_gradient_scale(model=model, gradient_scale=gradient_scale)
-    if score_args.compile_mode is not None:
-        model = torch.compile(model, mode=score_args.compile_mode)
 
     with tqdm(
         total=len(train_loader),
         desc="Computing self-influence scores",
         bar_format=TQDM_BAR_FORMAT,
-        disable=not state.is_main_process,
+        disable=not state.is_main_process or disable_tqdm,
     ) as pbar:
         for batch in train_loader:
             batch = send_to_device(
@@ -377,10 +371,11 @@ def compute_self_measurement_scores_with_loaders(
                             else:
                                 self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
                     score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
+                release_preconditioned_gradient(model=model)
                 release_scores(model=model)
 
             if state.use_distributed and total_steps % score_args.distributed_sync_steps == 0:
-                # Periodically synchronize all processes to avoid timeout at the final synchronization.
+                # Periodically synchronizes all processes to avoid timeout at the final synchronization.
                 state.wait_for_everyone()
 
             pbar.update(1)
@@ -409,4 +404,5 @@ def compute_self_measurement_scores_with_loaders(
                 if state.is_main_process:
                     total_scores[module_name] = torch.cat(gather_list, dim=0)[:dataset_size].cpu()
         state.wait_for_everyone()
+
     return total_scores

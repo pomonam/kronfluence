@@ -165,6 +165,10 @@ class ScoreArguments(Arguments):
         default=None,
         metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
     )
+    shared_parameters_exist: bool = field(
+        default=False,
+        metadata={"help": "Specifies whether the shared parameters exist in the forward pass."},
+    )
 
     # Partition configuration. #
     data_partition_size: int = field(

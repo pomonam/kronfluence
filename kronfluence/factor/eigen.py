@@ -273,6 +273,8 @@ def fit_lambda_matrices_with_loader(
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
+        if tracked_module_names is None:
+            tracked_module_names = get_tracked_module_names(model=model)
         set_mode(
             model=model,
             tracked_module_names=tracked_module_names,
@@ -344,6 +346,7 @@ def fit_lambda_matrices_with_loader(
 
         # Clean up the memory.
         model.zero_grad(set_to_none=True)
+        remove_gradient_scale(model=model)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
 
     return num_data_processed, saved_factors

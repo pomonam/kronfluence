@@ -178,6 +178,17 @@ def synchronize_lambda_matrices(model: nn.Module) -> None:
         raise TrackedModuleNotFoundError("Tracked modules not found when trying to synchronize lambda matrices.")
 
 
+def compute_preconditioned_gradient(model: nn.Module) -> None:
+    """Computes preconditioned gradient of all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.compute_preconditioned_gradient()
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to truncate preconditioned gradient.")
+
+
 def aggregate_preconditioned_gradient(model: nn.Module) -> None:
     """Aggregates preconditioned gradient of all `TrackedModule` instances within a model."""
     tracked_module_count = 0
@@ -211,6 +222,17 @@ def synchronize_preconditioned_gradient(model: nn.Module, num_processes: int) ->
         raise TrackedModuleNotFoundError(
             "Tracked modules not found when trying to synchronize preconditioned gradient."
         )
+
+
+def release_preconditioned_gradient(model: nn.Module) -> None:
+    """Releases preconditioned gradient of all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.release_preconditioned_gradient()
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to release preconditioned gradient.")
 
 
 def release_scores(model: nn.Module) -> None:

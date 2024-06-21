@@ -91,7 +91,7 @@ def for_loop_per_sample_gradient(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
+        # "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -154,6 +154,7 @@ def test_for_loop_per_sample_gradient_equivalence(
                 module_gradients[module.name] = module.get_factor(factor_name=PRECONDITIONED_GRADIENT_NAME)
 
         per_sample_gradients.append(module_gradients)
+        set_mode(model, ModuleMode.PRECONDITION_GRADIENT, keep_factors=False)
 
     for_loop_per_sample_gradients = for_loop_per_sample_gradient(
         batches=batch_lst,

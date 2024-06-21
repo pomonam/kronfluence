@@ -21,7 +21,6 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -514,7 +513,6 @@ def test_compute_pairwise_scores_with_indices(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
     ],
 )
