@@ -41,7 +41,7 @@ class FactorComputer(Computer):
     def _configure_and_save_factor_args(
         self, factor_args: Optional[FactorArguments], factors_output_dir: Path, overwrite_output_dir: bool
     ) -> FactorArguments:
-        """Configure the provided factor arguments and save it in disk."""
+        """Configures the provided factor arguments and saves it in disk."""
         if factor_args is None:
             factor_args = FactorArguments()
             self.logger.info(f"Factor arguments not provided. Using the default configuration: {factor_args}.")
@@ -139,7 +139,7 @@ class FactorComputer(Computer):
 
         def executable_batch_size_func(batch_size: int) -> None:
             self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
-            # Release all memory that could be caused by the previous OOM.
+            # Releases all memory that could be caused by the previous OOM.
             set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
             self.model.zero_grad(set_to_none=True)
             release_memory()
@@ -293,6 +293,7 @@ class FactorComputer(Computer):
                         "task": self.task,
                         "factor_args": factor_args,
                         "tracked_module_names": module_partition_names[module_partition],
+                        "disable_tqdm": True,
                     }
                     per_device_batch_size = self._find_executable_factors_batch_size(
                         func=fit_covariance_matrices_with_loader,
@@ -320,6 +321,7 @@ class FactorComputer(Computer):
                         loader=loader,
                         factor_args=factor_args,
                         tracked_module_names=module_partition_names[module_partition],
+                        disable_tqdm=self.disable_tqdm,
                     )
                 end_time = get_time(state=self.state)
                 elapsed_time = end_time - start_time
@@ -437,7 +439,7 @@ class FactorComputer(Computer):
             covariance_factors = load_covariance_matrices(output_dir=load_factors_output_dir)
 
         if load_from_factors_name is not None and self.state.is_main_process:
-            # Save the loaded covariances to the current factor output directory.
+            # Saves the loaded covariances to the current factor output directory.
             with self.profiler.profile("Save Covariance"):
                 save_covariance_matrices(output_dir=factors_output_dir, factors=covariance_factors)
             loaded_factor_args = self.load_factor_args(factors_name=load_from_factors_name)
@@ -459,6 +461,7 @@ class FactorComputer(Computer):
                     model=self.model,
                     state=self.state,
                     factor_args=factor_args,
+                    disable_tqdm=self.disable_tqdm,
                 )
             end_time = time.time()
             elapsed_time = end_time - start_time
@@ -642,6 +645,7 @@ class FactorComputer(Computer):
                         "task": self.task,
                         "factor_args": factor_args,
                         "tracked_module_names": module_partition_names[module_partition],
+                        "disable_tqdm": True,
                     }
                     per_device_batch_size = self._find_executable_factors_batch_size(
                         func=fit_lambda_matrices_with_loader,
@@ -670,6 +674,7 @@ class FactorComputer(Computer):
                         loader=loader,
                         factor_args=factor_args,
                         tracked_module_names=module_partition_names[module_partition],
+                        disable_tqdm=self.disable_tqdm,
                     )
                 end_time = get_time(state=self.state)
                 elapsed_time = end_time - start_time

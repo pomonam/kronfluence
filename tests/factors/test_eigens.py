@@ -202,6 +202,7 @@ def test_lambda_matrices_batch_size_equivalence(
     [
         "mlp",
         "conv",
+        "conv_bn",
         "gpt",
     ],
 )
@@ -349,9 +350,7 @@ def test_lambda_matrices_iterative_aggregate(
 
 @pytest.mark.parametrize(
     "test_name",
-    [
-        "mlp",
-    ],
+    ["mlp", "conv"],
 )
 @pytest.mark.parametrize("data_partition_size", [1, 4])
 @pytest.mark.parametrize("train_size", [82])

@@ -180,6 +180,11 @@ def forward(x: torch.Tensor) -> torch.Tensor:
     x = self.linear.weight @ x + self.linear.bias  # This does not work 😞
 ```
 
+> [!WARNING]
+> The default arguments assume the module is used only once during the forward pass.
+> IIf your model shares parameters (e.g., the module is used in multiple places during the forward pass), set
+> `shared_parameters_exist=True` in both `FactorArguments` and `ScoreArguments`.
+
 **Why are there so many arguments?**
 Kronfluence was originally developed to compute influence scores on large-scale models, which is why `FactorArguments` and `ScoreArguments` 
 have many parameters to support these use cases. However, for most standard applications, the default argument values 
@@ -201,7 +206,6 @@ factor_args = FactorArguments(
     use_empirical_fisher=False,
     distributed_sync_steps=1000,
     amp_dtype=None,
-    compile_mode=None,
 
     # Settings for covariance matrix fitting.
     covariance_max_examples=100_000,
@@ -219,6 +223,8 @@ factor_args = FactorArguments(
     lambda_module_partition_size=1,
     lambda_iterative_aggregate=False,
     cached_activation_cpu_offload=False,
+    shared_parameters_exist=False,
+    per_sample_gradient_dtype=torch.float32,
     lambda_dtype=torch.float32,
 )
 
@@ -231,7 +237,6 @@ You can change:
 - `use_empirical_fisher`: Determines whether to use the [empirical Fisher](https://arxiv.org/abs/1905.12558) (using actual labels from batch) 
 instead of the true Fisher (using sampled labels from model's predictions). It is recommended to be `False`.
 - `amp_dtype`: Selects the dtype for [automatic mixed precision (AMP)](https://pytorch.org/docs/stable/amp.html). Disables AMP if set to `None`.
-- `compile_model`: Selects the mode for [torch compile](https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html). Disables torch compile if set to `None`.
 
 ### Fitting Covariance Matrices
 
@@ -301,9 +306,11 @@ This corresponds to **Equation 20** in the paper. You can tune:
 You can set `cached_activation_cpu_offload=True` to cache these activations in CPU. This is helpful for dealing with OOMs, but will make the overall computation slower.
 - `lambda_iterative_aggregate`: Whether to compute the Lambda matrices with for-loops instead of batched matrix multiplications.
 This is helpful for reducing peak memory, as it avoids holding multiple copies of tensors with the same shape as the per-sample-gradient.
+- `shared_parameters_exist`: Specifies whether the shared parameters exist in the forward pass.
+- `per_sample_gradient_dtype`: `dtype` for computing per-sample-gradient. You can also use `torch.bfloat16`
+or `torch.float16`.
 - `lambda_dtype`: `dtype` for computing Lambda matrices. You can also use `torch.bfloat16`
 or `torch.float16`.
-
 
 **Dealing with OOMs.** Here are some steps to fix Out of Memory (OOM) errors.
 1. Try reducing the `per_device_batch_size` when fitting Lambda matrices.
@@ -323,6 +330,10 @@ You can use the largest possible batch size that does not result in OOM. Typical
 matrices should be smaller than that used for fitting covariance matrices. Furthermore, note that you should be getting similar results, regardless
 of what batch size you use (different from training neural networks).
 
+**Why are there so many arguments?**
+Kronfluence was originally developed to compute influence scores on large-scale models, which is why `FactorArguments` 
+have many parameters to support these use cases. There are some common `FactorArguments` in `common_factor_arguments.py`.
+
 ---
 
 ## Configuring Scores with ScoreArguments
@@ -336,13 +347,11 @@ score_args = ScoreArguments(
     cached_activation_cpu_offload=False,
     distributed_sync_steps=1000,
     amp_dtype=None,
-    compile_mode=None,
 
     # More functionalities to compute influence scores.
     data_partition_size=1,
     module_partition_size=1,
     per_module_score=False,
-    per_token_score=False,
     use_measurement_for_self_influence=False,
 
     # Configuration for query batching.
@@ -361,7 +370,6 @@ score_args = ScoreArguments(
 `(0.1 x mean eigenvalues)` if `None`, as done in [this paper](https://arxiv.org/abs/2308.03296).
 - `cached_activation_cpu_offload`: Whether to offload cached activations to CPU.
 - `amp_dtype`: Selects the dtype for [automatic mixed precision (AMP)](https://pytorch.org/docs/stable/amp.html). Disables AMP if set to `None`.
-- `compile_model`: Selects the mode for [torch compile](https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html). Disables torch compile if set to `None`.
 - `data_partition_size`: Number of data partitions for computing influence scores.
 - `module_partition_size`: Number of module partitions for computing influence scores.
 - `per_module_score`: Whether to return a per-module influence scores. Instead of summing over influences across

@@ -48,6 +48,7 @@ def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module,
         task=task,
         disable_model_save=True,
         cpu=True,
+        disable_tqdm=True,
     )
     return model, analyzer
 

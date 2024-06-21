@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from abc import ABC
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -63,6 +64,7 @@ class Computer(ABC):
         log_level: Optional[int] = logging.INFO,
         log_main_process_only: bool = True,
         profile: bool = False,
+        disable_tqdm: bool = False,
     ) -> None:
         """Initializes an instance of the Computer class."""
         self.state = State(cpu=cpu)
@@ -115,6 +117,7 @@ class Computer(ABC):
         # Create directory to save profiler output.
         self.profiler_dir = (self.output_dir / "profiler_output").resolve()
         os.makedirs(name=self.profiler_dir, exist_ok=True)
+        self.disable_tqdm = disable_tqdm
 
         # DataLoader parameters.
         self._dataloader_params = DataLoaderKwargs()
@@ -319,9 +322,10 @@ class Computer(ABC):
         return modules_partition_list, target_module_partitions
 
     def _log_profile_summary(self) -> None:
-        """Log the summary of the profiling results."""
+        """Saves the summary of the profiling results."""
         profile_summary = self.profiler.summary()
-        profile_save_path = (self.profiler_dir / f"summary_rank_{self.state.process_index}.txt").resolve()
+        time_str = time.strftime("%Y%m%d_%H%M%S")
+        profile_save_path = (self.profiler_dir / f"summary_rank_{self.state.process_index}_{time_str}.txt").resolve()
         if profile_summary != "":
             self.logger.info(profile_summary)
             with open(profile_save_path, "a", encoding="utf-8") as f:

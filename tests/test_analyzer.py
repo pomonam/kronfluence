@@ -100,6 +100,8 @@ def test_default_factor_arguments() -> None:
     assert factor_args.lambda_module_partition_size == 1
     assert factor_args.lambda_iterative_aggregate is False
     assert factor_args.cached_activation_cpu_offload is False
+    assert factor_args.shared_parameters_exist is False
+    assert factor_args.per_sample_gradient_dtype == torch.float32
     assert factor_args.lambda_dtype == torch.float32
 
 

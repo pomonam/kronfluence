@@ -58,6 +58,7 @@ class Analyzer(FactorComputer, ScoreComputer):
         log_level: Optional[int] = None,
         log_main_process_only: bool = True,
         profile: bool = False,
+        disable_tqdm: bool = False,
         output_dir: str = "./analyses",
         disable_model_save: bool = True,
     ) -> None:
@@ -80,6 +81,8 @@ class Analyzer(FactorComputer, ScoreComputer):
             profile (bool, optional):
                 Enables the generation of performance profiling logs. This can be useful for
                 identifying bottlenecks or performance issues. Defaults to False.
+            disable_tqdm (bool, optional):
+                Disables TQDM progress bars. Defaults to False.
             output_dir (str):
                 The file path to the directory, where analysis results will be stored. If the directory
                 does not exist, it will be created. Defaults to './analyses'.
@@ -95,6 +98,7 @@ class Analyzer(FactorComputer, ScoreComputer):
             log_level=log_level,
             log_main_process_only=log_main_process_only,
             profile=profile,
+            disable_tqdm=disable_tqdm,
             output_dir=output_dir,
         )
         self.logger.info(f"Initializing Computer with parameters: {locals()}")

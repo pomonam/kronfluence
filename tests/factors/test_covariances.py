@@ -149,6 +149,7 @@ def test_covariance_matrices_batch_size_equivalence(
     [
         "mlp",
         "conv",
+        "conv_bn",
         "gpt",
     ],
 )
@@ -415,7 +416,7 @@ def test_covariance_matrices_max_examples(
         "conv",
     ],
 )
-@pytest.mark.parametrize("train_size", [100])
+@pytest.mark.parametrize("train_size", [101])
 @pytest.mark.parametrize("seed", [8])
 def test_covariance_matrices_amp(
     test_name: str,

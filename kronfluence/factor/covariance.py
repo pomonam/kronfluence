@@ -101,6 +101,7 @@ def fit_covariance_matrices_with_loader(
     loader: data.DataLoader,
     factor_args: FactorArguments,
     tracked_module_names: Optional[List[str]] = None,
+    disable_tqdm: bool = False,
 ) -> Tuple[torch.Tensor, FACTOR_TYPE]:
     """Computes activation and pseudo-gradient covariance matrices for a given model and task.
 
@@ -118,13 +119,15 @@ def fit_covariance_matrices_with_loader(
         tracked_module_names (List[str], optional):
             A list of module names for which covariance matrices will be computed. If not specified,
             covariance matrices will be computed for all tracked modules.
+        disable_tqdm (bool, optional):
+            Disables TQDM progress bars. Defaults to False.
 
     Returns:
         Tuple[torch.Tensor, FACTOR_TYPE]:
-            A tuple containing the number of data points processed and computed covariance matrices in CPU.
+            A tuple containing the number of data points processed and computed covariance matrices.
             The covariance matrices are organized in nested dictionaries, where the first key is the name of the
             covariance matrix (e.g., activation covariance and pseudo-gradient covariance) and the second key is
-            the module name.
+            the module name. These will map to the covariance tensor.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
@@ -132,6 +135,7 @@ def fit_covariance_matrices_with_loader(
             model=model,
             tracked_module_names=tracked_module_names,
             mode=ModuleMode.COVARIANCE,
+            keep_factors=False,
         )
 
     total_steps = 0
@@ -146,7 +150,7 @@ def fit_covariance_matrices_with_loader(
         total=len(loader),
         desc="Fitting covariance matrices",
         bar_format=TQDM_BAR_FORMAT,
-        disable=not state.is_main_process,
+        disable=not state.is_main_process or disable_tqdm,
     ) as pbar:
         for index, batch in enumerate(loader):
             batch = send_to_device(batch, device=state.device)
@@ -174,14 +178,14 @@ def fit_covariance_matrices_with_loader(
                 and total_steps % factor_args.distributed_sync_steps == 0
                 and index not in [len(loader) - 1, len(loader) - 2]
             ):
-                # Periodically synchronize all processes to avoid timeout at the final covariance synchronization.
+                # Periodically synchronizes all processes to avoid timeout at the final covariance synchronization.
                 state.wait_for_everyone()
 
             pbar.update(1)
 
     with torch.no_grad():
         if state.use_distributed:
-            # Aggregate covariance matrices across multiple devices or nodes.
+            # Aggregates covariance matrices across multiple devices or nodes.
             synchronize_covariance_matrices(model=model)
             num_data_processed = num_data_processed.to(device=state.device)
             dist.all_reduce(tensor=num_data_processed, op=torch.distributed.ReduceOp.SUM)
