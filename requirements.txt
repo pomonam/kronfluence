@@ -1,8 +1,8 @@
 torch>=2.1.0
 torchvision>=0.16.0
-accelerate>=0.27.2
-einops>=0.7.0
+accelerate>=0.31.0
+einops>=0.8.0
 einconv>=0.1.0
 opt_einsum>=3.3.0
 safetensors>=0.4.2
-tqdm>=4.66.2
+tqdm>=4.66.4
