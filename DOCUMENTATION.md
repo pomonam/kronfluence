@@ -43,6 +43,7 @@ query_dataset = prepare_query_dataset()
 To compute influence scores, you need to define a [`Task`](https://github.com/pomonam/kronfluence/blob/main/kronfluence/task.py) class.
 This class contains information about the trained model and how influence scores will be computed:
 (1) how to compute the training loss; (2) how to compute the measurable quantity (f(θ) in the [paper](https://arxiv.org/abs/2308.03296); see **Equation 5**);
+(3) which modules to use for influence function computations; and (4) whether the model used [attention mask](https://huggingface.co/docs/transformers/en/glossary#attention-mask).
 
 ```python
 from typing import Any, Dict, List, Optional, Union
@@ -92,7 +93,7 @@ If you have specified specific module names in `Task.tracked_modules`, `TrackedM
 
 **\[Optional\] Create a DDP and FSDP Module.** 
 After calling `prepare_model`, you can create [DistributedDataParallel (DDP)](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html) or 
-[FullyShardedDataParallel (FSDP)](https://pytorch.org/docs/stable/fsdp.html) module.
+[FullyShardedDataParallel (FSDP)](https://pytorch.org/docs/stable/fsdp.html) module. You can also wrap your model with [`torch.compile`](https://pytorch.org/tutorials/intermediate/torch_compile_tutorial.html).
 
 **Set up the Analyzer and Fit Factors.** 
 Initialize the `Analyzer` and run `fit_all_factors` to compute all factors that aim to approximate the Hessian 
@@ -288,7 +289,7 @@ but `torch.float64` is strongly recommended.
 
 ### Fitting Lambda Matrices
 
-`ekfac` and `diagonal` require computing the Lambda (eigenvalue) matrices for all modules.
+`ekfac` and `diagonal` require computing the Lambda (corrected-eigenvalue) matrices for all modules.
 
 ```python
 # Fitting Lambda matrices.
@@ -304,17 +305,17 @@ This corresponds to **Equation 20** in the paper. You can tune:
 - `cached_activation_cpu_offload`: Computing the per-sample-gradient requires saving the intermediate activation in memory.
 You can set `cached_activation_cpu_offload=True` to cache these activations in CPU. This is helpful for dealing with OOMs, but will make the overall computation slower.
 - `lambda_iterative_aggregate`: Whether to compute the Lambda matrices with for-loops instead of batched matrix multiplications.
-This is helpful for reducing peak memory, as it avoids holding multiple copies of tensors with the same shape as the per-sample-gradient.
+This is helpful for reducing peak GPU memory, as it avoids holding multiple copies of tensors with the same shape as the per-sample-gradient.
 - `shared_parameters_exist`: Specifies whether the shared parameters exist in the forward pass.
 - `per_sample_gradient_dtype`: `dtype` for computing per-sample-gradient. You can also use `torch.bfloat16`
 or `torch.float16`.
 - `lambda_dtype`: `dtype` for computing Lambda matrices. You can also use `torch.bfloat16`
-or `torch.float16`.
+or `torch.float16`. Recommended to use `torch.float32`.
 
 **Dealing with OOMs.** Here are some steps to fix Out of Memory (OOM) errors.
 1. Try reducing the `per_device_batch_size` when fitting Lambda matrices.
 2. Try setting `lambda_iterative_aggregate=True` or `cached_activation_cpu_offload=True`. (Try out `lambda_iterative_aggregate=True` first.)
-3. Try using lower precision for `lambda_dtype`. 
+3. Try using lower precision for `per_sample_gradient_dtype` and `lambda_dtype`. 
 4. Try using `lambda_module_partition_size > 1`. 
 
 ### FAQs
@@ -325,9 +326,9 @@ Using `use_empirical_fisher=True` could make the process more deterministic. Mor
 different eigenvectors when performing eigendecomposition.
 
 **How should I select the batch size?**
-You can use the largest possible batch size that does not result in OOM. Typically, the batch size for fitting Lambda
-matrices should be smaller than that used for fitting covariance matrices. Furthermore, note that you should be getting similar results, regardless
-of what batch size you use (different from training neural networks).
+You can use the largest possible batch size that avoids OOM error. Typically, the batch size for fitting Lambda
+matrices should be smaller than that used for fitting covariance matrices. Furthermore, note that you should be getting 
+similar results, regardless of what batch size you use (different from training neural networks).
 
 ---
 
@@ -369,8 +370,6 @@ score_args = ScoreArguments(
 - `module_partition_size`: Number of module partitions for computing influence scores.
 - `per_module_score`: Whether to return a per-module influence scores. Instead of summing over influences across
 all modules, this will keep track of intermediate module-wise scores. 
-- `per_token_score`: Whether to return a per-token influence scores. Instead of summing over influence scores across
-all tokens, this will keep track of influence scores for each token. Note that this is only supported for Transformer-based models (language modeling).
 - `query_gradient_rank`: The rank for the query batching (low-rank approximation to the preconditioned query gradient; see **Section 3.2.2**). If `None`, no query batching will be used.
 - `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can also use `torch.float64`.
 - `num_query_gradient_aggregations`: Number of query gradients to aggregate over. For example, when `num_query_gradient_aggregations=2` with 
@@ -412,9 +411,10 @@ vector will correspond to `g_m^T ⋅ H^{-1} ⋅ g_l`, where `g_m` is the gradien
 1. Try reducing the `per_device_query_batch_size` or `per_device_train_batch_size`.
 2. Try setting `cached_activation_cpu_offload=True`.
 3. Try using lower precision for `per_sample_gradient_dtype` and `score_dtype`. 
-4. Try setting `query_gradient_rank > 1`. The recommended values are `16`, `32`, `64`, `128`, and `256`. Note that query
+4. Try using lower precision for `precondition_dtype`.
+5. Try setting `query_gradient_rank > 1`. The recommended values are `16`, `32`, `64`, `128`, and `256`. Note that query
 batching is only supported for computing pairwise influence scores, not self-influence scores.
-5. Try setting `module_partition_size > 1`.
+6. Try setting `module_partition_size > 1`.
 
 ### FAQs
 
@@ -427,8 +427,7 @@ reasonable range to find what works best for your use case.
 
 **Influence scores are very large in magnitude.**
 Ideally, influence scores need to be divided by the total number of training data points. However, the code does
-not normalize the scores. If you would like, you can divide the scores with the total number of data points (or tokens) used to
-train the model.
+not normalize the scores. If you would like, you can divide the scores with the total number of data points (or tokens for language modeling) used to train the model.
 
 ## References
 
@@ -437,5 +436,5 @@ train the model.
 3. [TRAK: Attributing Model Behavior at Scale](https://arxiv.org/abs/2303.14186). Sung Min Park, Kristian Georgiev, Andrew Ilyas, Guillaume Leclerc, Aleksander Madry. ICML, 2023.
 4. [Understanding Black-box Predictions via Influence Functions](https://arxiv.org/abs/1703.04730). Pang Wei Koh, Percy Liang. ICML, 2017.
 5. [Optimizing Neural Networks with Kronecker-factored Approximate Curvature](https://arxiv.org/abs/1503.05671). James Martens, Roger Grosse. Tech Report, 2015.
-5. [Fast Approximate Natural Gradient Descent in a Kronecker-factored Eigenbasis](https://arxiv.org/abs/1806.03884). Thomas George, César Laurent, Xavier Bouthillier, Nicolas Ballas, Pascal Vincent. NeurIPS, 2018.
-6. [Training Data Attribution via Approximate Unrolled Differentiation](https://arxiv.org/abs/2405.12186). Juhan Bae, Wu Lin, Jonathan Lorraine, Roger Grosse. Preprint, 2024.
+6. [Fast Approximate Natural Gradient Descent in a Kronecker-factored Eigenbasis](https://arxiv.org/abs/1806.03884). Thomas George, César Laurent, Xavier Bouthillier, Nicolas Ballas, Pascal Vincent. NeurIPS, 2018.
+7. [Training Data Attribution via Approximate Unrolled Differentiation](https://arxiv.org/abs/2405.12186). Juhan Bae, Wu Lin, Jonathan Lorraine, Roger Grosse. Preprint, 2024.

@@ -112,7 +112,7 @@ analyzer.compute_pairwise_scores(
 scores = analyzer.load_pairwise_scores(scores_name="my_scores")
 ```
 
-Kronfluence supports various PyTorch features. The following table summarizes the supported features:
+Kronfluence supports various PyTorch features; the following table summarizes the supported features:
 
 <div align="center">
 
