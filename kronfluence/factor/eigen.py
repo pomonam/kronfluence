@@ -21,7 +21,8 @@ from kronfluence.module.utils import (
     set_gradient_scale,
     set_mode,
     synchronize_lambda_matrices,
-    update_factor_args, update_aggregated_lambda_matrices,
+    update_aggregated_lambda_matrices,
+    update_factor_args,
 )
 from kronfluence.task import Task
 from kronfluence.utils.constants import (

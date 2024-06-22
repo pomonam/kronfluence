@@ -877,9 +877,7 @@ class TrackedModule(nn.Module):
 
             # The preconditioning factors need to be loaded to appropriate device as they will be
             # used at each iteration.
-            if not self._storge_at_current_device:
-                self._move_storage_to_device(target_device=per_sample_gradient.device)
-                self._storge_at_current_device = True
+            self._move_storage_to_device(target_device=per_sample_gradient.device)
 
             if self._cached_per_sample_gradient is None:
                 self._cached_per_sample_gradient = per_sample_gradient
@@ -941,9 +939,7 @@ class TrackedModule(nn.Module):
 
             # The preconditioning factors need to be loaded to appropriate device as they will be
             # used at each iteration.
-            if not self._storge_at_current_device:
-                self._move_storage_to_device(target_device=per_sample_gradient.device)
-                self._storge_at_current_device = True
+            self._move_storage_to_device(target_device=per_sample_gradient.device)
 
             if self._cached_per_sample_gradient is None:
                 self._cached_per_sample_gradient = per_sample_gradient
@@ -996,4 +992,3 @@ class TrackedModule(nn.Module):
         self._cached_activations = []
         del self._cached_per_sample_gradient
         self._cached_per_sample_gradient = None
-        self._storge_at_current_device = False

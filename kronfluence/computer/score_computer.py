@@ -516,7 +516,7 @@ class ScoreComputer(Computer):
                 score_args=score_args,
                 factor_args=factor_args,
                 tracked_module_names=tracked_modules_name,
-                disable_tqdm=True
+                disable_tqdm=True,
             )
 
         per_device_batch_size = find_executable_batch_size(
