@@ -69,8 +69,13 @@ def make_gpt_dataset(num_data: int, seed: int = 0) -> data.Dataset:
 
     def group_texts(examples):
         concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
+        # Just to make sure attention_mask is correctly implemented.
+        concatenated_examples["attention_mask"][15:30] = [0 for _ in range(15)]
+        concatenated_examples["attention_mask"][90:100] = [0 for _ in range(10)]
+        concatenated_examples["attention_mask"][300:400] = [0 for _ in range(100)]
         total_length = len(concatenated_examples[list(examples.keys())[0]])
-        total_length = (total_length // block_size) * block_size
+        if total_length >= block_size:
+            total_length = (total_length // block_size) * block_size
         result = {
             k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
             for k, t in concatenated_examples.items()

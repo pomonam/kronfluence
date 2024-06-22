@@ -27,6 +27,7 @@ from tests.utils import (
     [
         "mlp",
         "repeated_mlp",
+        "mlp_checkpoint",
         "conv",
         "conv_bn",
         "bert",
@@ -88,11 +89,13 @@ def test_perform_eigendecomposition(
         "gpt",
     ],
 )
+@pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("lambda_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("train_size", [16])
 @pytest.mark.parametrize("seed", [0])
 def test_fit_lambda_matrices(
     test_name: str,
+    per_sample_gradient_dtype: torch.dtype,
     lambda_dtype: torch.dtype,
     train_size: int,
     seed: int,
@@ -111,6 +114,7 @@ def test_fit_lambda_matrices(
 
     factor_args = FactorArguments(
         lambda_dtype=lambda_dtype,
+        per_sample_gradient_dtype=per_sample_gradient_dtype,
     )
     factors_name = f"pytest_{test_name}_{test_fit_lambda_matrices.__name__}"
     analyzer.fit_all_factors(
@@ -198,6 +202,7 @@ def test_lambda_matrices_batch_size_equivalence(
     [
         "mlp",
         "conv",
+        "conv_bn",
         "gpt",
     ],
 )
@@ -277,6 +282,7 @@ def test_lambda_matrices_partition_equivalence(
     [
         "mlp",
         "conv",
+        "bert",
         "gpt",
     ],
 )
@@ -344,9 +350,7 @@ def test_lambda_matrices_iterative_aggregate(
 
 @pytest.mark.parametrize(
     "test_name",
-    [
-        "mlp",
-    ],
+    ["mlp", "conv"],
 )
 @pytest.mark.parametrize("data_partition_size", [1, 4])
 @pytest.mark.parametrize("train_size", [82])
@@ -387,3 +391,256 @@ def test_lambda_matrices_max_examples(
     )
     for num_examples in lambda_factors[NUM_LAMBDA_PROCESSED].values():
         assert num_examples == MAX_EXAMPLES
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "conv",
+    ],
+)
+@pytest.mark.parametrize("train_size", [100])
+@pytest.mark.parametrize("seed", [8])
+def test_lambda_matrices_amp(
+    test_name: str,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Lambda matrices should be similar when AMP is enabled.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name=test_name,
+        train_size=train_size,
+        seed=seed,
+    )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        lambda_dtype=torch.float64,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}",
+        dataset=train_dataset,
+        factor_args=factor_args,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        dataloader_kwargs=kwargs,
+    )
+    lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}"
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        amp_dtype=torch.float16,
+        lambda_dtype=torch.float64,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}_amp",
+        dataset=train_dataset,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+        dataloader_kwargs=kwargs,
+    )
+    amp_lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}_amp",
+    )
+
+    for name in LAMBDA_FACTOR_NAMES:
+        assert check_tensor_dict_equivalence(lambda_factors[name], amp_lambda_factors[name], atol=1e-01, rtol=1e-02)
+
+
+@pytest.mark.parametrize("train_size", [105])
+@pytest.mark.parametrize("seed", [12])
+def test_lambda_matrices_gradient_checkpoint(
+    train_size: int,
+    seed: int,
+) -> None:
+    # Lambda matrices should be the same even when gradient checkpointing is used.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name="mlp",
+        train_size=train_size,
+        seed=seed,
+    )
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}",
+        dataset=train_dataset,
+        per_device_batch_size=5,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}",
+    )
+
+    model, _, _, _, task = prepare_test(
+        test_name="mlp_checkpoint",
+        train_size=train_size,
+        seed=seed,
+    )
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}_cp",
+        dataset=train_dataset,
+        per_device_batch_size=6,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    checkpoint_lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}_cp",
+    )
+
+    for name in LAMBDA_FACTOR_NAMES:
+        assert check_tensor_dict_equivalence(
+            lambda_factors[name], checkpoint_lambda_factors[name], atol=ATOL, rtol=RTOL
+        )
+
+
+@pytest.mark.parametrize("train_size", [105])
+@pytest.mark.parametrize("seed", [12])
+def test_lambda_matrices_shared_parameters(
+    train_size: int,
+    seed: int,
+) -> None:
+    # Lambda matrix computations fail when there are shared parameters.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name="repeated_mlp",
+        train_size=train_size,
+        seed=seed,
+    )
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        shared_parameters_exist=False,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}",
+        dataset=train_dataset,
+        per_device_batch_size=5,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}",
+    )
+
+    model, train_dataset, _, _, task = prepare_test(
+        test_name="repeated_mlp",
+        train_size=train_size,
+        seed=seed,
+    )
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        shared_parameters_exist=True,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}_shared",
+        dataset=train_dataset,
+        per_device_batch_size=6,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    checkpoint_lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}_shared",
+    )
+
+    for name in LAMBDA_FACTOR_NAMES:
+        assert not check_tensor_dict_equivalence(
+            lambda_factors[name], checkpoint_lambda_factors[name], atol=ATOL, rtol=RTOL
+        )
+
+    # However, when there are no shared parameters, they should have identical results.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name="mlp",
+        train_size=train_size,
+        seed=seed,
+    )
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        shared_parameters_exist=False,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}",
+        dataset=train_dataset,
+        per_device_batch_size=5,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}",
+    )
+
+    model, train_dataset, _, _, task = prepare_test(
+        test_name="mlp",
+        train_size=train_size,
+        seed=seed,
+    )
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        shared_parameters_exist=True,
+    )
+    analyzer.fit_all_factors(
+        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}_shared",
+        dataset=train_dataset,
+        per_device_batch_size=6,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    checkpoint_lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}_shared",
+    )
+
+    for name in LAMBDA_FACTOR_NAMES:
+        assert check_tensor_dict_equivalence(
+            lambda_factors[name], checkpoint_lambda_factors[name], atol=ATOL, rtol=RTOL
+        )
