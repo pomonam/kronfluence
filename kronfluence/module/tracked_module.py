@@ -505,7 +505,7 @@ class TrackedModule(nn.Module):
 
     def _lambda_post_forward(self, inputs: torch.Tensor, outputs: torch.Tensor) -> None:
         """Registers backward hook to obtain gradient with respect to the output."""
-        inputs = inputs.detach().clone().to(dtype=self.factor_args.per_sample_gradient_dtype)
+        inputs = inputs.detach().to(dtype=self.factor_args.per_sample_gradient_dtype)
         if self.factor_args.cached_activation_cpu_offload:
             inputs = inputs.cpu()
         func = self._lambda_backward_hook
