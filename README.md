@@ -23,8 +23,7 @@
 ---
 
 > **Kronfluence** is a PyTorch package designed to compute [influence functions](https://arxiv.org/abs/1703.04730) using [Kronecker-factored Approximate Curvature (KFAC)](https://arxiv.org/abs/1503.05671) or [Eigenvalue-corrected KFAC (EKFAC)](https://arxiv.org/abs/1806.03884).
-For a detailed description of the methodology, see the [**paper**](https://arxiv.org/abs/2308.03296) *Studying Large Language Model Generalization with Influence Functions*.
-
+For a detailed description of the methodology, see the [**paper**](https://arxiv.org/abs/2308.03296), *Studying Large Language Model Generalization with Influence Functions*.
 ---
 
 > [!WARNING]
@@ -113,7 +112,29 @@ analyzer.compute_pairwise_scores(
 scores = analyzer.load_pairwise_scores(scores_name="my_scores")
 ```
 
+Kronfluence supports various PyTorch features. The following table summarizes the supported features:
+
+<div align="center">
+
+| Feature                                                                                                                     | Supported |
+|-----------------------------------------------------------------------------------------------------------------------------|:---------:|
+| [Distributed Data Parallel (DDP)](https://pytorch.org/docs/master/generated/torch.nn.parallel.DistributedDataParallel.html) |     ✅    |
+| [Automatic Mixed Precision (AMP)](https://pytorch.org/docs/stable/amp.html)                                                 |     ✅    |
+| [Torch Compile](https://pytorch.org/docs/stable/generated/torch.compile.html)                                               |     ✅    |
+| [Gradient Checkpointing](https://pytorch.org/docs/stable/checkpoint.html)                                                   |     ✅    |
+| [Fully Sharded Data Parallel (FSDP)](https://pytorch.org/docs/stable/fsdp.html)                                                                                      |     ✅    |
+
+</div>
+
 The [examples](https://github.com/pomonam/kronfluence/tree/main/examples) folder contains several examples demonstrating how to use Kronfluence. 
+
+## LogIX
+
+While Kronfluence supports influence function computations on large-scale models like `Meta-Llama-3-8B-Instruct`, for those 
+interested in running influence analysis on even larger models or with a large number of query data points, our
+project [LogIX](https://github.com/logix-project/logix) may be worth exploring. It integrates with frameworks like 
+[HuggingFace Trainer](https://huggingface.co/docs/transformers/en/main_classes/trainer) and [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) 
+and is also compatible with many PyTorch features (DDP & FSDP & [DeepSpeed](https://github.com/microsoft/DeepSpeed)). 
 
 ## Contributing
 
@@ -131,13 +152,31 @@ cd kronfluence
 pip install -e ."[dev]"
 ```
 
-## LogIX
+### Style Testing
 
-While Kronfluence supports influence function computations on large-scale models like `Meta-Llama-3-8B-Instruct`, for those 
-interested in running influence analysis on even larger models or with a high number of query data points, our another
-project [LogIX](https://github.com/logix-project/logix) may be worth exploring. It integrates with frameworks like 
-[HuggingFace Trainer](https://huggingface.co/docs/transformers/en/main_classes/trainer) and [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) 
-and is compatible with many existing PyTorch features (DDP & FSDP). 
+To maintain code quality and consistency, we run ruff and linting tests on pull requests. Before submitting a 
+pull request, please ensure that your code adheres to our formatting and linting guidelines. The following commands will 
+modify your code. It is recommended to create a Git commit before running them to easily revert any unintended changes.
+
+Sort import orderings using [isort](https://pycqa.github.io/isort/):
+
+```bash
+isort kronfluence
+```
+
+Format code using [ruff](https://docs.astral.sh/ruff/):
+
+```bash
+ruff format kronfluence
+```
+
+To view all [pylint](https://www.pylint.org/) complaints, run the following command:
+
+```bash
+pylint kronfluence
+```
+
+Please address any reported issues before submitting your PR.
 
 ## Acknowledgements
 
