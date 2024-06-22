@@ -112,6 +112,7 @@ def test_default_score_arguments() -> None:
     assert score_args.cached_activation_cpu_offload is False
     assert score_args.distributed_sync_steps == 1000
     assert score_args.amp_dtype is None
+    assert score_args.shared_parameters_exist is False
 
     assert score_args.data_partition_size == 1
     assert score_args.module_partition_size == 1

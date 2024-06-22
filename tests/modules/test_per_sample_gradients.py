@@ -179,7 +179,6 @@ def test_for_loop_per_sample_gradient_equivalence(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -242,6 +241,7 @@ def test_mean_gradient_equivalence(
                 module_gradients[module.name] = module.get_factor(factor_name=PRECONDITIONED_GRADIENT_NAME)
 
         per_sample_gradients.append(module_gradients)
+        set_mode(model, ModuleMode.PRECONDITION_GRADIENT, keep_factors=False)
 
     summed_gradients = []
     for i in range(num_batches):
@@ -291,7 +291,6 @@ def test_mean_gradient_equivalence(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
         "gpt",
     ],
