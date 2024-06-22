@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from abc import ABC
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -38,6 +39,7 @@ from kronfluence.utils.exceptions import (
     TrackedModuleNotFoundError,
 )
 from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger
+from kronfluence.utils.model import apply_ddp
 from kronfluence.utils.save import (
     FACTOR_ARGUMENTS_NAME,
     FACTOR_SAVE_PREFIX,
@@ -62,11 +64,12 @@ class Computer(ABC):
         log_level: Optional[int] = logging.INFO,
         log_main_process_only: bool = True,
         profile: bool = False,
+        disable_tqdm: bool = False,
     ) -> None:
         """Initializes an instance of the Computer class."""
         self.state = State(cpu=cpu)
 
-        # Create and configure logger.
+        # Creates and configures logger.
         disable_log = log_main_process_only and self.state.process_index != 0
         self.logger = get_logger(name=__name__, log_level=log_level, disable_log=disable_log)
 
@@ -91,10 +94,11 @@ class Computer(ABC):
             )
             self.logger.warning(warning_msg)
             self.model.to(self.state.device)
-            self.model = DDP(
-                self.model,
-                device_ids=[self.state.local_process_index],
-                output_device=self.state.local_process_index,
+            self.model = apply_ddp(
+                model=self.model,
+                local_rank=self.state.local_process_index,
+                rank=self.state.process_index,
+                world_size=self.state.num_processes,
             )
 
         if cpu and isinstance(model, (DataParallel, DDP, FSDP)):
@@ -105,17 +109,18 @@ class Computer(ABC):
         if not self.state.use_distributed:
             self.model.to(self.state.device)
 
-        # Create and configure output directory.
+        # Creates and configures output directory.
         self.output_dir = Path(output_dir).joinpath(name).resolve()
         os.makedirs(name=self.output_dir, exist_ok=True)
 
-        # Create and configure profiler.
+        # Creates and configures profiler.
         self.profiler = Profiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
-        # Create directory to save profiler output.
+        # Creates directory to save profiler output.
         self.profiler_dir = (self.output_dir / "profiler_output").resolve()
         os.makedirs(name=self.profiler_dir, exist_ok=True)
+        self.disable_tqdm = disable_tqdm
 
-        # DataLoader parameters.
+        # Sets PyTorch DataLoader arguments.
         self._dataloader_params = DataLoaderKwargs()
 
     def factors_output_dir(self, factors_name: str) -> Path:
@@ -169,7 +174,7 @@ class Computer(ABC):
 
         if dataset_metadata_save_path.exists() and not overwrite_output_dir:
             self.logger.info(f"Found existing saved dataset metadata at `{dataset_metadata_save_path}`.")
-            # Load the existing dataset metadata for comparison.
+            # Loads the existing dataset metadata for comparison.
             loaded_metadata = load_json(dataset_metadata_save_path)
             if loaded_metadata != dataset_metadata:
                 error_msg = (
@@ -318,9 +323,10 @@ class Computer(ABC):
         return modules_partition_list, target_module_partitions
 
     def _log_profile_summary(self) -> None:
-        """Log the summary of the profiling results."""
+        """Saves the summary of the profiling results."""
         profile_summary = self.profiler.summary()
-        profile_save_path = (self.profiler_dir / f"summary_rank_{self.state.process_index}.txt").resolve()
+        time_str = time.strftime("%Y%m%d_%H%M%S")
+        profile_save_path = (self.profiler_dir / f"summary_rank_{self.state.process_index}_{time_str}.txt").resolve()
         if profile_summary != "":
             self.logger.info(profile_summary)
             with open(profile_save_path, "a", encoding="utf-8") as f:
@@ -378,7 +384,7 @@ class Computer(ABC):
         return None
 
     def load_all_factors(self, factors_name: str) -> FACTOR_TYPE:
-        """Loads factors from disk."""
+        """Loads all relevant factors from disk."""
         from kronfluence.factor.config import (  # pylint: disable=import-outside-toplevel
             FactorConfig,
         )
@@ -396,7 +402,7 @@ class Computer(ABC):
             covariance_factors = self.load_covariance_matrices(factors_name=factors_name)
             if covariance_factors is None:
                 error_msg = (
-                    f"Strategy `{factor_args.strategy}` computing covariance matrices. "
+                    f"Strategy `{factor_args.strategy}` requires computing covariance matrices. "
                     f"However, the covariance matrices were not found."
                 )
                 self.logger.error(error_msg)
@@ -407,7 +413,7 @@ class Computer(ABC):
             eigen_factors = self.load_eigendecomposition(factors_name=factors_name)
             if eigen_factors is None:
                 error_msg = (
-                    f"Strategy `{factor_args.strategy}` computing Eigendecomposition. "
+                    f"Strategy `{factor_args.strategy}` requires computing Eigendecomposition. "
                     f"However, the Eigendecomposition results were not found."
                 )
                 self.logger.error(error_msg)
@@ -418,7 +424,7 @@ class Computer(ABC):
             lambda_factors = self.load_lambda_matrices(factors_name=factors_name)
             if lambda_factors is None:
                 error_msg = (
-                    f"Strategy `{factor_args.strategy}` computing Lambda matrices. "
+                    f"Strategy `{factor_args.strategy}` requires computing Lambda matrices. "
                     f"However, the Lambda matrices were not found."
                 )
                 self.logger.error(error_msg)

@@ -37,18 +37,18 @@ def wrap_tracked_modules(
         task (Task):
             The specific task associated with the model.
         factor_args (FactorArguments, optional):
-            Arguments related to computing the preconditioning factors.
+            Arguments related to computing the influence factors.
         score_args (ScoreArguments, optional):
             Arguments related to computing the influence scores.
 
     Returns:
         nn.Module:
-            The wrapped model with `TrackedModule`.
+            The wrapped Pytorch model with `TrackedModule` installed.
     """
     if isinstance(model, (DP, DDP, FSDP)):
         raise ValueError(
             "The model is wrapped with DataParallel, DistributedDataParallel "
-            "or FullyShardedDataParallel. Call `wrap_tracked_modules` before wrapping the model."
+            "or FullyShardedDataParallel. Call `prepare_model` before wrapping the model."
         )
 
     tracked_module_count = 0
@@ -90,12 +90,12 @@ def wrap_tracked_modules(
     if tracked_module_count == 0:
         supported_modules_names = [module.__name__ for module in TrackedModule.SUPPORTED_MODULES]
         error_msg = (
-            f"Kronfluence currently supports modules in `{supported_modules_names}`. "
+            f"Kronfluence currently supports following PyTorch modules: `{supported_modules_names}`. "
             f"However, these modules were not found in the provided model. If you want to analyze "
             "custom layers, consider rewriting your model to use the supported modules, "
             "or define your own custom module by subclassing `TrackedModule`."
         )
-        error_msg += f"\n{model}"
+        error_msg += f"\nCurrent Model:\n{model}"
         raise IllegalTaskConfigurationError(error_msg)
 
     return model
@@ -331,3 +331,14 @@ def remove_gradient_scale(model: nn.Module) -> None:
             tracked_module_count += 1
     if tracked_module_count == 0:
         raise TrackedModuleNotFoundError("Tracked modules not found when trying to remove `gradient_scale`.")
+
+
+def update_aggregated_lambda_matrices(model: nn.Module) -> None:
+    """Updates Lambda matrices of all `TrackedModule` instances within a model."""
+    tracked_module_count = 0
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.update_aggregated_lambda_matrix()
+            tracked_module_count += 1
+    if tracked_module_count == 0:
+        raise TrackedModuleNotFoundError("Tracked modules not found when trying to update lambda matrices.")

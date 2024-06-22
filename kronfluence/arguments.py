@@ -125,6 +125,14 @@ class FactorArguments(Arguments):
         default=False,
         metadata={"help": "Whether to offload cached activation to CPU for computing the per-sample-gradient."},
     )
+    shared_parameters_exist: bool = field(
+        default=False,
+        metadata={"help": "Specifies whether the shared parameters exist in the forward pass."},
+    )
+    per_sample_gradient_dtype: torch.dtype = field(
+        default=torch.float32,
+        metadata={"help": "Dtype for computing per-sample-gradients."},
+    )
     lambda_dtype: torch.dtype = field(
         default=torch.float32,
         metadata={"help": "Dtype for computing Lambda (corrected eigenvalues) matrices."},
@@ -156,6 +164,10 @@ class ScoreArguments(Arguments):
     amp_dtype: Optional[torch.dtype] = field(
         default=None,
         metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
+    )
+    shared_parameters_exist: bool = field(
+        default=False,
+        metadata={"help": "Specifies whether the shared parameters exist in the forward pass."},
     )
 
     # Partition configuration. #

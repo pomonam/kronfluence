@@ -41,7 +41,7 @@ class ScoreComputer(Computer):
         factors_name: str,
         overwrite_output_dir: bool,
     ) -> Tuple[FactorArguments, ScoreArguments]:
-        """Configure the provided factor arguments and save it in disk."""
+        """Configures the provided score arguments and saves it in disk."""
         if score_args is None:
             score_args = ScoreArguments()
             self.logger.info(f"Score arguments not provided. Using the default configuration: {score_args}.")
@@ -173,7 +173,8 @@ class ScoreComputer(Computer):
 
         def executable_batch_size_func(batch_size: int) -> None:
             self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
-            # Release all memory that could be caused by the previous OOM.
+            # Releases all memory that could be caused by the previous OOM.
+            self.model.zero_grad(set_to_none=True)
             set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
             release_memory()
             total_batch_size = batch_size * self.state.num_processes
@@ -203,6 +204,7 @@ class ScoreComputer(Computer):
                 train_loader=train_loader,
                 per_device_query_batch_size=per_device_query_batch_size,
                 tracked_module_names=tracked_modules_name,
+                disable_tqdm=True,
             )
 
         per_device_batch_size = find_executable_batch_size(
@@ -403,6 +405,7 @@ class ScoreComputer(Computer):
                         score_args=score_args,
                         factor_args=factor_args,
                         tracked_module_names=module_partition_names[module_partition],
+                        disable_tqdm=self.disable_tqdm,
                     )
                 end_time = get_time(state=self.state)
                 elapsed_time = end_time - start_time
@@ -487,7 +490,8 @@ class ScoreComputer(Computer):
 
         def executable_batch_size_func(batch_size: int) -> None:
             self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
-            # Release all memory that could be caused by the previous OOM.
+            # Releases all memory that could be caused by the previous OOM.
+            self.model.zero_grad(set_to_none=True)
             set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
             release_memory()
             total_batch_size = batch_size * self.state.num_processes
@@ -512,6 +516,7 @@ class ScoreComputer(Computer):
                 score_args=score_args,
                 factor_args=factor_args,
                 tracked_module_names=tracked_modules_name,
+                disable_tqdm=True
             )
 
         per_device_batch_size = find_executable_batch_size(
@@ -536,7 +541,7 @@ class ScoreComputer(Computer):
         overwrite_output_dir: bool = False,
     ) -> Optional[SCORE_TYPE]:
         """Computes self-influence scores for the given score configuration. As an example,
-        for T training dataset, the self-influence scores are represented as T-dimensional vector.
+        for training dataset with T examples, the self-influence scores are represented as T-dimensional vector.
 
         Args:
             scores_name (str):
@@ -691,6 +696,7 @@ class ScoreComputer(Computer):
                         score_args=score_args,
                         factor_args=factor_args,
                         tracked_module_names=module_partition_names[module_partition],
+                        disable_tqdm=self.disable_tqdm,
                     )
                 end_time = get_time(state=self.state)
                 elapsed_time = end_time - start_time
