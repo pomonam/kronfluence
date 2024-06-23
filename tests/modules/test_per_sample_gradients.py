@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode, TrackedModule
-from kronfluence.module.utils import set_mode, update_factor_args
+from kronfluence.module.utils import set_mode, update_factor_args, finalize_preconditioned_gradient
 from kronfluence.task import Task
 from kronfluence.utils.constants import LAMBDA_MATRIX_NAME, PRECONDITIONED_GRADIENT_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
@@ -91,6 +91,7 @@ def for_loop_per_sample_gradient(
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -132,6 +133,8 @@ def test_for_loop_per_sample_gradient_equivalence(
     factor_args = FactorArguments(
         strategy="identity",
     )
+    if test_name == "repeated_mlp":
+        factor_args.shared_parameters_exist = True
     update_factor_args(model=model, factor_args=factor_args)
 
     per_sample_gradients = []
@@ -146,6 +149,9 @@ def test_for_loop_per_sample_gradient_equivalence(
         else:
             loss = task.compute_train_loss(batch=batch_lst[i], model=model, sample=False)
         loss.backward()
+
+        if test_name == "repeated_mlp":
+            finalize_preconditioned_gradient(model=model)
 
         module_gradients = {}
         for module in model.modules():
@@ -177,6 +183,7 @@ def test_for_loop_per_sample_gradient_equivalence(
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -218,6 +225,8 @@ def test_mean_gradient_equivalence(
     factor_args = FactorArguments(
         strategy="identity",
     )
+    if test_name == "repeated_mlp":
+        factor_args.shared_parameters_exist = True
     update_factor_args(model=model, factor_args=factor_args)
 
     per_sample_gradients = []
@@ -232,6 +241,9 @@ def test_mean_gradient_equivalence(
         else:
             loss = task.compute_train_loss(batch=batch_lst[i], model=model, sample=False)
         loss.backward()
+
+        if test_name == "repeated_mlp":
+            finalize_preconditioned_gradient(model=model)
 
         module_gradients = {}
         for module in model.modules():
@@ -328,6 +340,7 @@ def test_lambda_equivalence(
         task=task,
         disable_model_save=True,
         cpu=True,
+        disable_tqdm=True,
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
     factor_args = FactorArguments(

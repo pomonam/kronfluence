@@ -21,6 +21,8 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
+        "mlp_checkpoint",
         "conv",
         "conv_bn",
         "bert",
@@ -52,9 +54,14 @@ def test_compute_pairwise_scores(
         model=model,
         task=task,
     )
+    factor_args = FactorArguments()
+    if test_name == "repeated_mlp":
+        factor_args.shared_parameters_exist = True
+
     factors_name = f"pytest_{test_name}_{test_compute_pairwise_scores.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
+        factor_args=factor_args,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=32,
@@ -596,6 +603,89 @@ def test_query_accumulation(
     assert check_tensor_dict_equivalence(
         scores,
         partitioned_scores,
+        atol=ATOL,
+        rtol=RTOL,
+    )
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "conv",
+    ],
+)
+@pytest.mark.parametrize("query_size", [50])
+@pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("seed", [8])
+def test_pairwise_shared_parameters(
+    test_name: str,
+    query_size: int,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Make sure the scores are identical with and without `shared_parameters_exist` flag.
+    model, train_dataset, test_dataset, data_collator, task = prepare_test(
+        test_name=test_name,
+        query_size=query_size,
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    factor_args = FactorArguments(shared_parameters_exist=False, use_empirical_fisher=True)
+    factors_name = f"pytest_{test_name}_{test_pairwise_shared_parameters.__name__}"
+    analyzer.fit_all_factors(
+        factors_name=factors_name,
+        factor_args=factor_args,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+    scores_name = f"pytest_{test_name}_{test_pairwise_shared_parameters.__name__}_scores"
+    analyzer.compute_pairwise_scores(
+        scores_name=scores_name,
+        factors_name=factors_name,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=4,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        overwrite_output_dir=True,
+    )
+    scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+
+    factor_args = FactorArguments(shared_parameters_exist=True, use_empirical_fisher=True)
+    factors_name = f"pytest_{test_name}_{test_pairwise_shared_parameters.__name__}_shared"
+    analyzer.fit_all_factors(
+        factors_name=factors_name,
+        factor_args=factor_args,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+    scores_name = f"pytest_{test_name}_{test_pairwise_shared_parameters.__name__}_shared_scores"
+    analyzer.compute_pairwise_scores(
+        scores_name=scores_name,
+        factors_name=factors_name,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=4,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        overwrite_output_dir=True,
+    )
+    shared_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+
+    assert check_tensor_dict_equivalence(
+        scores,
+        shared_scores,
         atol=ATOL,
         rtol=RTOL,
     )

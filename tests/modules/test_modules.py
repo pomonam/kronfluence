@@ -85,7 +85,7 @@ def test_tracked_modules_forward_equivalence(
     ],
 )
 @pytest.mark.parametrize("train_size", [32])
-@pytest.mark.parametrize("seed", [0])
+@pytest.mark.parametrize("seed", [1])
 def test_tracked_modules_backward_equivalence(
     test_name: str,
     mode: ModuleMode,

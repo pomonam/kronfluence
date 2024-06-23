@@ -97,7 +97,7 @@ After calling `prepare_model`, you can create [DistributedDataParallel (DDP)](ht
 
 **Set up the Analyzer and Fit Factors.** 
 Initialize the `Analyzer` and run `fit_all_factors` to compute all factors that aim to approximate the Hessian 
-(Gauss-Newton Hessian). The computed factors will be stored on disk.
+([Gauss-Newton Hessian](https://www.cs.toronto.edu/~rgrosse/courses/csc2541_2022/readings/L03_metrics.pdf)). The computed factors will be stored on disk.
 
 ```python
 from kronfluence.analyzer import Analyzer
@@ -182,8 +182,8 @@ def forward(x: torch.Tensor) -> torch.Tensor:
 
 > [!WARNING]
 > The default arguments assume the module is used only once during the forward pass.
-> IIf your model shares parameters (e.g., the module is used in multiple places during the forward pass), set
-> `shared_parameters_exist=True` in both `FactorArguments` and `ScoreArguments`.
+> If your model shares parameters (e.g., the module is used in multiple places during the forward pass), set
+> `shared_parameters_exist=True` in `FactorArguments`.
 
 **Why are there so many arguments?**
 Kronfluence was originally developed to compute influence scores on large-scale models, which is why `FactorArguments` and `ScoreArguments` 
@@ -206,6 +206,7 @@ factor_args = FactorArguments(
     use_empirical_fisher=False,
     distributed_sync_steps=1000,
     amp_dtype=None,
+    shared_parameters_exist=False,
 
     # Settings for covariance matrix fitting.
     covariance_max_examples=100_000,
@@ -223,7 +224,6 @@ factor_args = FactorArguments(
     lambda_module_partition_size=1,
     lambda_iterative_aggregate=False,
     cached_activation_cpu_offload=False,
-    shared_parameters_exist=False,
     per_sample_gradient_dtype=torch.float32,
     lambda_dtype=torch.float32,
 )
@@ -237,6 +237,7 @@ You can change:
 - `use_empirical_fisher`: Determines whether to use the [empirical Fisher](https://arxiv.org/abs/1905.12558) (using actual labels from batch) 
 instead of the true Fisher (using sampled labels from model's predictions). It is recommended to be `False`.
 - `amp_dtype`: Selects the dtype for [automatic mixed precision (AMP)](https://pytorch.org/docs/stable/amp.html). Disables AMP if set to `None`.
+- `shared_parameters_exist`: Specifies whether the shared parameters exist in the forward pass.
 
 ### Fitting Covariance Matrices
 
@@ -306,7 +307,6 @@ This corresponds to **Equation 20** in the paper. You can tune:
 You can set `cached_activation_cpu_offload=True` to cache these activations in CPU. This is helpful for dealing with OOMs, but will make the overall computation slower.
 - `lambda_iterative_aggregate`: Whether to compute the Lambda matrices with for-loops instead of batched matrix multiplications.
 This is helpful for reducing peak GPU memory, as it avoids holding multiple copies of tensors with the same shape as the per-sample-gradient.
-- `shared_parameters_exist`: Specifies whether the shared parameters exist in the forward pass.
 - `per_sample_gradient_dtype`: `dtype` for computing per-sample-gradient. You can also use `torch.bfloat16`
 or `torch.float16`.
 - `lambda_dtype`: `dtype` for computing Lambda matrices. You can also use `torch.bfloat16`
@@ -353,7 +353,7 @@ score_args = ScoreArguments(
     # Configuration for query batching.
     query_gradient_rank=None,
     query_gradient_svd_dtype=torch.float32,
-    num_query_gradient_aggregations=1,
+    num_query_gradient_accumulations=1,
     
     # Configuration for dtype.
     score_dtype=torch.float32,
@@ -370,11 +370,11 @@ score_args = ScoreArguments(
 - `module_partition_size`: Number of module partitions for computing influence scores.
 - `per_module_score`: Whether to return a per-module influence scores. Instead of summing over influences across
 all modules, this will keep track of intermediate module-wise scores. 
+- - `use_measurement_for_self_influence`: Whether to use the measurement (instead of the loss) when computing self-influence scores.
 - `query_gradient_rank`: The rank for the query batching (low-rank approximation to the preconditioned query gradient; see **Section 3.2.2**). If `None`, no query batching will be used.
 - `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can also use `torch.float64`.
-- `num_query_gradient_aggregations`: Number of query gradients to aggregate over. For example, when `num_query_gradient_aggregations=2` with 
+- `num_query_gradient_accumulations`: Number of query gradients to accumulate over. For example, when `num_query_gradient_accumulations=2` with 
 `query_batch_size=16`, a total of 32 query gradients will be stored in memory when computing dot products with training gradients.
-- `use_measurement_for_self_influence`: Whether to use the measurement (instead of the loss) when computing self-influence scores.
 - `score_dtype`: `dtype` for computing influence scores. You can use `torch.bfloat16` or `torch.float16`.
 - `per_sample_gradient_dtype`: `dtype` for computing per-sample-gradient. You can use `torch.bfloat16` or `torch.float16`.
 - `precondition_dtype`: `dtype` for performing preconditioning. You can use `torch.bfloat16` or `torch.float16`,

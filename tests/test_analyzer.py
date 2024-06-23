@@ -13,6 +13,7 @@ from tests.utils import prepare_test
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -48,10 +49,14 @@ def test_analyzer(
         model=model,
         task=task,
         disable_model_save=True,
+        disable_tqdm=True,
         cpu=True,
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
+
     factor_args = FactorArguments(strategy=strategy)
+    if test_name == "repeated_mlp":
+        factor_args.shared_parameters_exist = True
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
         dataset=train_dataset,
@@ -70,12 +75,23 @@ def test_analyzer(
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
     )
+    score_args = ScoreArguments()
     analyzer.compute_self_scores(
         scores_name="self",
         factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    analyzer.compute_self_scores(
+        scores_name="self",
+        factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
         overwrite_output_dir=True,
     )
 
@@ -94,6 +110,7 @@ def test_default_factor_arguments() -> None:
     assert factor_args.covariance_module_partition_size == 1
     assert factor_args.activation_covariance_dtype == torch.float32
     assert factor_args.gradient_covariance_dtype == torch.float32
+
     assert factor_args.eigendecomposition_dtype == torch.float64
 
     assert factor_args.lambda_max_examples == 100_000
@@ -116,11 +133,11 @@ def test_default_score_arguments() -> None:
     assert score_args.data_partition_size == 1
     assert score_args.module_partition_size == 1
     assert score_args.per_module_score is False
+    assert score_args.use_measurement_for_self_influence is False
 
     assert score_args.query_gradient_rank is None
     assert score_args.num_query_gradient_accumulations == 1
     assert score_args.query_gradient_svd_dtype == torch.float32
-    assert score_args.use_measurement_for_self_influence is False
 
     assert score_args.score_dtype == torch.float32
     assert score_args.per_sample_gradient_dtype == torch.float32

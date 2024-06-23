@@ -19,6 +19,8 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
+        "mlp_checkpoint",
         "conv",
         "conv_bn",
         "bert",
@@ -45,9 +47,14 @@ def test_compute_self_scores(
         model=model,
         task=task,
     )
+    factor_args = FactorArguments()
+    if test_name == "repeated_mlp":
+        factor_args.shared_parameters_exist = True
+
     factors_name = f"pytest_{test_name}_{test_compute_self_scores.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
+        factor_args=factor_args,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=32,
@@ -589,6 +596,90 @@ def test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence(
     assert torch.allclose(
         torch.diag(pairwise_scores[ALL_MODULE_NAME]),
         self_scores[ALL_MODULE_NAME],
+        atol=ATOL,
+        rtol=RTOL,
+    )
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "conv",
+    ],
+)
+@pytest.mark.parametrize("use_measurement_for_self_influence", [False, True])
+@pytest.mark.parametrize("query_size", [50])
+@pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("seed", [9])
+def test_self_shared_parameters(
+    test_name: str,
+    use_measurement_for_self_influence: bool,
+    query_size: int,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Make sure the scores are identical with and without `shared_parameters_exist` flag.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name=test_name,
+        query_size=query_size,
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    factor_args = FactorArguments(shared_parameters_exist=False, use_empirical_fisher=True)
+    score_args = ScoreArguments(use_measurement_for_self_influence=use_measurement_for_self_influence)
+    factors_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}"
+    analyzer.fit_all_factors(
+        factors_name=factors_name,
+        factor_args=factor_args,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+    scores_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}_scores"
+    analyzer.compute_self_scores(
+        scores_name=scores_name,
+        score_args=score_args,
+        factors_name=factors_name,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        overwrite_output_dir=True,
+    )
+    scores = analyzer.load_self_scores(scores_name=scores_name)
+
+    factor_args = FactorArguments(shared_parameters_exist=True, use_empirical_fisher=True)
+    factors_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}_shared"
+    analyzer.fit_all_factors(
+        factors_name=factors_name,
+        factor_args=factor_args,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+    scores_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}_shared_scores"
+    analyzer.compute_self_scores(
+        scores_name=scores_name,
+        score_args=score_args,
+        factors_name=factors_name,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        overwrite_output_dir=True,
+    )
+    shared_scores = analyzer.load_self_scores(scores_name=scores_name)
+
+    assert check_tensor_dict_equivalence(
+        scores,
+        shared_scores,
         atol=ATOL,
         rtol=RTOL,
     )

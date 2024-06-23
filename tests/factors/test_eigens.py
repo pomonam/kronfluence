@@ -26,6 +26,7 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
         "mlp_checkpoint",
         "conv",
         "conv_bn",
@@ -53,16 +54,17 @@ def test_perform_eigendecomposition(
         model=model,
         task=task,
     )
+    factor_args = FactorArguments(
+        eigendecomposition_dtype=eigendecomposition_dtype,
+    )
     factors_name = f"pytest_{test_name}_{test_perform_eigendecomposition.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
+        factor_args=factor_args,
         dataset=train_dataset,
         per_device_batch_size=4,
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
-    )
-    factor_args = FactorArguments(
-        eigendecomposition_dtype=eigendecomposition_dtype,
     )
     analyzer.perform_eigendecomposition(
         factors_name=factors_name,
@@ -81,6 +83,8 @@ def test_perform_eigendecomposition(
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
+        "mlp_checkpoint",
         "conv",
         "conv_bn",
         "bert",
@@ -114,6 +118,9 @@ def test_fit_lambda_matrices(
         lambda_dtype=lambda_dtype,
         per_sample_gradient_dtype=per_sample_gradient_dtype,
     )
+    if test_name == "repeated_mlp":
+        factor_args.shared_parameters_exist = True
+
     factors_name = f"pytest_{test_name}_{test_fit_lambda_matrices.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
