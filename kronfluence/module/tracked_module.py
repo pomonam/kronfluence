@@ -263,10 +263,6 @@ class TrackedModule(nn.Module):
         """
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
         flattened_gradient, count = self._get_flattened_gradient(output_gradient=output_gradient)
-        if self._gradient_scale != 1.0:
-            flattened_gradient.mul_(self._gradient_scale)
-
-        print(self._gradient_scale)
 
         if self._storage[GRADIENT_COVARIANCE_MATRIX_NAME] is None:
             dimension = flattened_gradient.size(1)
@@ -276,7 +272,8 @@ class TrackedModule(nn.Module):
                 device=flattened_gradient.device,
                 requires_grad=False,
             )
-        self._storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(flattened_gradient.t(), flattened_gradient)
+        self._storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(flattened_gradient.t(), flattened_gradient,
+                                                              alpha=self._gradient_scale ** 2.)
 
         # This is not necessary as `NUM_GRADIENT_COVARIANCE_PROCESSED` should be identical to
         # `NUM_ACTIVATION_COVARIANCE_PROCESSED` in most cases. However, they can be different when using
