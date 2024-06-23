@@ -1,27 +1,13 @@
 # pylint: skip-file
 
-from typing import Tuple
 
 import pytest
-from torch import nn
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
-from kronfluence.task import Task
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import prepare_test
-
-
-def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
-    model = prepare_model(model=model, task=task)
-    analyzer = Analyzer(
-        analysis_name=f"pytest_{__name__}",
-        model=model,
-        task=task,
-        disable_model_save=True,
-    )
-    return model, analyzer
 
 
 @pytest.mark.parametrize(
@@ -29,6 +15,7 @@ def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module,
     [
         "mlp",
         "repeated_mlp",
+        "mlp_checkpoint",
         "conv",
         "conv_bn",
         "bert",
@@ -38,7 +25,7 @@ def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module,
 @pytest.mark.parametrize("cached_activation_cpu_offload", [True, False])
 @pytest.mark.parametrize("query_size", [16])
 @pytest.mark.parametrize("train_size", [32])
-@pytest.mark.parametrize("seed", [0])
+@pytest.mark.parametrize("seed", [1])
 def test_cpu_offloads(
     test_name: str,
     cached_activation_cpu_offload: bool,
@@ -53,13 +40,19 @@ def test_cpu_offloads(
         seed=seed,
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
-    model, analyzer = prepare_model_and_analyzer(
+    model = prepare_model(model=model, task=task)
+    analyzer = Analyzer(
+        analysis_name=f"pytest_{__name__}",
         model=model,
         task=task,
+        disable_model_save=True,
+        disable_tqdm=True,
     )
     factor_args = FactorArguments(
         cached_activation_cpu_offload=cached_activation_cpu_offload,
     )
+    if test_name == "repeated_mlp":
+        factor_args.shared_parameters_exist = True
     factors_name = f"pytest_{test_name}_{test_cpu_offloads.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
