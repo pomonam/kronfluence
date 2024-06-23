@@ -264,7 +264,7 @@ class TrackedModule(nn.Module):
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
         flattened_gradient, count = self._get_flattened_gradient(output_gradient=output_gradient)
         if self._gradient_scale != 1.0:
-            flattened_gradient.mul_(self._gradient_scale)
+            flattened_gradient = flattened_gradient * self._gradient_scale
 
         if self._storage[GRADIENT_COVARIANCE_MATRIX_NAME] is None:
             dimension = flattened_gradient.size(1)
@@ -302,7 +302,7 @@ class TrackedModule(nn.Module):
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             # Computes and updates pseudo-gradient covariance matrix in the backward pass.
-            self._update_gradient_covariance_matrix(output_gradient.detach().clone())
+            self._update_gradient_covariance_matrix(output_gradient.detach())
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
 
