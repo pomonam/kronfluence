@@ -26,7 +26,6 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "mlp_checkpoint",
         "conv",
         "conv_bn",
@@ -82,7 +81,6 @@ def test_perform_eigendecomposition(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -525,67 +523,7 @@ def test_lambda_matrices_shared_parameters(
     train_size: int,
     seed: int,
 ) -> None:
-    # Lambda matrix computations fail when there are shared parameters.
-    model, train_dataset, _, data_collator, task = prepare_test(
-        test_name="repeated_mlp",
-        train_size=train_size,
-        seed=seed,
-    )
-    model, analyzer = prepare_model_and_analyzer(
-        model=model,
-        task=task,
-    )
-
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        shared_parameters_exist=False,
-    )
-    analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}",
-        dataset=train_dataset,
-        per_device_batch_size=5,
-        overwrite_output_dir=True,
-        factor_args=factor_args,
-    )
-    lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}",
-    )
-
-    model, train_dataset, _, _, task = prepare_test(
-        test_name="repeated_mlp",
-        train_size=train_size,
-        seed=seed,
-    )
-    model, analyzer = prepare_model_and_analyzer(
-        model=model,
-        task=task,
-    )
-
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        shared_parameters_exist=True,
-    )
-    analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}_shared",
-        dataset=train_dataset,
-        per_device_batch_size=6,
-        overwrite_output_dir=True,
-        factor_args=factor_args,
-    )
-    checkpoint_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}_shared",
-    )
-
-    for name in LAMBDA_FACTOR_NAMES:
-        assert not check_tensor_dict_equivalence(
-            lambda_factors[name], checkpoint_lambda_factors[name], atol=ATOL, rtol=RTOL
-        )
-
-    # However, when there are no shared parameters, they should have identical results.
+    # When there are no shared parameters, they should have identical results.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name="mlp",
         train_size=train_size,

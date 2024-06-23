@@ -53,7 +53,7 @@ LAMBDA_FACTOR_NAMES = [LAMBDA_MATRIX_NAME, NUM_LAMBDA_PROCESSED]
 
 # Preconditioned per-sample gradient.
 PRECONDITIONED_GRADIENT_NAME = "preconditioned_gradient"
-AGGREGATED_PRECONDITIONED_GRADIENT_NAME = "aggregated_preconditioned_gradient"
+ACCUMULATED_PRECONDITIONED_GRADIENT_NAME = "aggregated_preconditioned_gradient"
 # Pairwise influence scores.
 PAIRWISE_SCORE_MATRIX_NAME = "pairwise_score_matrix"
 # Self-influence scores.

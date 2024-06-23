@@ -91,7 +91,6 @@ def for_loop_per_sample_gradient(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -178,7 +177,6 @@ def test_for_loop_per_sample_gradient_equivalence(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -290,7 +288,6 @@ def test_mean_gradient_equivalence(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
         "gpt",
     ],

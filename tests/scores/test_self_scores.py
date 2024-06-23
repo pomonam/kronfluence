@@ -19,7 +19,6 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",

@@ -402,7 +402,7 @@ class Computer(ABC):
             covariance_factors = self.load_covariance_matrices(factors_name=factors_name)
             if covariance_factors is None:
                 error_msg = (
-                    f"Strategy `{factor_args.strategy}` requires computing covariance matrices. "
+                    f"Strategy `{factor_args.strategy}` requires covariance matrices. "
                     f"However, the covariance matrices were not found."
                 )
                 self.logger.error(error_msg)
@@ -413,7 +413,7 @@ class Computer(ABC):
             eigen_factors = self.load_eigendecomposition(factors_name=factors_name)
             if eigen_factors is None:
                 error_msg = (
-                    f"Strategy `{factor_args.strategy}` requires computing Eigendecomposition. "
+                    f"Strategy `{factor_args.strategy}` requires Eigendecomposition results. "
                     f"However, the Eigendecomposition results were not found."
                 )
                 self.logger.error(error_msg)
@@ -424,7 +424,7 @@ class Computer(ABC):
             lambda_factors = self.load_lambda_matrices(factors_name=factors_name)
             if lambda_factors is None:
                 error_msg = (
-                    f"Strategy `{factor_args.strategy}` requires computing Lambda matrices. "
+                    f"Strategy `{factor_args.strategy}` requires Lambda matrices. "
                     f"However, the Lambda matrices were not found."
                 )
                 self.logger.error(error_msg)

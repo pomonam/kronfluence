@@ -14,14 +14,13 @@ from tqdm import tqdm
 from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
+    finalize_lambda_matrices,
     get_tracked_module_names,
     load_factors,
-    remove_gradient_scale,
     set_factors,
     set_gradient_scale,
     set_mode,
     synchronize_lambda_matrices,
-    update_aggregated_lambda_matrices,
     update_factor_args,
 )
 from kronfluence.task import Task
@@ -320,10 +319,7 @@ def fit_lambda_matrices_with_loader(
             if factor_args.shared_parameters_exist:
                 # If shared parameter exists, Lambda matrices are computed and updated only after all
                 # per-sample-gradients are aggregated.
-                update_aggregated_lambda_matrices(model=model)
-
-            num_data_processed += find_batch_size(data=batch)
-            total_steps += 1
+                finalize_lambda_matrices(model=model)
 
             if (
                 state.use_distributed
@@ -333,6 +329,8 @@ def fit_lambda_matrices_with_loader(
                 # Periodically synchronizes all processes to avoid timeout at the final synchronization.
                 state.wait_for_everyone()
 
+            num_data_processed.add_(find_batch_size(data=batch))
+            total_steps += 1
             pbar.update(1)
 
     with torch.no_grad():
@@ -345,12 +343,13 @@ def fit_lambda_matrices_with_loader(
         saved_factors: FACTOR_TYPE = {}
         if state.is_main_process:
             for factor_name in LAMBDA_FACTOR_NAMES:
-                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name)
+                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=True)
         state.wait_for_everyone()
 
         # Clean up the memory.
         model.zero_grad(set_to_none=True)
-        remove_gradient_scale(model=model)
+        if enable_amp:
+            set_gradient_scale(model=model, gradient_scale=1.0)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
 
     return num_data_processed, saved_factors

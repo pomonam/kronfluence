@@ -15,7 +15,6 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     get_tracked_module_names,
     load_factors,
-    remove_gradient_scale,
     set_attention_mask,
     set_gradient_scale,
     set_mode,
@@ -173,9 +172,6 @@ def fit_covariance_matrices_with_loader(
                     )
                 scaler.scale(loss).backward()
 
-            num_data_processed += find_batch_size(data=batch)
-            total_steps += 1
-
             if (
                 state.use_distributed
                 and total_steps % factor_args.distributed_sync_steps == 0
@@ -184,6 +180,8 @@ def fit_covariance_matrices_with_loader(
                 # Periodically synchronizes all processes to avoid timeout at the final synchronization.
                 state.wait_for_everyone()
 
+            num_data_processed.add_(find_batch_size(data=batch))
+            total_steps += 1
             pbar.update(1)
 
     with torch.no_grad():
@@ -195,12 +193,13 @@ def fit_covariance_matrices_with_loader(
 
         saved_factors: FACTOR_TYPE = {}
         for factor_name in COVARIANCE_FACTOR_NAMES:
-            saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name)
+            saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=True)
         state.wait_for_everyone()
 
         # Clean up the memory.
         model.zero_grad(set_to_none=True)
-        remove_gradient_scale(model=model)
+        if enable_amp:
+            set_gradient_scale(model=model, gradient_scale=1.0)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
 
     return num_data_processed, saved_factors

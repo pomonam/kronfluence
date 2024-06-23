@@ -9,10 +9,7 @@ from torch.nn.parallel.distributed import DistributedDataParallel as DDP
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.module.tracked_module import ModuleMode, TrackedModule
 from kronfluence.task import Task
-from kronfluence.utils.exceptions import (
-    IllegalTaskConfigurationError,
-    TrackedModuleNotFoundError,
-)
+from kronfluence.utils.exceptions import IllegalTaskConfigurationError
 
 
 def _get_submodules(model: nn.Module, key: str) -> Tuple[nn.Module, str]:
@@ -112,28 +109,16 @@ def make_modules_partition(total_module_names: List[str], partition_size: int) -
 
 def update_factor_args(model: nn.Module, factor_args: FactorArguments) -> None:
     """Updates the factor arguments for all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.update_factor_args(factor_args=factor_args)
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError(
-            f"Tracked modules not found when trying to update factor arguments `{factor_args}`."
-        )
 
 
 def update_score_args(model: nn.Module, score_args: ScoreArguments) -> None:
     """Updates the score arguments for all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.update_score_args(score_args=score_args)
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError(
-            f"Tracked modules not found when trying to update score arguments `{score_args}`."
-        )
 
 
 def get_tracked_module_names(model: nn.Module) -> List[str]:
@@ -147,70 +132,51 @@ def get_tracked_module_names(model: nn.Module) -> List[str]:
 
 def synchronize_covariance_matrices(model: nn.Module) -> None:
     """Synchronizes covariance matrices of all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.synchronize_covariance_matrices()
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to synchronize covariance matrices.")
 
 
 def synchronize_lambda_matrices(model: nn.Module) -> None:
     """Synchronizes Lambda matrices of all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.synchronize_lambda_matrices()
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to synchronize lambda matrices.")
 
 
-def aggregate_preconditioned_gradient(model: nn.Module) -> None:
-    """Aggregates preconditioned gradient of all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
+def accumulate_preconditioned_gradient(model: nn.Module) -> None:
+    """Accumulates preconditioned gradient of all `TrackedModule` instances within a model."""
     for module in model.modules():
         if isinstance(module, TrackedModule):
-            module.aggregate_preconditioned_gradient()
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to truncate preconditioned gradient.")
+            module.accumulate_preconditioned_gradient()
+
+
+def release_preconditioned_gradient(model: nn.Module) -> None:
+    """Releases preconditioned gradient of all `TrackedModule` instances within a model."""
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.release_preconditioned_gradient()
 
 
 def truncate_preconditioned_gradient(model: nn.Module, keep_size: int) -> None:
     """Truncates preconditioned gradient of all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.truncate_preconditioned_gradient(keep_size=keep_size)
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to truncate preconditioned gradient.")
 
 
 def synchronize_preconditioned_gradient(model: nn.Module, num_processes: int) -> None:
     """Synchronizes preconditioned gradient of all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.synchronize_preconditioned_gradient(num_processes=num_processes)
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError(
-            "Tracked modules not found when trying to synchronize preconditioned gradient."
-        )
 
 
 def release_scores(model: nn.Module) -> None:
     """Releases scores of all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.release_scores()
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to release scores.")
 
 
 def set_mode(
@@ -233,20 +199,17 @@ def set_mode(
         keep_factors (bool, optional):
             If True, existing factors are kept in memory. Defaults to False.
     """
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             if tracked_module_names is not None and module.name not in tracked_module_names:
                 continue
             module.set_mode(mode=mode, keep_factors=keep_factors)
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError(f"Tracked modules not found when trying to set mode `{mode}`.")
 
 
 def load_factors(
     model: nn.Module,
     factor_name: str,
+    clone: bool = False,
 ) -> Dict[str, torch.Tensor]:
     """Loads factors with the given name from all `TrackedModule` instances within a model."""
     loaded_factors = {}
@@ -254,25 +217,15 @@ def load_factors(
         if isinstance(module, TrackedModule):
             factor = module.get_factor(factor_name=factor_name)
             if factor is not None:
-                loaded_factors[module.name] = factor
-    if len(loaded_factors) == 0:
-        raise TrackedModuleNotFoundError(
-            f"Tracked modules not found when trying to load factors with name `{factor_name}`."
-        )
+                loaded_factors[module.name] = factor.contiguous().clone() if clone else factor
     return loaded_factors
 
 
 def set_factors(model: nn.Module, factor_name: str, factors: Dict[str, torch.Tensor]) -> None:
     """Sets new factor for all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.set_factor(factor_name=factor_name, factor=factors[module.name])
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError(
-            f"Tracked modules not found when trying to set factor with name `{factor_name}`."
-        )
 
 
 def set_attention_mask(
@@ -280,7 +233,6 @@ def set_attention_mask(
     attention_mask: Optional[Union[Dict[str, torch.Tensor], torch.Tensor]] = None,
 ) -> None:
     """Sets the attention mask for all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             if isinstance(attention_mask, dict):
@@ -292,20 +244,6 @@ def set_attention_mask(
                 module.set_attention_mask(attention_mask=attention_mask)
             else:
                 raise RuntimeError(f"Invalid attention mask `{attention_mask}` provided.")
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to set `attention_mask`.")
-
-
-def remove_attention_mask(model: nn.Module) -> None:
-    """Removes the attention mask for all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
-    for module in model.modules():
-        if isinstance(module, TrackedModule):
-            module.remove_attention_mask()
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to remove `attention_mask`.")
 
 
 def set_gradient_scale(
@@ -313,32 +251,41 @@ def set_gradient_scale(
     gradient_scale: float = 1.0,
 ) -> None:
     """Sets the gradient scale for all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.set_gradient_scale(scale=gradient_scale)
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to set `gradient_scale`.")
 
 
-def remove_gradient_scale(model: nn.Module) -> None:
-    """Resets the gradient scale for all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
-    for module in model.modules():
-        if isinstance(module, TrackedModule):
-            module.remove_gradient_scale()
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to remove `gradient_scale`.")
-
-
-def update_aggregated_lambda_matrices(model: nn.Module) -> None:
+def finalize_lambda_matrices(model: nn.Module) -> None:
     """Updates Lambda matrices of all `TrackedModule` instances within a model."""
-    tracked_module_count = 0
     for module in model.modules():
         if isinstance(module, TrackedModule):
-            module.update_aggregated_lambda_matrix()
-            tracked_module_count += 1
-    if tracked_module_count == 0:
-        raise TrackedModuleNotFoundError("Tracked modules not found when trying to update lambda matrices.")
+            module.finalize_lambda_matrix()
+
+
+def finalize_preconditioned_gradient(model: nn.Module) -> None:
+    """Computes preconditioned gradient of all `TrackedModule` instances within a model."""
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.finalize_preconditioned_gradient()
+
+
+def finalize_pairwise_scores(model: nn.Module) -> None:
+    """Computes pairwise influence scores of all `TrackedModule` instances within a model."""
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.finalize_pairwise_score()
+
+
+def finalize_self_scores(model: nn.Module) -> None:
+    """Computes self-influence scores of all `TrackedModule` instances within a model."""
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.finalize_self_score()
+
+
+def finalize_self_measurement_scores(model: nn.Module) -> None:
+    """Computes self-influence scores with measurement of all `TrackedModule` instances within a model."""
+    for module in model.modules():
+        if isinstance(module, TrackedModule):
+            module.finalize_self_measurement_score()
