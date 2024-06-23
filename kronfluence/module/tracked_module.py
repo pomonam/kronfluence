@@ -212,7 +212,7 @@ class TrackedModule(nn.Module):
                 The input tensor to the module, provided by the PyTorch's forward hook.
         """
         input_activation = input_activation.to(dtype=self.factor_args.activation_covariance_dtype)
-        flattened_activation, count = self._get_flattened_activation(input_activation)
+        flattened_activation, count = self._get_flattened_activation(input_activation=input_activation)
 
         if self._storage[ACTIVATION_COVARIANCE_MATRIX_NAME] is None:
             dimension = flattened_activation.size(1)
@@ -262,9 +262,11 @@ class TrackedModule(nn.Module):
                 PyTorch's backward hook.
         """
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
-        flattened_gradient, count = self._get_flattened_gradient(output_gradient)
+        flattened_gradient, count = self._get_flattened_gradient(output_gradient=output_gradient)
         if self._gradient_scale != 1.0:
             flattened_gradient.mul_(self._gradient_scale)
+
+        print(self._gradient_scale)
 
         if self._storage[GRADIENT_COVARIANCE_MATRIX_NAME] is None:
             dimension = flattened_gradient.size(1)

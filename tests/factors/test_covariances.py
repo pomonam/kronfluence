@@ -2,8 +2,10 @@
 
 import pytest
 import torch
+import inspect
 
 from kronfluence.arguments import FactorArguments
+from kronfluence.utils.common.factor_arguments import test_factor_arguments
 from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     COVARIANCE_FACTOR_NAMES,
@@ -106,11 +108,7 @@ def test_covariance_matrices_batch_size_equivalence(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_name}_{test_covariance_matrices_batch_size_equivalence.__name__}_bs1",
         dataset=train_dataset,
@@ -176,11 +174,7 @@ def test_covariance_matrices_partition_equivalence(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
     factors_name = f"pytest_{test_name}_{test_covariance_matrices_partition_equivalence.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
@@ -255,11 +249,7 @@ def test_covariance_matrices_attention_mask(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
     factors_name = f"pytest_{test_name}_{test_covariance_matrices_attention_mask.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
@@ -326,11 +316,7 @@ def test_covariance_matrices_automatic_batch_size(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
     factors_name = f"pytest_{test_name}_{test_covariance_matrices_automatic_batch_size.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
@@ -386,11 +372,10 @@ def test_covariance_matrices_max_examples(
     )
 
     MAX_EXAMPLES = 26
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        covariance_max_examples=MAX_EXAMPLES,
-        covariance_data_partition_size=data_partition_size,
-    )
+    factor_args = test_factor_arguments()
+    factor_args.covariance_max_examples = MAX_EXAMPLES
+    factor_args.covariance_data_partition_size = data_partition_size
+
     factors_name = f"pytest_{test_name}_{test_covariance_matrices_max_examples.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
@@ -435,11 +420,7 @@ def test_covariance_matrices_amp(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}",
         dataset=train_dataset,
@@ -452,12 +433,8 @@ def test_covariance_matrices_amp(
         factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}"
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        amp_dtype=torch.float16,
-    )
+    factor_args = test_factor_arguments()
+    factor_args.amp_dtype = torch.float16
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}_amp",
         dataset=train_dataset,
@@ -496,11 +473,7 @@ def test_covariance_matrices_gradient_checkpoint(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_covariance_matrices_gradient_checkpoint.__name__}",
         dataset=train_dataset,
