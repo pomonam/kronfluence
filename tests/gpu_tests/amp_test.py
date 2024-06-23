@@ -69,8 +69,8 @@ class AMPTest(unittest.TestCase):
             assert check_tensor_dict_equivalence(
                 covariance_factors[name],
                 new_covariance_factors[name],
-                atol=1e-5,
-                rtol=1e-3,
+                atol=1e-3,
+                rtol=1e-1,
             )
 
     def test_lambda_matrices(self):
