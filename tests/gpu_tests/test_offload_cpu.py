@@ -186,6 +186,4 @@ def test_cpu_offloads_identical(
     )
     cached_pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
 
-    assert check_tensor_dict_equivalence(
-        pairwise_scores, cached_pairwise_scores, atol=ATOL, rtol=RTOL
-    )
+    assert check_tensor_dict_equivalence(pairwise_scores, cached_pairwise_scores, atol=ATOL, rtol=RTOL)

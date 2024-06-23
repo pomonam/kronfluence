@@ -263,6 +263,8 @@ class TrackedModule(nn.Module):
         """
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
         flattened_gradient, count = self._get_flattened_gradient(output_gradient=output_gradient)
+        if self._gradient_scale != 1.0:
+            flattened_gradient.mul_(self._gradient_scale)
 
         if self._storage[GRADIENT_COVARIANCE_MATRIX_NAME] is None:
             dimension = flattened_gradient.size(1)
@@ -272,8 +274,7 @@ class TrackedModule(nn.Module):
                 device=flattened_gradient.device,
                 requires_grad=False,
             )
-        self._storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(flattened_gradient.t(), flattened_gradient,
-                                                              alpha=self._gradient_scale ** 2.)
+        self._storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(flattened_gradient.t(), flattened_gradient)
 
         # This is not necessary as `NUM_GRADIENT_COVARIANCE_PROCESSED` should be identical to
         # `NUM_ACTIVATION_COVARIANCE_PROCESSED` in most cases. However, they can be different when using
@@ -301,7 +302,7 @@ class TrackedModule(nn.Module):
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             # Computes and updates pseudo-gradient covariance matrix in the backward pass.
-            self._update_gradient_covariance_matrix(output_gradient.detach())
+            self._update_gradient_covariance_matrix(output_gradient.detach().clone())
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
 
@@ -476,7 +477,7 @@ class TrackedModule(nn.Module):
             cached_activation = self._cached_activations.pop()
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=cached_activation.to(device=output_gradient.device),
-                output_gradient=output_gradient.detach().to(dtype=self.factor_args.per_sample_gradient_dtype),
+                output_gradient=output_gradient.detach().clone().to(dtype=self.factor_args.per_sample_gradient_dtype),
             )
             if self._cached_per_sample_gradient is None:
                 self._cached_per_sample_gradient = per_sample_gradient

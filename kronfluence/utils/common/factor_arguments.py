@@ -18,7 +18,9 @@ def test_factor_arguments(strategy: str = "ekfac") -> FactorArguments:
     return factor_args
 
 
-def smart_low_precision_factor_arguments(strategy: str = "ekfac", dtype: torch.dtype = torch.bfloat16) -> FactorArguments:
+def smart_low_precision_factor_arguments(
+    strategy: str = "ekfac", dtype: torch.dtype = torch.bfloat16
+) -> FactorArguments:
     factor_args = FactorArguments(strategy=strategy)
     factor_args.amp_dtype = dtype
     factor_args.activation_covariance_dtype = dtype
@@ -44,7 +46,9 @@ def reduce_memory_factor_arguments(strategy: str = "ekfac", dtype: torch.dtype =
     return factor_args
 
 
-def extreme_reduce_memory_factor_arguments(strategy: str = "ekfac", dtype: torch.dtype = torch.bfloat16) -> FactorArguments:
+def extreme_reduce_memory_factor_arguments(
+    strategy: str = "ekfac", dtype: torch.dtype = torch.bfloat16
+) -> FactorArguments:
     factor_args = all_low_precision_factor_arguments(strategy=strategy, dtype=dtype)
     factor_args.lambda_iterative_aggregate = True
     factor_args.cached_activation_cpu_offload = True
