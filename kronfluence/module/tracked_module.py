@@ -477,7 +477,7 @@ class TrackedModule(nn.Module):
             cached_activation = self._cached_activations.pop()
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=cached_activation.to(device=output_gradient.device),
-                output_gradient=output_gradient.detach().clone().to(dtype=self.factor_args.per_sample_gradient_dtype),
+                output_gradient=output_gradient.detach().to(dtype=self.factor_args.per_sample_gradient_dtype),
             )
             if self._cached_per_sample_gradient is None:
                 self._cached_per_sample_gradient = per_sample_gradient
