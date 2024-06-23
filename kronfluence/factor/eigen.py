@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple
 import torch
 import torch.distributed as dist
 from accelerate.utils import find_batch_size, send_to_device
+from accelerate.utils.memory import should_reduce_batch_size
 from safetensors.torch import load_file, save_file
 from torch import autocast, nn
 from torch.cuda.amp import GradScaler
@@ -13,9 +14,9 @@ from tqdm import tqdm
 from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
+    finalize_lambda_matrices,
     get_tracked_module_names,
     load_factors,
-    remove_gradient_scale,
     set_factors,
     set_gradient_scale,
     set_mode,
@@ -33,11 +34,12 @@ from kronfluence.utils.constants import (
     GRADIENT_EIGENVALUES_NAME,
     GRADIENT_EIGENVECTORS_NAME,
     LAMBDA_FACTOR_NAMES,
-    NUM_COVARIANCE_PROCESSED,
+    NUM_ACTIVATION_COVARIANCE_PROCESSED,
+    NUM_GRADIENT_COVARIANCE_PROCESSED,
     PARTITION_TYPE,
 )
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
-from kronfluence.utils.state import State, no_sync
+from kronfluence.utils.state import State, no_sync, release_memory
 
 
 def eigendecomposition_save_path(
@@ -94,24 +96,28 @@ def perform_eigendecomposition(
     model: nn.Module,
     state: State,
     factor_args: FactorArguments,
+    disable_tqdm: bool = False,
 ) -> FACTOR_TYPE:
     """Performs Eigendecomposition on activation and pseudo-gradient covariance matrices.
 
     Args:
         covariance_factors (FACTOR_TYPE):
-            The covariance matrices to perform Eigendecomposition on.
+            The model used to compute covariance matrices.
         model (nn.Module):
             The model which contains modules which Eigendecomposition will be performed.
         state (State):
             The current process's information (e.g., device being used).
         factor_args (FactorArguments):
-            Arguments related to performing Eigendecomposition.
+            Arguments for computing Eigendecomposition.
+        disable_tqdm (bool, optional):
+            Disables TQDM progress bars. Defaults to False.
 
     Returns:
         FACTOR_TYPE:
-            The Eigendecomposition results in CPU. The Eigendecomposition results are organized in
-            nested dictionaries, where the first key is the name of the Eigendecomposition factor (e.g.,
-            activation eigenvector), and the second key is the module name.
+            The Eigendecomposition results. These results are organized in nested dictionaries, where the first key
+            is the name of the factor (e.g.,activation eigenvector), and the second key is the module name.
+        disable_tqdm (bool, optional):
+            Disables TQDM progress bars. Defaults to False.
     """
     eigen_factors: FACTOR_TYPE = {}
     for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
@@ -122,17 +128,19 @@ def perform_eigendecomposition(
         total=len(tracked_module_names),
         desc="Performing Eigendecomposition",
         bar_format=TQDM_BAR_FORMAT,
-        disable=not state.is_main_process,
+        disable=not state.is_main_process or disable_tqdm,
     ) as pbar:
         for module_name in tracked_module_names:
-            for covariance_name, eigenvectors_name, eigenvalues_name in [
+            for covariance_name, num_processed_name, eigenvectors_name, eigenvalues_name in [
                 (
                     ACTIVATION_COVARIANCE_MATRIX_NAME,
+                    NUM_ACTIVATION_COVARIANCE_PROCESSED,
                     ACTIVATION_EIGENVECTORS_NAME,
                     ACTIVATION_EIGENVALUES_NAME,
                 ),
                 (
                     GRADIENT_COVARIANCE_MATRIX_NAME,
+                    NUM_GRADIENT_COVARIANCE_PROCESSED,
                     GRADIENT_EIGENVECTORS_NAME,
                     GRADIENT_EIGENVALUES_NAME,
                 ),
@@ -142,17 +150,27 @@ def perform_eigendecomposition(
                     device=state.device,
                     dtype=factor_args.eigendecomposition_dtype,
                 )
-                # Normalize covariance matrices.
-                covariance_matrix.div_(
-                    covariance_factors[NUM_COVARIANCE_PROCESSED][module_name].to(device=state.device)
-                )
+                # Normalizes covariance matrices.
+                covariance_matrix.div_(covariance_factors[num_processed_name][module_name].to(device=state.device))
                 # In cases where covariance matrices are not exactly symmetric due to numerical issues.
-                covariance_matrix = 0.5 * (covariance_matrix + covariance_matrix.t())
-                eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
+                covariance_matrix = covariance_matrix + covariance_matrix.t()
+                covariance_matrix.mul_(0.5)
+
+                try:
+                    eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    # If we get OOM error, release the memory and try again.
+                    if should_reduce_batch_size(exception=e):  # pylint: disable=no-else-continue
+                        release_memory()
+                        eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
+                    else:
+                        raise
                 eigen_factors[eigenvalues_name][module_name] = eigenvalues.to(dtype=original_dtype).contiguous().cpu()
                 eigen_factors[eigenvectors_name][module_name] = eigenvectors.to(dtype=original_dtype).contiguous().cpu()
-                del eigenvalues, eigenvectors
+                del covariance_matrix, eigenvalues, eigenvectors
+
             pbar.update(1)
+
     return eigen_factors
 
 
@@ -208,7 +226,7 @@ def lambda_matrices_exist(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
-    """Check if Lambda matrices exist at the specified path."""
+    """Checks if Lambda matrices exist at the specified path."""
     for factor_name in LAMBDA_FACTOR_NAMES:
         save_path = lambda_matrices_save_path(
             output_dir=output_dir,
@@ -228,6 +246,7 @@ def fit_lambda_matrices_with_loader(
     factor_args: FactorArguments,
     eigen_factors: Optional[FACTOR_TYPE] = None,
     tracked_module_names: Optional[List[str]] = None,
+    disable_tqdm: bool = False,
 ) -> Tuple[torch.Tensor, FACTOR_TYPE]:
     """Computes Lambda (corrected eigenvalues) matrices for a given model and task.
 
@@ -247,71 +266,76 @@ def fit_lambda_matrices_with_loader(
         tracked_module_names (List[str], optional):
             A list of module names for which Lambda matrices will be computed. If not specified,
             Lambda matrices will be computed for all tracked modules.
+        disable_tqdm (bool, optional):
+            Disables TQDM progress bars. Defaults to False.
 
     Returns:
         Tuple[torch.Tensor, FACTOR_TYPE]:
-            A tuple containing the number of data points processed, and computed Lambda matrices in CPU.
+            A tuple containing the number of data points processed and computed Lambda matrices.
             The Lambda matrices are organized in nested dictionaries, where the first key is the name of
             the computed variable and the second key is the module name.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
+        if tracked_module_names is None:
+            tracked_module_names = get_tracked_module_names(model=model)
         set_mode(
             model=model,
             tracked_module_names=tracked_module_names,
             mode=ModuleMode.LAMBDA,
+            keep_factors=False,
         )
         if eigen_factors is not None:
             for name in eigen_factors:
                 set_factors(model=model, factor_name=name, factors=eigen_factors[name])
+
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
     enable_amp = factor_args.amp_dtype is not None
     scaler = GradScaler(enabled=enable_amp)
+    if enable_amp:
+        gradient_scale = 1.0 / scaler.get_scale()
+        set_gradient_scale(model=model, gradient_scale=gradient_scale)
 
     with tqdm(
         total=len(loader),
         desc="Fitting Lambda matrices",
         bar_format=TQDM_BAR_FORMAT,
-        disable=not state.is_main_process,
+        disable=not state.is_main_process or disable_tqdm,
     ) as pbar:
         for index, batch in enumerate(loader):
             batch = send_to_device(tensor=batch, device=state.device)
 
+            model.zero_grad(set_to_none=True)
             with no_sync(model=model, state=state):
-                model.zero_grad(set_to_none=True)
                 with autocast(device_type=state.device.type, enabled=enable_amp, dtype=factor_args.amp_dtype):
                     loss = task.compute_train_loss(
                         batch=batch,
                         model=model,
                         sample=not factor_args.use_empirical_fisher,
                     )
-                scaled_loss = scaler.scale(loss)
-                if enable_amp:
-                    gradient_scale = 1.0 / scaler.get_scale()
-                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
-                scaled_loss.backward()
+                scaler.scale(loss).backward()
 
-            num_data_processed += find_batch_size(data=batch)
-            total_steps += 1
+            if factor_args.shared_parameters_exist:
+                # If shared parameter exists, Lambda matrices are computed and updated only after all
+                # per-sample-gradients are aggregated.
+                finalize_lambda_matrices(model=model)
 
             if (
                 state.use_distributed
                 and total_steps % factor_args.distributed_sync_steps == 0
                 and index not in [len(loader) - 1, len(loader) - 2]
             ):
-                # Periodically synchronize all processes to avoid timeout at the final Lambda synchronization.
+                # Periodically synchronizes all processes to avoid timeout at the final synchronization.
                 state.wait_for_everyone()
 
+            num_data_processed.add_(find_batch_size(data=batch))
+            total_steps += 1
             pbar.update(1)
 
     with torch.no_grad():
-        del loss
-        remove_gradient_scale(model=model)
-        model.zero_grad(set_to_none=True)
-
         if state.use_distributed:
-            # Aggregate Lambda matrices across multiple devices or nodes.
+            # Aggregates Lambda matrices across multiple devices or nodes.
             synchronize_lambda_matrices(model=model)
             num_data_processed = num_data_processed.to(device=state.device)
             dist.all_reduce(tensor=num_data_processed, op=torch.distributed.ReduceOp.SUM)
@@ -319,7 +343,13 @@ def fit_lambda_matrices_with_loader(
         saved_factors: FACTOR_TYPE = {}
         if state.is_main_process:
             for factor_name in LAMBDA_FACTOR_NAMES:
-                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name)
+                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=True)
         state.wait_for_everyone()
+
+        # Clean up the memory.
+        model.zero_grad(set_to_none=True)
+        if enable_amp:
+            set_gradient_scale(model=model, gradient_scale=1.0)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
+
     return num_data_processed, saved_factors

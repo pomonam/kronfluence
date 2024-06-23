@@ -8,7 +8,8 @@ from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     COVARIANCE_FACTOR_NAMES,
     GRADIENT_COVARIANCE_MATRIX_NAME,
-    NUM_COVARIANCE_PROCESSED,
+    NUM_ACTIVATION_COVARIANCE_PROCESSED,
+    NUM_GRADIENT_COVARIANCE_PROCESSED,
 )
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import (
@@ -25,6 +26,7 @@ from tests.utils import (
     [
         "mlp",
         "repeated_mlp",
+        "mlp_checkpoint",
         "conv",
         "conv_bn",
         "bert",
@@ -147,6 +149,7 @@ def test_covariance_matrices_batch_size_equivalence(
     [
         "mlp",
         "conv",
+        "conv_bn",
         "gpt",
     ],
 )
@@ -217,7 +220,7 @@ def test_covariance_matrices_partition_equivalence(
         )
 
 
-@pytest.mark.parametrize("test_name", ["bert", "wrong_bert"])
+@pytest.mark.parametrize("test_name", ["bert", "wrong_bert", "gpt"])
 @pytest.mark.parametrize("train_size", [213])
 @pytest.mark.parametrize("seed", [3])
 def test_covariance_matrices_attention_mask(
@@ -283,7 +286,11 @@ def test_covariance_matrices_attention_mask(
     )
 
     for name in COVARIANCE_FACTOR_NAMES:
-        if "wrong" in test_name and name in [ACTIVATION_COVARIANCE_MATRIX_NAME, NUM_COVARIANCE_PROCESSED]:
+        if "wrong" in test_name and name in [
+            ACTIVATION_COVARIANCE_MATRIX_NAME,
+            NUM_ACTIVATION_COVARIANCE_PROCESSED,
+            NUM_GRADIENT_COVARIANCE_PROCESSED,
+        ]:
             assert not check_tensor_dict_equivalence(
                 covariance_factors[name],
                 no_padded_covariance_factors[name],
@@ -395,7 +402,10 @@ def test_covariance_matrices_max_examples(
     )
     covariance_factors = analyzer.load_covariance_matrices(factors_name=factors_name)
 
-    for num_examples in covariance_factors[NUM_COVARIANCE_PROCESSED].values():
+    for num_examples in covariance_factors[NUM_ACTIVATION_COVARIANCE_PROCESSED].values():
+        assert num_examples == MAX_EXAMPLES
+
+    for num_examples in covariance_factors[NUM_GRADIENT_COVARIANCE_PROCESSED].values():
         assert num_examples == MAX_EXAMPLES
 
 
@@ -406,8 +416,8 @@ def test_covariance_matrices_max_examples(
         "conv",
     ],
 )
-@pytest.mark.parametrize("train_size", [100])
-@pytest.mark.parametrize("seed", [6])
+@pytest.mark.parametrize("train_size", [101])
+@pytest.mark.parametrize("seed", [8])
 def test_covariance_matrices_amp(
     test_name: str,
     train_size: int,
@@ -429,26 +439,31 @@ def test_covariance_matrices_amp(
         use_empirical_fisher=True,
         activation_covariance_dtype=torch.float64,
         gradient_covariance_dtype=torch.float64,
-        amp_dtype=torch.float16,
     )
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}",
         dataset=train_dataset,
-        factor_args=factor_args,
         per_device_batch_size=8,
         overwrite_output_dir=True,
+        factor_args=factor_args,
         dataloader_kwargs=kwargs,
     )
     covariance_factors = analyzer.load_covariance_matrices(
         factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}"
     )
 
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+        amp_dtype=torch.float16,
+    )
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}_amp",
         dataset=train_dataset,
-        factor_args=factor_args,
         per_device_batch_size=8,
         overwrite_output_dir=True,
+        factor_args=factor_args,
         dataloader_kwargs=kwargs,
     )
     amp_covariance_factors = analyzer.load_covariance_matrices(
@@ -459,6 +474,67 @@ def test_covariance_matrices_amp(
         assert check_tensor_dict_equivalence(
             covariance_factors[name],
             amp_covariance_factors[name],
-            atol=ATOL,
-            rtol=RTOL,
+            atol=1e-01,
+            rtol=1e-02,
         )
+
+
+@pytest.mark.parametrize("train_size", [100])
+@pytest.mark.parametrize("seed", [12])
+def test_covariance_matrices_gradient_checkpoint(
+    train_size: int,
+    seed: int,
+) -> None:
+    # Covariance matrices should be the same even when gradient checkpointing is used.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name="mlp",
+        train_size=train_size,
+        seed=seed,
+    )
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = FactorArguments(
+        use_empirical_fisher=True,
+        activation_covariance_dtype=torch.float64,
+        gradient_covariance_dtype=torch.float64,
+    )
+    analyzer.fit_covariance_matrices(
+        factors_name=f"pytest_{test_covariance_matrices_gradient_checkpoint.__name__}",
+        dataset=train_dataset,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=f"pytest_{test_covariance_matrices_gradient_checkpoint.__name__}",
+    )
+
+    model, _, _, _, task = prepare_test(
+        test_name="mlp_checkpoint",
+        train_size=train_size,
+        seed=seed,
+    )
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    analyzer.fit_covariance_matrices(
+        factors_name=f"pytest_{test_covariance_matrices_gradient_checkpoint.__name__}_cp",
+        dataset=train_dataset,
+        per_device_batch_size=4,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    checkpoint_covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=f"pytest_{test_covariance_matrices_gradient_checkpoint.__name__}_cp",
+    )
+
+    assert check_tensor_dict_equivalence(
+        covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME],
+        checkpoint_covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME],
+        atol=ATOL,
+        rtol=RTOL,
+    )

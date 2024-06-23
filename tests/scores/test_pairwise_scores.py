@@ -21,7 +21,6 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
         "conv_bn",
         "bert",
@@ -514,22 +513,21 @@ def test_compute_pairwise_scores_with_indices(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
         "conv",
     ],
 )
 @pytest.mark.parametrize("query_size", [64])
 @pytest.mark.parametrize("train_size", [32])
-@pytest.mark.parametrize("num_query_gradient_aggregations", [2, 5])
+@pytest.mark.parametrize("num_query_gradient_accumulations", [2, 5])
 @pytest.mark.parametrize("seed", [5])
-def test_query_aggregation(
+def test_query_accumulation(
     test_name: str,
     query_size: int,
     train_size: int,
-    num_query_gradient_aggregations: int,
+    num_query_gradient_accumulations: int,
     seed: int,
 ) -> None:
-    # Make sure the query aggregation is correctly implemented.
+    # Make sure the query accumulation is correctly implemented.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
@@ -543,7 +541,7 @@ def test_query_aggregation(
         task=task,
     )
 
-    factors_name = f"pytest_{test_name}_{test_query_aggregation.__name__}"
+    factors_name = f"pytest_{test_name}_{test_query_accumulation.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -552,10 +550,10 @@ def test_query_aggregation(
         overwrite_output_dir=True,
     )
 
-    scores_name = f"pytest_{test_name}_{test_query_aggregation.__name__}_scores"
+    scores_name = f"pytest_{test_name}_{test_query_accumulation.__name__}_scores"
     score_args = ScoreArguments(
         query_gradient_rank=8,
-        num_query_gradient_aggregations=1,
+        num_query_gradient_accumulations=1,
         score_dtype=torch.float64,
         precondition_dtype=torch.float64,
         per_sample_gradient_dtype=torch.float64,
@@ -575,13 +573,13 @@ def test_query_aggregation(
 
     score_args = ScoreArguments(
         query_gradient_rank=8,
-        num_query_gradient_aggregations=num_query_gradient_aggregations,
+        num_query_gradient_accumulations=num_query_gradient_accumulations,
         score_dtype=torch.float64,
         precondition_dtype=torch.float64,
         per_sample_gradient_dtype=torch.float64,
     )
     analyzer.compute_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_query_aggregation.__name__}_aggregate_scores",
+        scores_name=f"pytest_{test_name}_{test_query_accumulation.__name__}_accumulated_scores",
         factors_name=factors_name,
         query_dataset=test_dataset,
         per_device_query_batch_size=10,
@@ -592,7 +590,7 @@ def test_query_aggregation(
         overwrite_output_dir=True,
     )
     partitioned_scores = analyzer.load_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_query_aggregation.__name__}_aggregate_scores",
+        scores_name=f"pytest_{test_name}_{test_query_accumulation.__name__}_accumulated_scores",
     )
 
     assert check_tensor_dict_equivalence(

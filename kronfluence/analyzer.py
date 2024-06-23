@@ -21,8 +21,8 @@ def prepare_model(
     task: Task,
 ) -> nn.Module:
     """Prepares the model before passing it to `Analyzer`. This function sets `param.requires_grad = False`
-    for all modules that does not require influence computations and installs `TrackedModule` to supported
-    modules. This `TrackedModule` keeps track of relevant statistics needed to compute influence scores.
+    for all modules and installs `TrackedModule` to supported modules. This `TrackedModule` keeps track of relevant
+    statistics needed to compute influence scores.
 
     Args:
         model (nn.Module):
@@ -32,22 +32,21 @@ def prepare_model(
 
     Returns:
         nn.Module:
-            The same PyTorch model with `param.requires_grad = False` on all modules that does not require influence
-            computations and with `TrackedModule` installed.
+            The PyTorch model with `param.requires_grad = False` on all modules and with `TrackedModule` installed.
     """
     model.eval()
     for params in model.parameters():
         params.requires_grad = False
+    for buffers in model.buffers():
+        buffers.requires_grad = False
     # Install `TrackedModule` to the model.
     model = wrap_tracked_modules(model=model, task=task)
     return model
 
 
 class Analyzer(FactorComputer, ScoreComputer):
-    """
-    Handles the computation of all factors (e.g., covariance and Lambda matrices for EKFAC)
-    and influence scores for a given PyTorch model.
-    """
+    """Handles the computation of all factors (e.g., covariance and Lambda matrices for EKFAC)
+    and influence scores for a given PyTorch model."""
 
     def __init__(
         self,
@@ -58,7 +57,8 @@ class Analyzer(FactorComputer, ScoreComputer):
         log_level: Optional[int] = None,
         log_main_process_only: bool = True,
         profile: bool = False,
-        output_dir: str = "./analyses",
+        disable_tqdm: bool = False,
+        output_dir: str = "./influence_results",
         disable_model_save: bool = True,
     ) -> None:
         """Initializes an instance of the Analyzer class.
@@ -80,9 +80,11 @@ class Analyzer(FactorComputer, ScoreComputer):
             profile (bool, optional):
                 Enables the generation of performance profiling logs. This can be useful for
                 identifying bottlenecks or performance issues. Defaults to False.
+            disable_tqdm (bool, optional):
+                Disables TQDM progress bars. Defaults to False.
             output_dir (str):
                 The file path to the directory, where analysis results will be stored. If the directory
-                does not exist, it will be created. Defaults to './analyses'.
+                does not exist, it will be created. Defaults to './influence_results'.
             disable_model_save (bool, optional):
                 If set to True, prevents the saving of the model's state_dict. When the provided model is different
                 from the previously saved model, it will raise an Exception. Defaults to True.
@@ -95,12 +97,13 @@ class Analyzer(FactorComputer, ScoreComputer):
             log_level=log_level,
             log_main_process_only=log_main_process_only,
             profile=profile,
+            disable_tqdm=disable_tqdm,
             output_dir=output_dir,
         )
         self.logger.info(f"Initializing Computer with parameters: {locals()}")
         self.logger.debug(f"Process state configuration:\n{repr(self.state)}")
 
-        # Save model parameters.
+        # Saves model parameters.
         if self.state.is_main_process and not disable_model_save:
             self._save_model()
         self.state.wait_for_everyone()
@@ -151,7 +154,7 @@ class Analyzer(FactorComputer, ScoreComputer):
     ) -> None:
         """Computes all necessary factors for the given factor strategy. As an example, EK-FAC
         requires (1) computing covariance matrices, (2) performing Eigendecomposition, and
-        (3) computing Lambda (corrected-eigenvalues) matrices.
+        (3) computing Lambda (corrected eigenvalues) matrices.
 
         Args:
             factors_name (str):

@@ -51,6 +51,10 @@ class FactorArguments(Arguments):
         default=None,
         metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
     )
+    shared_parameters_exist: bool = field(
+        default=False,
+        metadata={"help": "Specifies whether the shared parameters exist in the forward pass."},
+    )
 
     # Configuration for fitting covariance matrices. #
     covariance_max_examples: Optional[int] = field(
@@ -125,6 +129,10 @@ class FactorArguments(Arguments):
         default=False,
         metadata={"help": "Whether to offload cached activation to CPU for computing the per-sample-gradient."},
     )
+    per_sample_gradient_dtype: torch.dtype = field(
+        default=torch.float32,
+        metadata={"help": "Dtype for computing per-sample-gradients."},
+    )
     lambda_dtype: torch.dtype = field(
         default=torch.float32,
         metadata={"help": "Dtype for computing Lambda (corrected eigenvalues) matrices."},
@@ -188,9 +196,9 @@ class ScoreArguments(Arguments):
         default=None,
         metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
     )
-    num_query_gradient_aggregations: int = field(
+    num_query_gradient_accumulations: int = field(
         default=1,
-        metadata={"help": "Number of query batches to aggregate over."},
+        metadata={"help": "Number of query batches to accumulate over."},
     )
     use_measurement_for_self_influence: bool = field(
         default=False,

@@ -85,7 +85,7 @@ class Task(ABC):
         Returns:
             Optional[Union[Dict[str, torch.Tensor], torch.Tensor]]:
                 A binary tensor as the mask for the batch, or None if padding is not used. The mask dimensions should
-                match `batch_size x num_seq`. For models requiring different masks for various modules
+                match `batch_size x num_seq`. For models requiring different masks for different modules
                 (e.g., encoder-decoder architectures), returns a dictionary mapping module names to their
                 corresponding masks.
         """

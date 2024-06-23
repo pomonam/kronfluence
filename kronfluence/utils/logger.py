@@ -143,7 +143,7 @@ class Profiler:
 
 
 class PassThroughProfiler(Profiler):
-    """A pass through Profiler objective that does not record timing for the profiler."""
+    """A pass through Profiler objective that does not record timing."""
 
     def start(self, action_name: str) -> None:
         """Defines how to start recording an action."""
@@ -161,6 +161,8 @@ class PassThroughProfiler(Profiler):
 class TorchProfiler(Profiler):
     """A PyTorch Profiler objective that provides detailed profiling information:
     https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html.
+
+    This is useful for low-level profiling in PyTorch, and is not used by default.
     """
 
     def __init__(self, state: State) -> None:
@@ -174,7 +176,7 @@ class TorchProfiler(Profiler):
         """Defines how to start recording an action."""
         if action_name in self.current_actions:
             raise ValueError(f"Attempted to start {action_name} which has already started.")
-        # Set dummy value, since only used to track duplicate actions
+        # Set dummy value, since only used to track duplicate actions.
         self.current_actions[action_name] = 0.0
         self.actions.append(action_name)
         self._torch_prof.start()

@@ -165,6 +165,7 @@ cython_debug/
 # Checkpoints and influence outputs
 checkpoints/
 analyses/
+influence_results/
 data/
 *.pth
 *.pt

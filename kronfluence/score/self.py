@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import torch
-from accelerate.utils import find_batch_size, send_to_device
+from accelerate.utils import send_to_device
 from safetensors.torch import load_file, save_file
 from torch import autocast, nn
 from torch.cuda.amp import GradScaler
@@ -13,9 +13,11 @@ from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.module import TrackedModule
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
+    finalize_preconditioned_gradient,
+    finalize_self_measurement_scores,
+    finalize_self_scores,
     get_tracked_module_names,
     release_scores,
-    remove_gradient_scale,
     set_factors,
     set_gradient_scale,
     set_mode,
@@ -51,7 +53,7 @@ def self_scores_exist(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
-    """Check if the self-influence scores exist at the specified path."""
+    """Checks if the self-influence scores exist at the specified path."""
     save_path = self_scores_save_path(
         output_dir=output_dir,
         partition=partition,
@@ -94,6 +96,7 @@ def compute_self_scores_with_loaders(
     score_args: ScoreArguments,
     factor_args: FactorArguments,
     tracked_module_names: Optional[List[str]],
+    disable_tqdm: bool = False,
 ) -> Dict[str, torch.Tensor]:
     """Computes self-influence scores for a given model and task.
 
@@ -115,21 +118,24 @@ def compute_self_scores_with_loaders(
         tracked_module_names (List[str], optional):
             A list of module names that self-influence scores will be computed. If not specified, scores
             will be computed for all available tracked modules.
+        disable_tqdm (bool, optional):
+            Disables TQDM progress bars. Defaults to False.
 
     Returns:
         Dict[str, torch.Tensor]:
-            A dictionary containing the module name and its self-influence scores. If
-            `score_args.per_module_score` is False, the self-influence scores will be aggregated across all modules.
+            A dictionary containing the module name and its self-influence scores.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
         update_score_args(model=model, score_args=score_args)
+        if tracked_module_names is None:
+            tracked_module_names = get_tracked_module_names(model=model)
         set_mode(
             model=model,
-            mode=ModuleMode.DEFAULT,
+            mode=ModuleMode.SELF_SCORE,
+            tracked_module_names=tracked_module_names,
             keep_factors=False,
         )
-
         # Loads necessary factors before computing self-influence scores.
         if len(loaded_factors) > 0:
             for name in loaded_factors:
@@ -138,14 +144,6 @@ def compute_self_scores_with_loaders(
                     factor_name=name,
                     factors=loaded_factors[name],
                 )
-        if tracked_module_names is None:
-            tracked_module_names = get_tracked_module_names(model=model)
-        set_mode(
-            model=model,
-            mode=ModuleMode.SELF_SCORE,
-            tracked_module_names=tracked_module_names,
-            keep_factors=True,
-        )
 
     dataset_size = len(train_loader.dataset)
     score_chunks: Dict[str, List[torch.Tensor]] = {}
@@ -155,15 +153,19 @@ def compute_self_scores_with_loaders(
                 score_chunks[module.name] = []
     else:
         score_chunks[ALL_MODULE_NAME] = []
+
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
     scaler = GradScaler(enabled=enable_amp)
+    if enable_amp:
+        gradient_scale = 1.0 / scaler.get_scale()
+        set_gradient_scale(model=model, gradient_scale=gradient_scale)
 
     with tqdm(
         total=len(train_loader),
         desc="Computing self-influence scores",
         bar_format=TQDM_BAR_FORMAT,
-        disable=not state.is_main_process,
+        disable=not state.is_main_process or disable_tqdm,
     ) as pbar:
         for batch in train_loader:
             batch = send_to_device(
@@ -171,20 +173,18 @@ def compute_self_scores_with_loaders(
                 device=state.device,
             )
 
+            model.zero_grad(set_to_none=True)
             with no_sync(model=model, state=state):
-                model.zero_grad(set_to_none=True)
                 with autocast(device_type=state.device.type, enabled=enable_amp, dtype=score_args.amp_dtype):
                     loss = task.compute_train_loss(
                         batch=batch,
                         model=model,
                         sample=False,
                     )
-                scaled_loss = scaler.scale(loss)
-                if enable_amp:
-                    gradient_scale = 1.0 / scaler.get_scale()
-                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
-                scaled_loss.backward()
-            total_steps += 1
+                scaler.scale(loss).backward()
+
+            if factor_args.shared_parameters_exist:
+                finalize_self_scores(model=model)
 
             with torch.no_grad():
                 if score_args.per_module_score:
@@ -194,39 +194,40 @@ def compute_self_scores_with_loaders(
                                 module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).cpu()
                             )
                 else:
-                    # Aggregate the self-influence scores across all modules.
-                    batch_size = find_batch_size(batch)
-                    self_scores = torch.zeros(
-                        size=(batch_size,),
-                        dtype=score_args.score_dtype,
-                        device=state.device,
-                        requires_grad=False,
-                    )
+                    # Aggregates the self-influence scores across all modules.
+                    self_scores = None
                     for module in model.modules():
                         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                            self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
+                            if self_scores is None:
+                                self_scores = module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).clone()
+                            else:
+                                self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
                     score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
                 release_scores(model=model)
 
             if state.use_distributed and total_steps % score_args.distributed_sync_steps == 0:
+                # Periodically synchronizes all processes to avoid timeout at the final synchronization.
                 state.wait_for_everyone()
 
+            total_steps += 1
             pbar.update(1)
 
     with torch.no_grad():
         model.zero_grad(set_to_none=True)
-        remove_gradient_scale(model=model)
+        if enable_amp:
+            set_gradient_scale(model=model, gradient_scale=1.0)
         set_mode(
             model=model,
             mode=ModuleMode.DEFAULT,
             tracked_module_names=tracked_module_names,
             keep_factors=False,
         )
+        release_memory()
+
         total_scores: SCORE_TYPE = {}
         for module_name, chunks in score_chunks.items():
             total_scores[module_name] = torch.cat(chunks, dim=0)
             if state.use_distributed:
-                release_memory()
                 total_scores[module_name] = total_scores[module_name].to(device=state.device)
                 gather_list = None
                 if state.is_main_process:
@@ -234,7 +235,8 @@ def compute_self_scores_with_loaders(
                 torch.distributed.gather(total_scores[module_name], gather_list)
                 if state.is_main_process:
                     total_scores[module_name] = torch.cat(gather_list, dim=0)[:dataset_size].cpu()
-    state.wait_for_everyone()
+        state.wait_for_everyone()
+
     return total_scores
 
 
@@ -247,6 +249,7 @@ def compute_self_measurement_scores_with_loaders(
     score_args: ScoreArguments,
     factor_args: FactorArguments,
     tracked_module_names: Optional[List[str]],
+    disable_tqdm: bool = False,
 ) -> Dict[str, torch.Tensor]:
     """Computes self-influence scores with measurement (instead of the loss) for a given model and task.
 
@@ -268,21 +271,18 @@ def compute_self_measurement_scores_with_loaders(
         tracked_module_names (List[str], optional):
             A list of module names that self-influence scores will be computed. If not specified, scores
             will be computed for all available tracked modules.
+        disable_tqdm (bool, optional):
+            Disables TQDM progress bars. Defaults to False.
 
     Returns:
         Dict[str, torch.Tensor]:
-            A dictionary containing the module name and its self-influence scores. If
-            `score_args.per_module_score` is False, the self-influence scores will be aggregated across all modules.
+            A dictionary containing the module name and its self-influence scores.
     """
     with torch.no_grad():
         update_factor_args(model=model, factor_args=factor_args)
         update_score_args(model=model, score_args=score_args)
-        set_mode(
-            model=model,
-            mode=ModuleMode.DEFAULT,
-            keep_factors=False,
-        )
-
+        if tracked_module_names is None:
+            tracked_module_names = get_tracked_module_names(model=model)
         # Loads necessary factors before computing self-influence scores.
         if len(loaded_factors) > 0:
             for name in loaded_factors:
@@ -291,8 +291,6 @@ def compute_self_measurement_scores_with_loaders(
                     factor_name=name,
                     factors=loaded_factors[name],
                 )
-        if tracked_module_names is None:
-            tracked_module_names = get_tracked_module_names(model=model)
 
     dataset_size = len(train_loader.dataset)
     score_chunks: Dict[str, List[torch.Tensor]] = {}
@@ -302,15 +300,19 @@ def compute_self_measurement_scores_with_loaders(
                 score_chunks[module.name] = []
     else:
         score_chunks[ALL_MODULE_NAME] = []
+
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
     scaler = GradScaler(enabled=enable_amp)
+    if enable_amp:
+        gradient_scale = 1.0 / scaler.get_scale()
+        set_gradient_scale(model=model, gradient_scale=gradient_scale)
 
     with tqdm(
         total=len(train_loader),
         desc="Computing self-influence scores",
         bar_format=TQDM_BAR_FORMAT,
-        disable=not state.is_main_process,
+        disable=not state.is_main_process or disable_tqdm,
     ) as pbar:
         for batch in train_loader:
             batch = send_to_device(
@@ -324,15 +326,14 @@ def compute_self_measurement_scores_with_loaders(
                 tracked_module_names=tracked_module_names,
                 keep_factors=True,
             )
+            model.zero_grad(set_to_none=True)
             with no_sync(model=model, state=state):
-                model.zero_grad(set_to_none=True)
                 with autocast(device_type=state.device.type, enabled=enable_amp, dtype=score_args.amp_dtype):
                     measurement = task.compute_measurement(batch=batch, model=model)
-                scaled_measurement = scaler.scale(measurement)
-                if enable_amp:
-                    gradient_scale = 1.0 / scaler.get_scale()
-                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
-                scaled_measurement.backward()
+                scaler.scale(measurement).backward()
+
+            if factor_args.shared_parameters_exist:
+                finalize_preconditioned_gradient(model=model)
 
             set_mode(
                 model=model,
@@ -340,20 +341,18 @@ def compute_self_measurement_scores_with_loaders(
                 tracked_module_names=tracked_module_names,
                 keep_factors=True,
             )
+            model.zero_grad(set_to_none=True)
             with no_sync(model=model, state=state):
-                model.zero_grad(set_to_none=True)
                 with autocast(device_type=state.device.type, enabled=enable_amp, dtype=score_args.amp_dtype):
                     loss = task.compute_train_loss(
                         batch=batch,
                         model=model,
                         sample=False,
                     )
-                scaled_loss = scaler.scale(loss)
-                if enable_amp:
-                    gradient_scale = 1.0 / scaler.get_scale()
-                    set_gradient_scale(model=model, gradient_scale=gradient_scale)
-                scaled_loss.backward()
-            total_steps += 1
+                scaler.scale(loss).backward()
+
+            if factor_args.shared_parameters_exist:
+                finalize_self_measurement_scores(model=model)
 
             with torch.no_grad():
                 if score_args.per_module_score:
@@ -363,39 +362,40 @@ def compute_self_measurement_scores_with_loaders(
                                 module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).cpu()
                             )
                 else:
-                    # Aggregate the self-influence scores across all modules.
-                    batch_size = find_batch_size(batch)
-                    self_scores = torch.zeros(
-                        size=(batch_size,),
-                        dtype=score_args.score_dtype,
-                        device=state.device,
-                        requires_grad=False,
-                    )
+                    # Aggregates the self-influence scores across all modules.
+                    self_scores = None
                     for module in model.modules():
                         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                            self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
+                            if self_scores is None:
+                                self_scores = module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).clone()
+                            else:
+                                self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
                     score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
                 release_scores(model=model)
 
             if state.use_distributed and total_steps % score_args.distributed_sync_steps == 0:
+                # Periodically synchronizes all processes to avoid timeout at the final synchronization.
                 state.wait_for_everyone()
 
+            total_steps += 1
             pbar.update(1)
 
     with torch.no_grad():
         model.zero_grad(set_to_none=True)
-        remove_gradient_scale(model=model)
+        if enable_amp:
+            set_gradient_scale(model=model, gradient_scale=1.0)
         set_mode(
             model=model,
             mode=ModuleMode.DEFAULT,
             tracked_module_names=tracked_module_names,
             keep_factors=False,
         )
+        release_memory()
+
         total_scores: SCORE_TYPE = {}
         for module_name, chunks in score_chunks.items():
             total_scores[module_name] = torch.cat(chunks, dim=0)
             if state.use_distributed:
-                release_memory()
                 total_scores[module_name] = total_scores[module_name].to(device=state.device)
                 gather_list = None
                 if state.is_main_process:
@@ -403,5 +403,6 @@ def compute_self_measurement_scores_with_loaders(
                 torch.distributed.gather(total_scores[module_name], gather_list)
                 if state.is_main_process:
                     total_scores[module_name] = torch.cat(gather_list, dim=0)[:dataset_size].cpu()
-    state.wait_for_everyone()
+        state.wait_for_everyone()
+
     return total_scores
