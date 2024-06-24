@@ -14,7 +14,11 @@ from torch.utils.data import DataLoader
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode, TrackedModule
-from kronfluence.module.utils import set_mode, update_factor_args, finalize_preconditioned_gradient
+from kronfluence.module.utils import (
+    finalize_preconditioned_gradient,
+    set_mode,
+    update_factor_args,
+)
 from kronfluence.task import Task
 from kronfluence.utils.constants import LAMBDA_MATRIX_NAME, PRECONDITIONED_GRADIENT_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs

@@ -2,13 +2,13 @@
 
 
 import pytest
+import torch
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
-from tests.utils import prepare_test, check_tensor_dict_equivalence, ATOL, RTOL
-import torch
+from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
 
 
 @pytest.mark.parametrize(

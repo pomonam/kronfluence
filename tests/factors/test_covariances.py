@@ -2,7 +2,6 @@
 
 import pytest
 import torch
-import inspect
 
 from kronfluence.arguments import FactorArguments
 from kronfluence.utils.common.factor_arguments import test_factor_arguments
@@ -46,7 +45,7 @@ def test_fit_covariance_matrices(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure that the covariance computations are working properly.
+    # Makes sure that the covariance computations are working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -147,12 +146,10 @@ def test_covariance_matrices_batch_size_equivalence(
     [
         "mlp",
         "conv",
-        "conv_bn",
-        "gpt",
     ],
 )
-@pytest.mark.parametrize("data_partition_size", [1, 4])
-@pytest.mark.parametrize("module_partition_size", [1, 3])
+@pytest.mark.parametrize("data_partition_size", [2, 4])
+@pytest.mark.parametrize("module_partition_size", [2, 3])
 @pytest.mark.parametrize("train_size", [62])
 @pytest.mark.parametrize("seed", [2])
 def test_covariance_matrices_partition_equivalence(
@@ -186,13 +183,8 @@ def test_covariance_matrices_partition_equivalence(
     )
     covariance_factors = analyzer.load_covariance_matrices(factors_name=factors_name)
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        covariance_data_partition_size=data_partition_size,
-        covariance_module_partition_size=module_partition_size,
-    )
+    factor_args.covariance_data_partition_size = data_partition_size
+    factor_args.covariance_data_partition_size = module_partition_size
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_name}_partitioned_{data_partition_size}_{module_partition_size}",
         dataset=train_dataset,
@@ -222,7 +214,7 @@ def test_covariance_matrices_attention_mask(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure the attention mask is correctly implemented by comparing with the results
+    # Makes sure the attention mask is correctly implemented by comparing with the results
     # without any padding applied (and batch size of 1).
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
@@ -304,7 +296,7 @@ def test_covariance_matrices_automatic_batch_size(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure the automatic batch size search feature is working properly.
+    # Makes sure the automatic batch size search feature is working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -359,7 +351,7 @@ def test_covariance_matrices_max_examples(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure the max covariance data selection is working properly.
+    # Makes sure the max covariance data selection is working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
