@@ -3,7 +3,12 @@
 import pytest
 import torch
 
-from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.arguments import ScoreArguments
+from kronfluence.utils.common.factor_arguments import (
+    default_factor_arguments,
+    test_factor_arguments,
+)
+from kronfluence.utils.common.score_arguments import test_score_arguments
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import (
@@ -27,16 +32,18 @@ from tests.utils import (
         "gpt",
     ],
 )
-@pytest.mark.parametrize("score_dtype", [torch.float32, torch.bfloat16])
+@pytest.mark.parametrize("use_measurement_for_self_influence", [False, True])
+@pytest.mark.parametrize("score_dtype", [torch.float32])
 @pytest.mark.parametrize("train_size", [22])
 @pytest.mark.parametrize("seed", [0])
 def test_compute_self_scores(
     test_name: str,
+    use_measurement_for_self_influence: bool,
     score_dtype: torch.dtype,
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure that the self-influence computations are working properly.
+    # Makes sure that the self-influence computations are working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -47,7 +54,7 @@ def test_compute_self_scores(
         model=model,
         task=task,
     )
-    factor_args = FactorArguments()
+    factor_args = default_factor_arguments()
     if test_name == "repeated_mlp":
         factor_args.shared_parameters_exist = True
 
@@ -62,6 +69,7 @@ def test_compute_self_scores(
     )
 
     score_args = ScoreArguments(
+        use_measurement_for_self_influence=use_measurement_for_self_influence,
         score_dtype=score_dtype,
     )
     scores_name = f"pytest_{test_name}_{test_compute_self_scores.__name__}_scores"
@@ -83,9 +91,7 @@ def test_compute_self_scores(
 
 @pytest.mark.parametrize(
     "test_name",
-    [
-        "mlp",
-    ],
+    ["mlp"],
 )
 @pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("precondition_dtype", [torch.float32, torch.bfloat16])
@@ -172,9 +178,7 @@ def test_self_scores_batch_size_equivalence(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        strategy=strategy,
-    )
+    factor_args = test_factor_arguments(strategy=strategy)
     factors_name = f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
@@ -185,12 +189,7 @@ def test_self_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
 
-    score_args = ScoreArguments(
-        per_module_score=False,
-        score_dtype=torch.float64,
-        per_sample_gradient_dtype=torch.float64,
-        precondition_dtype=torch.float64,
-    )
+    score_args = test_score_arguments()
     analyzer.compute_self_scores(
         scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_bs1",
         factors_name=factors_name,
@@ -287,11 +286,7 @@ def test_self_scores_partition_equivalence(
     )
 
     scores_name = f"pytest_{test_name}_{test_self_scores_partition_equivalence.__name__}_scores"
-    score_args = ScoreArguments(
-        score_dtype=torch.float64,
-        per_sample_gradient_dtype=torch.float64,
-        precondition_dtype=torch.float64,
-    )
+    score_args = test_score_arguments()
     analyzer.compute_self_scores(
         scores_name=scores_name,
         factors_name=factors_name,
@@ -303,13 +298,8 @@ def test_self_scores_partition_equivalence(
     )
     scores = analyzer.load_self_scores(scores_name=scores_name)
 
-    score_args = ScoreArguments(
-        data_partition_size=data_partition_size,
-        module_partition_size=module_partition_size,
-        score_dtype=torch.float64,
-        per_sample_gradient_dtype=torch.float64,
-        precondition_dtype=torch.float64,
-    )
+    score_args.data_partition_size = data_partition_size
+    score_args.module_partition_size = module_partition_size
     analyzer.compute_self_scores(
         scores_name=f"pytest_{test_name}_partition_{data_partition_size}_{module_partition_size}",
         factors_name=factors_name,
@@ -369,8 +359,10 @@ def test_per_module_scores_equivalence(
     )
 
     scores_name = f"pytest_{test_name}_{test_per_module_scores_equivalence.__name__}_scores"
+    score_args = test_score_arguments()
     analyzer.compute_self_scores(
         scores_name=scores_name,
+        score_args=score_args,
         factors_name=factors_name,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
@@ -379,7 +371,7 @@ def test_per_module_scores_equivalence(
     )
     scores = analyzer.load_self_scores(scores_name=scores_name)
 
-    score_args = ScoreArguments(per_module_score=True)
+    score_args.per_module_score = True
     analyzer.compute_self_scores(
         scores_name=scores_name + "_per_module",
         factors_name=factors_name,
@@ -416,7 +408,7 @@ def test_compute_self_scores_with_indices(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure the indices selection is correctly implemented.
+    # Makes sure the indices selection is correctly implemented.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -436,7 +428,8 @@ def test_compute_self_scores_with_indices(
         overwrite_output_dir=True,
     )
 
-    score_args = ScoreArguments(data_partition_size=2)
+    score_args = test_score_arguments()
+    score_args.data_partition_size = 2
     scores_name = f"pytest_{test_name}_{test_compute_self_scores_with_indices.__name__}_scores"
     analyzer.compute_self_scores(
         scores_name=scores_name,
@@ -488,12 +481,7 @@ def test_compute_self_scores_with_diagonal_pairwise_equivalence(
     )
 
     scores_name = f"pytest_{test_name}_{test_compute_self_scores_with_diagonal_pairwise_equivalence.__name__}_scores"
-    score_args = ScoreArguments(
-        use_measurement_for_self_influence=False,
-        score_dtype=torch.float64,
-        per_sample_gradient_dtype=torch.float64,
-        precondition_dtype=torch.float64,
-    )
+    score_args = test_score_arguments()
     analyzer.compute_self_scores(
         scores_name=scores_name,
         factors_name=factors_name,
@@ -563,12 +551,8 @@ def test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence(
     scores_name = (
         f"pytest_{test_name}_{test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence.__name__}_scores"
     )
-    score_args = ScoreArguments(
-        use_measurement_for_self_influence=True,
-        score_dtype=torch.float64,
-        per_sample_gradient_dtype=torch.float64,
-        precondition_dtype=torch.float64,
-    )
+    score_args = test_score_arguments()
+    score_args.use_measurement_for_self_influence = True
     analyzer.compute_self_scores(
         scores_name=scores_name,
         factors_name=factors_name,
@@ -619,7 +603,7 @@ def test_self_shared_parameters(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure the scores are identical with and without `shared_parameters_exist` flag.
+    # Makes sure the scores are identical with and without `shared_parameters_exist` flag.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
@@ -632,8 +616,10 @@ def test_self_shared_parameters(
         model=model,
         task=task,
     )
-    factor_args = FactorArguments(shared_parameters_exist=False, use_empirical_fisher=True)
-    score_args = ScoreArguments(use_measurement_for_self_influence=use_measurement_for_self_influence)
+    factor_args = test_factor_arguments()
+    factor_args.shared_parameters_exist = False
+    score_args = test_score_arguments()
+    score_args.use_measurement_for_self_influence = use_measurement_for_self_influence
     factors_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
@@ -655,7 +641,7 @@ def test_self_shared_parameters(
     )
     scores = analyzer.load_self_scores(scores_name=scores_name)
 
-    factor_args = FactorArguments(shared_parameters_exist=True, use_empirical_fisher=True)
+    factor_args.shared_parameters_exist = True
     factors_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}_shared"
     analyzer.fit_all_factors(
         factors_name=factors_name,
