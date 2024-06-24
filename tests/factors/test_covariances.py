@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from kronfluence.arguments import FactorArguments
-from kronfluence.utils.common.factor_arguments import test_factor_arguments
+from kronfluence.utils.common.factor_arguments import test_factor_arguments, default_factor_arguments
 from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     COVARIANCE_FACTOR_NAMES,
@@ -57,10 +57,9 @@ def test_fit_covariance_matrices(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        activation_covariance_dtype=activation_covariance_dtype,
-        gradient_covariance_dtype=gradient_covariance_dtype,
-    )
+    factor_args = default_factor_arguments()
+    factor_args.activation_covariance_dtype = activation_covariance_dtype
+    factor_args.gradient_covariance_dtype = gradient_covariance_dtype
     factors_name = f"pytest_{test_name}_{test_fit_covariance_matrices.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,

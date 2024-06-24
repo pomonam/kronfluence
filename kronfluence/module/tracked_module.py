@@ -322,9 +322,10 @@ class TrackedModule(nn.Module):
     @torch.no_grad()
     def synchronize_covariance_matrices(self) -> None:
         """Aggregates covariance matrices across multiple devices or nodes in a distributed setting."""
-        if dist.is_initialized() and self._covariance_matrices_available():
+        if dist.is_initialized() and torch.cuda.is_available() and self._covariance_matrices_available():
             # Note that only the main process holds the aggregated covariance matrix.
             for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
+                self._storage[covariance_factor_name] = self._storage[covariance_factor_name].cuda()
                 dist.reduce(
                     tensor=self._storage[covariance_factor_name],
                     op=dist.ReduceOp.SUM,
@@ -518,8 +519,9 @@ class TrackedModule(nn.Module):
     @torch.no_grad()
     def synchronize_lambda_matrices(self) -> None:
         """Aggregates Lambda matrices across multiple devices or nodes in a distributed setting."""
-        if dist.is_initialized() and self._lambda_matrix_available():
+        if dist.is_initialized() and torch.cuda.is_available() and self._lambda_matrix_available():
             for lambda_factor_name in LAMBDA_FACTOR_NAMES:
+                self._storage[lambda_factor_name] = self._storage[lambda_factor_name].cuda()
                 torch.distributed.reduce(
                     tensor=self._storage[lambda_factor_name],
                     op=dist.ReduceOp.SUM,
