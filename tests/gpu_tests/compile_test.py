@@ -11,7 +11,8 @@ from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.utils.constants import (
     ALL_MODULE_NAME,
     COVARIANCE_FACTOR_NAMES,
-    LAMBDA_FACTOR_NAMES,
+    LAMBDA_FACTOR_NAMES, ACTIVATION_COVARIANCE_MATRIX_NAME, GRADIENT_COVARIANCE_MATRIX_NAME,
+    NUM_ACTIVATION_COVARIANCE_PROCESSED, NUM_GRADIENT_COVARIANCE_PROCESSED,
 )
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
@@ -64,11 +65,20 @@ class CompileTest(unittest.TestCase):
         )
         new_covariance_factors = self.analyzer.load_covariance_matrices(factors_name=NEW_FACTOR_NAME)
 
-        for name in COVARIANCE_FACTOR_NAMES:
+        new_covariance_factors[ACTIVATION_COVARIANCE_MATRIX_NAME] /= new_covariance_factors[NUM_ACTIVATION_COVARIANCE_PROCESSED]
+        new_covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME] /= new_covariance_factors[NUM_GRADIENT_COVARIANCE_PROCESSED]
+
+        for name in [ACTIVATION_COVARIANCE_MATRIX_NAME, GRADIENT_COVARIANCE_MATRIX_NAME]:
             for module_name in covariance_factors[name]:
                 print(f"Name: {name, module_name}")
                 print(f"Previous factor: {covariance_factors[name][module_name]}")
                 print(f"New factor: {new_covariance_factors[name][module_name]}")
+            assert check_tensor_dict_equivalence(
+                covariance_factors[name],
+                new_covariance_factors[name],
+                atol=1e-5,
+                rtol=1e-3,
+            )
 
     def test_lambda_matrices(self):
         lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)

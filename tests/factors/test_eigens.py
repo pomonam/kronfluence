@@ -278,13 +278,14 @@ def test_lambda_matrices_iterative_aggregate(
     train_size: int,
     seed: int,
 ) -> None:
-    # Makes sure aggregated lambda computation is working properly.
+    # Makes sure iterative lambda computation is working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
         seed=seed,
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model = model.to(dtype=torch.float64)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
         task=task,
@@ -305,13 +306,6 @@ def test_lambda_matrices_iterative_aggregate(
         factors_name=factors_name,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        lambda_iterative_aggregate=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        lambda_dtype=torch.float64,
-    )
     factor_args.lambda_iterative_aggregate = True
     analyzer.fit_all_factors(
         factors_name=factors_name + "_iterative",
