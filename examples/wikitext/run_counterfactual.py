@@ -45,6 +45,7 @@ def main():
         )
         return evaluate_model(model, valid_dataset, batch_size=16)
 
+    # We do this to make the experiment faster; set `num_iter = 5` for proper experiment.
     num_iter = 1
     topk_lst = [0, 50, 100, 150, 200]
 

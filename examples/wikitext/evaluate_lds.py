@@ -37,6 +37,9 @@ def main():
     # scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac_half/pairwise_scores.safetensors")[
     #     "all_modules"
     # ].to(dtype=torch.float32)
+    # scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac_half_compile/pairwise_scores.safetensors")[
+    #     "all_modules"
+    # ].to(dtype=torch.float32)
 
     corr_mean = evaluate_correlations(scores)
     logging.info(f"LDS: {np.mean(corr_mean)}")

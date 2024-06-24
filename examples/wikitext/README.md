@@ -94,8 +94,7 @@ The `half_precision_analysis.py` script compares the correlations between `float
 <a href="#"><img width="380" img src="figure/half_precision.png" alt="Query Batching"/></a>
 </p>
 
-The average correlation for 481 data points is `0.96`. We can also try `torch.compile`:
-
+The average correlation for 481 data points is `0.96`. Finally, we can try using `torch.compile`:
 
 ```bash
 python analyze.py --query_batch_size 32 \
@@ -104,6 +103,28 @@ python analyze.py --query_batch_size 32 \
     --factor_strategy ekfac \
     --use_half_precision \
     --use_compile
+```
+
+This reduces computation time to about 16 minutes on an A100 (80GB) GPU:
+
+```
+----------------------------------------------------------------------------------------------------------------------------------
+|  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Total                        |  -                    |  11                   |  939.4                |  100 %                |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Compute Pairwise Score       |  735.99               |  1                    |  735.99               |  78.347               |
+|  Fit Covariance               |  103.6                |  1                    |  103.6                |  11.029               |
+|  Fit Lambda                   |  69.442               |  1                    |  69.442               |  7.3922               |
+|  Perform Eigendecomposition   |  16.011               |  1                    |  16.011               |  1.7044               |
+|  Save Covariance              |  5.9458               |  1                    |  5.9458               |  0.63294              |
+|  Save Eigendecomposition      |  5.9252               |  1                    |  5.9252               |  0.63074              |
+|  Save Lambda                  |  1.5185               |  1                    |  1.5185               |  0.16164              |
+|  Load Covariance              |  0.42047              |  1                    |  0.42047              |  0.04476              |
+|  Load Eigendecomposition      |  0.32199              |  1                    |  0.32199              |  0.034276             |
+|  Load All Factors             |  0.16436              |  1                    |  0.16436              |  0.017496             |
+|  Save Pairwise Score          |  0.055834             |  1                    |  0.055834             |  0.0059436            |
+----------------------------------------------------------------------------------------------------------------------------------
 ```
 
 ## Counterfactual Experiment
