@@ -1,8 +1,7 @@
 # WikiText & GPT-2 Example
 
-This directory contains scripts for fine-tuning GPT-2 on WikiText2 dataset. The pipeline is motivated from 
-[HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/language-modeling).
-Please begin by installing necessary packages.
+This directory contains scripts for fine-tuning GPT-2 and computing influence scores on WikiText2 dataset. The pipeline is motivated from 
+[this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/language-modeling). Please begin by installing necessary packages:
 ```bash
 pip install -r requirements.txt
 ```
@@ -10,13 +9,15 @@ pip install -r requirements.txt
 ## Training
 
 To fine-tune GPT-2, run the following command:
+
 ```bash
 python train.py --checkpoint_dir ./checkpoints \
     --train_batch_size 8 \
     --eval_batch_size 16 \
     --learning_rate 3e-05 \
     --weight_decay 0.01 \
-    --num_train_epochs 3 
+    --num_train_epochs 3 \
+    --seed 1004
 ```
 
 ## Computing Pairwise Influence Scores

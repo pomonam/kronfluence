@@ -5,10 +5,8 @@ import os
 import time
 
 import torch
-import torch.nn.functional as F
 from accelerate.utils import set_seed
 from torch import nn
-from torch.nn import CrossEntropyLoss
 from torch.utils import data
 from transformers import default_data_collator
 
@@ -55,7 +53,7 @@ def parse_args():
     parser.add_argument(
         "--seed",
         type=int,
-        default=0,
+        default=1004,
         help="A seed for reproducible training pipeline.",
     )
     parser.add_argument(
@@ -64,7 +62,6 @@ def parse_args():
         default="./checkpoints",
         help="A path to store the final checkpoint.",
     )
-
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -90,22 +87,18 @@ def train(
 
     model = construct_gpt2().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    loss_fn = CrossEntropyLoss(reduction="mean")
 
     start_time = time.time()
-    model.eval()
+    model.train()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
         for batch in train_dataloader:
-            model.zero_grad()
-            lm_logits = model(
+            optimizer.zero_grad(set_to_none=True)
+            loss = model(
                 input_ids=batch["input_ids"].to(device=DEVICE),
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
-            ).logits
-            labels = batch["labels"].to(device=DEVICE)
-            shift_logits = lm_logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            loss = loss_fn(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+                labels=batch["labels"].to(device=DEVICE)
+            ).loss
             loss.backward()
             optimizer.step()
             total_loss += loss.detach().float()
@@ -126,17 +119,13 @@ def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> 
     total_num = 0
     for batch in dataloader:
         with torch.no_grad():
-            lm_logits = model(
+            loss = model(
                 input_ids=batch["input_ids"].to(device=DEVICE),
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
-            ).logits
-            labels = batch["labels"].to(device=DEVICE)
-            shift_logits = lm_logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
-            loss = F.cross_entropy(reshaped_shift_logits, shift_labels.view(-1), reduction="sum").detach().float()
-            total_loss += loss
-            total_num += reshaped_shift_logits.shape[0]
+                labels=batch["labels"].to(device=DEVICE)
+            ).loss
+            total_loss += loss.detach()
+            total_num += batch["input_ids"].shape[0]
     return total_loss.item() / total_num
 
 
@@ -164,7 +153,10 @@ def main():
 
     eval_dataset = get_wikitext_dataset(split="valid")
     eval_loss = evaluate_model(model=model, dataset=eval_dataset, batch_size=args.eval_batch_size)
-    eval_perplexity = math.exp(eval_loss)
+    try:
+        eval_perplexity = math.exp(eval_loss)
+    except OverflowError:
+        eval_perplexity = float("inf")
     logger.info(f"Evaluation perplexity: {eval_perplexity}")
 
     if args.checkpoint_dir is not None:
