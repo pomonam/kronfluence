@@ -34,6 +34,17 @@ python analyze.py --query_batch_size 32 \
 You can also use `identity`, `diagonal`, and `kfac`. On A100 (80GB), it takes roughly 50 minutes to compute the 
 pairwise scores (including computing EKFAC factors):
 
+You can use half precision to more efficiently compute influence scores. On A100 (80GB), it takes roughly 20 minutes to compute the 
+pairwise scores (including computing EKFAC factors):
+
+Assuming you ran the above two commands, `half_precision_analysis.py` contains code to compute the correlations between 
+the `float32` and `bfloat16` scores.
+
+<p align="center">
+<a href="#"><img width="380" img src="figure/half_precision.png" alt="Query Batching"/></a>
+</p>
+
+The averaged correlations for 481 data points is 0.93.
 
 ## Counterfactual Experiment
 

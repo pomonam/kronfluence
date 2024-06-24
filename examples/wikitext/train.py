@@ -124,7 +124,7 @@ def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> 
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
                 labels=batch["labels"].to(device=DEVICE)
             ).loss
-            total_loss += loss.detach()
+            total_loss += loss.detach() * batch["input_ids"].shape[0]
             total_num += batch["input_ids"].shape[0]
     return total_loss.item() / total_num
 
