@@ -3,8 +3,10 @@
 import pytest
 import torch
 
-from kronfluence.arguments import FactorArguments
-from kronfluence.utils.common.factor_arguments import test_factor_arguments, default_factor_arguments
+from kronfluence.utils.common.factor_arguments import (
+    default_factor_arguments,
+    test_factor_arguments,
+)
 from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     COVARIANCE_FACTOR_NAMES,
@@ -183,7 +185,7 @@ def test_covariance_matrices_partition_equivalence(
     covariance_factors = analyzer.load_covariance_matrices(factors_name=factors_name)
 
     factor_args.covariance_data_partition_size = data_partition_size
-    factor_args.covariance_data_partition_size = module_partition_size
+    factor_args.covariance_module_partition_size = module_partition_size
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_name}_partitioned_{data_partition_size}_{module_partition_size}",
         dataset=train_dataset,
@@ -424,7 +426,6 @@ def test_covariance_matrices_amp(
         factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}"
     )
 
-    factor_args = test_factor_arguments()
     factor_args.amp_dtype = torch.float16
     analyzer.fit_covariance_matrices(
         factors_name=f"pytest_{test_name}_{test_covariance_matrices_amp.__name__}_amp",

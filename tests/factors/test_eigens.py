@@ -348,7 +348,7 @@ def test_lambda_matrices_max_examples(
         task=task,
     )
 
-    MAX_EXAMPLES = 28
+    MAX_EXAMPLES = 33
     factor_args = FactorArguments(
         use_empirical_fisher=True, lambda_max_examples=MAX_EXAMPLES, lambda_data_partition_size=data_partition_size
     )
@@ -441,11 +441,7 @@ def test_lambda_matrices_gradient_checkpoint(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}",
         dataset=train_dataset,
@@ -489,7 +485,8 @@ def test_lambda_matrices_shared_parameters(
     train_size: int,
     seed: int,
 ) -> None:
-    # When there are no shared parameters, they should have identical results.
+    # When there are no shared parameters, results with and without `shared_parameters_exist` should
+    # produce the same results.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name="mlp",
         train_size=train_size,

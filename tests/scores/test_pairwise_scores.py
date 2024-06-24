@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.utils.common.factor_arguments import test_factor_arguments
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import (
@@ -54,7 +55,7 @@ def test_compute_pairwise_scores(
         model=model,
         task=task,
     )
-    factor_args = FactorArguments()
+    factor_args = test_factor_arguments()
     if test_name == "repeated_mlp":
         factor_args.shared_parameters_exist = True
 
