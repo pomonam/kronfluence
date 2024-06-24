@@ -1,5 +1,5 @@
 import logging
-import torch
+
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import spearmanr
@@ -12,8 +12,12 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Load the scores. You might need to modify the path.
-    full_scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"]
-    half_scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise_half/pairwise_scores.safetensors")["all_modules"]
+    full_scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac/pairwise_scores.safetensors")[
+        "all_modules"
+    ]
+    half_scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac_half/pairwise_scores.safetensors")[
+        "all_modules"
+    ].float()
 
     # Only plot first 1000 points to avoid clutter.
     index = 5

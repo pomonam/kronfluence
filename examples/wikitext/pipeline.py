@@ -1,12 +1,12 @@
 from itertools import chain
 from typing import List
 
+import torch
 from datasets import load_dataset
 from torch import nn
 from torch.utils import data
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from transformers.pytorch_utils import Conv1D
-import torch
 
 
 @torch.no_grad()

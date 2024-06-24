@@ -97,11 +97,11 @@ def train(
             loss = model(
                 input_ids=batch["input_ids"].to(device=DEVICE),
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
-                labels=batch["labels"].to(device=DEVICE)
+                labels=batch["labels"].to(device=DEVICE),
             ).loss
             loss.backward()
             optimizer.step()
-            total_loss += loss.detach().float()
+            total_loss += loss.detach().float() * batch["input_ids"].shape[0]
         logging.info(f"Epoch {epoch + 1} - Averaged Loss: {total_loss / len(dataset)}")
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -122,7 +122,7 @@ def evaluate_model(model: nn.Module, dataset: data.Dataset, batch_size: int) -> 
             loss = model(
                 input_ids=batch["input_ids"].to(device=DEVICE),
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
-                labels=batch["labels"].to(device=DEVICE)
+                labels=batch["labels"].to(device=DEVICE),
             ).loss
             total_loss += loss.detach() * batch["input_ids"].shape[0]
             total_num += batch["input_ids"].shape[0]

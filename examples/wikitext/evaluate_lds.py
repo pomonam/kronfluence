@@ -2,11 +2,12 @@ import logging
 
 import numpy as np
 import torch
-from scipy.stats import spearmanr
-
-from kronfluence.analyzer import Analyzer
-
 import tqdm
+from scipy.stats import spearmanr
+from transformers import AutoTokenizer
+
+from examples.wikitext.pipeline import get_wikitext_dataset
+from kronfluence.analyzer import Analyzer
 
 
 def evaluate_correlations(scores):
@@ -30,12 +31,31 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # You might need to change the path.
-    # scores = Analyzer.load_file("scores_pairwise/ekfac_pairwise.safetensors")["all_modules"].to(dtype=torch.float64)
-    scores = Analyzer.load_file("scores_ekfac_pairwise/pairwise_scores.safetensors")["all_modules"].to(dtype=torch.float32)
-    # scores = Analyzer.load_file("scores_ekfac_pairwise_half/pairwise_scores.safetensors")["all_modules"].to(dtype=torch.float32)
+    scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac/pairwise_scores.safetensors")[
+        "all_modules"
+    ].to(dtype=torch.float32)
+    # scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac_half/pairwise_scores.safetensors")[
+    #     "all_modules"
+    # ].to(dtype=torch.float32)
 
     corr_mean = evaluate_correlations(scores)
     logging.info(f"LDS: {np.mean(corr_mean)}")
+
+    # We can also visualize the top influential sequences.
+    eval_idx = 0
+    train_dataset = get_wikitext_dataset(
+        split="eval_train",
+    )
+    eval_dataset = get_wikitext_dataset(
+        split="valid",
+    )
+    tokenizer = AutoTokenizer.from_pretrained("gpt2", use_fast=True, trust_remote_code=True)
+    print("Query Data Example:")
+    print(tokenizer.decode(eval_dataset[eval_idx]["input_ids"]))
+
+    top_idx = int(torch.argsort(scores[eval_idx], descending=True)[0])
+    print("Top Influential Example:")
+    print(tokenizer.decode(train_dataset[top_idx]["input_ids"]))
 
 
 if __name__ == "__main__":

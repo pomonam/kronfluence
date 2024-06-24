@@ -48,6 +48,12 @@ def parse_args():
         help="Whether to use half precision for computing factors and scores.",
     )
     parser.add_argument(
+        "--use_compile",
+        action="store_true",
+        default=False,
+        help="Whether to use torch compile for computing factors and scores.",
+    )
+    parser.add_argument(
         "--query_batch_size",
         type=int,
         default=8,
@@ -150,6 +156,9 @@ def main():
     task = LanguageModelingTask()
     model = prepare_model(model, task)
 
+    if args.use_compile:
+        model = torch.compile(model, mode="max-autotune")
+
     analyzer = Analyzer(
         analysis_name="wikitext",
         model=model,
@@ -166,7 +175,8 @@ def main():
     if args.use_half_precision:
         factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
         factors_name += "_half"
-
+    if args.use_compile:
+        factors_name += "_compile"
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -183,7 +193,8 @@ def main():
     if args.use_half_precision:
         score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
         scores_name += "_half"
-
+    if args.use_compile:
+        scores_name += "_compile"
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     if rank is not None:
         score_args.query_gradient_rank = rank
