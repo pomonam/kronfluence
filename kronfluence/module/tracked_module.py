@@ -212,7 +212,7 @@ class TrackedModule(nn.Module):
                 The input tensor to the module, provided by the PyTorch's forward hook.
         """
         input_activation = input_activation.to(dtype=self.factor_args.activation_covariance_dtype)
-        flattened_activation, count = self._get_flattened_activation(input_activation)
+        flattened_activation, count = self._get_flattened_activation(input_activation=input_activation)
 
         if self._storage[ACTIVATION_COVARIANCE_MATRIX_NAME] is None:
             dimension = flattened_activation.size(1)
@@ -262,9 +262,9 @@ class TrackedModule(nn.Module):
                 PyTorch's backward hook.
         """
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
-        flattened_gradient, count = self._get_flattened_gradient(output_gradient)
+        flattened_gradient, count = self._get_flattened_gradient(output_gradient=output_gradient)
         if self._gradient_scale != 1.0:
-            flattened_gradient.mul_(self._gradient_scale)
+            flattened_gradient = flattened_gradient * self._gradient_scale
 
         if self._storage[GRADIENT_COVARIANCE_MATRIX_NAME] is None:
             dimension = flattened_gradient.size(1)
@@ -322,9 +322,10 @@ class TrackedModule(nn.Module):
     @torch.no_grad()
     def synchronize_covariance_matrices(self) -> None:
         """Aggregates covariance matrices across multiple devices or nodes in a distributed setting."""
-        if dist.is_initialized() and self._covariance_matrices_available():
+        if dist.is_initialized() and torch.cuda.is_available() and self._covariance_matrices_available():
             # Note that only the main process holds the aggregated covariance matrix.
             for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
+                self._storage[covariance_factor_name] = self._storage[covariance_factor_name].cuda()
                 dist.reduce(
                     tensor=self._storage[covariance_factor_name],
                     op=dist.ReduceOp.SUM,
@@ -518,8 +519,9 @@ class TrackedModule(nn.Module):
     @torch.no_grad()
     def synchronize_lambda_matrices(self) -> None:
         """Aggregates Lambda matrices across multiple devices or nodes in a distributed setting."""
-        if dist.is_initialized() and self._lambda_matrix_available():
+        if dist.is_initialized() and torch.cuda.is_available() and self._lambda_matrix_available():
             for lambda_factor_name in LAMBDA_FACTOR_NAMES:
+                self._storage[lambda_factor_name] = self._storage[lambda_factor_name].cuda()
                 torch.distributed.reduce(
                     tensor=self._storage[lambda_factor_name],
                     op=dist.ReduceOp.SUM,
@@ -693,7 +695,11 @@ class TrackedModule(nn.Module):
     @torch.no_grad()
     def synchronize_preconditioned_gradient(self, num_processes: int) -> None:
         """Stacks preconditioned gradient across multiple devices or nodes in a distributed setting."""
-        if dist.is_initialized() and self._storage[PRECONDITIONED_GRADIENT_NAME] is not None:
+        if (
+            dist.is_initialized()
+            and torch.cuda.is_available()
+            and self._storage[PRECONDITIONED_GRADIENT_NAME] is not None
+        ):
             if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
                 for i in range(len(self._storage[PRECONDITIONED_GRADIENT_NAME])):
                     size = self._storage[PRECONDITIONED_GRADIENT_NAME][i].size()

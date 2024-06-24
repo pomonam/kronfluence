@@ -122,7 +122,6 @@ class CompileTest(unittest.TestCase):
         )
         new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
 
-        torch.set_printoptions(threshold=30_000)
         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][10]}")
         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][10]}")
@@ -152,7 +151,6 @@ class CompileTest(unittest.TestCase):
         new_self_scores = self.analyzer.load_self_scores(scores_name=NEW_SCORE_NAME)
 
         self_scores = self.analyzer.load_self_scores(scores_name=OLD_SCORE_NAME)
-        torch.set_printoptions(threshold=30_000)
         print(f"Previous score: {self_scores[ALL_MODULE_NAME]}")
         print(f"Previous shape: {self_scores[ALL_MODULE_NAME].shape}")
         print(f"New score: {new_self_scores[ALL_MODULE_NAME]}")

@@ -192,13 +192,13 @@ class ScoreArguments(Arguments):
             "This is useful when performing layer-wise influence analysis."
         },
     )
+    num_query_gradient_accumulations: int = field(
+        default=1,
+        metadata={"help": "Number of query batches to accumulate over before iterating over training examples."},
+    )
     query_gradient_rank: Optional[int] = field(
         default=None,
         metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
-    )
-    num_query_gradient_accumulations: int = field(
-        default=1,
-        metadata={"help": "Number of query batches to accumulate over."},
     )
     use_measurement_for_self_influence: bool = field(
         default=False,

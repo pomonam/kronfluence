@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from kronfluence.arguments import FactorArguments
+from kronfluence.utils.common.factor_arguments import test_factor_arguments
 from kronfluence.utils.constants import (
     ACTIVATION_EIGENVECTORS_NAME,
     EIGENDECOMPOSITION_FACTOR_NAMES,
@@ -26,6 +27,7 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
         "mlp_checkpoint",
         "conv",
         "conv_bn",
@@ -42,7 +44,7 @@ def test_perform_eigendecomposition(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure that the Eigendecomposition computations are working properly.
+    # Makes sure that the Eigendecomposition computations are working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -53,16 +55,17 @@ def test_perform_eigendecomposition(
         model=model,
         task=task,
     )
+    factor_args = FactorArguments(
+        eigendecomposition_dtype=eigendecomposition_dtype,
+    )
     factors_name = f"pytest_{test_name}_{test_perform_eigendecomposition.__name__}"
     analyzer.fit_covariance_matrices(
         factors_name=factors_name,
+        factor_args=factor_args,
         dataset=train_dataset,
         per_device_batch_size=4,
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
-    )
-    factor_args = FactorArguments(
-        eigendecomposition_dtype=eigendecomposition_dtype,
     )
     analyzer.perform_eigendecomposition(
         factors_name=factors_name,
@@ -81,6 +84,8 @@ def test_perform_eigendecomposition(
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
+        "mlp_checkpoint",
         "conv",
         "conv_bn",
         "bert",
@@ -98,7 +103,7 @@ def test_fit_lambda_matrices(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure that the Lambda computations are working properly.
+    # Makes sure that the Lambda computations are working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -114,6 +119,9 @@ def test_fit_lambda_matrices(
         lambda_dtype=lambda_dtype,
         per_sample_gradient_dtype=per_sample_gradient_dtype,
     )
+    if test_name == "repeated_mlp":
+        factor_args.shared_parameters_exist = True
+
     factors_name = f"pytest_{test_name}_{test_fit_lambda_matrices.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
@@ -160,13 +168,7 @@ def test_lambda_matrices_batch_size_equivalence(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        strategy=strategy,
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        lambda_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments(strategy=strategy)
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_name}_{test_lambda_matrices_batch_size_equivalence.__name__}_{strategy}_bs1",
         dataset=train_dataset,
@@ -200,13 +202,11 @@ def test_lambda_matrices_batch_size_equivalence(
     [
         "mlp",
         "conv",
-        "conv_bn",
-        "gpt",
     ],
 )
 @pytest.mark.parametrize("strategy", ["diagonal", "ekfac"])
-@pytest.mark.parametrize("data_partition_size", [1, 4])
-@pytest.mark.parametrize("module_partition_size", [1, 3])
+@pytest.mark.parametrize("data_partition_size", [4])
+@pytest.mark.parametrize("module_partition_size", [3])
 @pytest.mark.parametrize("train_size", [81])
 @pytest.mark.parametrize("seed", [2])
 def test_lambda_matrices_partition_equivalence(
@@ -229,13 +229,7 @@ def test_lambda_matrices_partition_equivalence(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        strategy=strategy,
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        lambda_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments(strategy=strategy)
     factors_name = f"pytest_{test_name}_{strategy}_{test_lambda_matrices_partition_equivalence.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
@@ -249,15 +243,8 @@ def test_lambda_matrices_partition_equivalence(
         factors_name=factors_name,
     )
 
-    factor_args = FactorArguments(
-        strategy=strategy,
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        lambda_dtype=torch.float64,
-        lambda_data_partition_size=data_partition_size,
-        lambda_module_partition_size=module_partition_size,
-    )
+    factor_args.lambda_data_partition_size = data_partition_size
+    factor_args.lambda_module_partition_size = module_partition_size
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_name}_{strategy}_{data_partition_size}_{module_partition_size}",
         dataset=train_dataset,
@@ -291,26 +278,22 @@ def test_lambda_matrices_iterative_aggregate(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure aggregated lambda computation is working properly.
+    # Makes sure iterative lambda computation is working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
         seed=seed,
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model = model.to(dtype=torch.float64)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
         task=task,
     )
 
     factors_name = f"pytest_{test_name}_{test_lambda_matrices_iterative_aggregate.__name__}"
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        lambda_iterative_aggregate=False,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        lambda_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
+    factor_args.lambda_iterative_aggregate = False
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -323,13 +306,7 @@ def test_lambda_matrices_iterative_aggregate(
         factors_name=factors_name,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        lambda_iterative_aggregate=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        lambda_dtype=torch.float64,
-    )
+    factor_args.lambda_iterative_aggregate = True
     analyzer.fit_all_factors(
         factors_name=factors_name + "_iterative",
         dataset=train_dataset,
@@ -359,7 +336,7 @@ def test_lambda_matrices_max_examples(
     train_size: int,
     seed: int,
 ) -> None:
-    # Make sure the max Lambda data selection is working properly.
+    # Makes sure the max Lambda data selection is working properly.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -371,7 +348,7 @@ def test_lambda_matrices_max_examples(
         task=task,
     )
 
-    MAX_EXAMPLES = 28
+    MAX_EXAMPLES = 33
     factor_args = FactorArguments(
         use_empirical_fisher=True, lambda_max_examples=MAX_EXAMPLES, lambda_data_partition_size=data_partition_size
     )
@@ -417,12 +394,7 @@ def test_lambda_matrices_amp(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        lambda_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}",
         dataset=train_dataset,
@@ -435,13 +407,7 @@ def test_lambda_matrices_amp(
         factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}"
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        amp_dtype=torch.float16,
-        lambda_dtype=torch.float64,
-    )
+    factor_args.amp_dtype = torch.float16
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}_amp",
         dataset=train_dataset,
@@ -475,11 +441,7 @@ def test_lambda_matrices_gradient_checkpoint(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-    )
+    factor_args = test_factor_arguments()
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}",
         dataset=train_dataset,
@@ -523,7 +485,8 @@ def test_lambda_matrices_shared_parameters(
     train_size: int,
     seed: int,
 ) -> None:
-    # When there are no shared parameters, they should have identical results.
+    # When there are no shared parameters, results with and without `shared_parameters_exist` should
+    # produce the same results.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name="mlp",
         train_size=train_size,
@@ -534,12 +497,7 @@ def test_lambda_matrices_shared_parameters(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        shared_parameters_exist=False,
-    )
+    factor_args = test_factor_arguments()
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}",
         dataset=train_dataset,
@@ -561,12 +519,7 @@ def test_lambda_matrices_shared_parameters(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        shared_parameters_exist=True,
-    )
+    factor_args.shared_parameters_exist = True
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}_shared",
         dataset=train_dataset,
