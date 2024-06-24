@@ -695,7 +695,11 @@ class TrackedModule(nn.Module):
     @torch.no_grad()
     def synchronize_preconditioned_gradient(self, num_processes: int) -> None:
         """Stacks preconditioned gradient across multiple devices or nodes in a distributed setting."""
-        if dist.is_initialized() and self._storage[PRECONDITIONED_GRADIENT_NAME] is not None:
+        if (
+            dist.is_initialized()
+            and torch.cuda.is_available()
+            and self._storage[PRECONDITIONED_GRADIENT_NAME] is not None
+        ):
             if isinstance(self._storage[PRECONDITIONED_GRADIENT_NAME], list):
                 for i in range(len(self._storage[PRECONDITIONED_GRADIENT_NAME])):
                     size = self._storage[PRECONDITIONED_GRADIENT_NAME][i].size()
