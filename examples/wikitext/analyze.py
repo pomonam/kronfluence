@@ -157,7 +157,7 @@ def main():
     model = prepare_model(model, task)
 
     if args.use_compile:
-        model = torch.compile(model, mode="max-autotune")
+        model = torch.compile(model)
 
     analyzer = Analyzer(
         analysis_name="wikitext",
