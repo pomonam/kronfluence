@@ -23,14 +23,16 @@ python train.py --checkpoint_dir ./checkpoints \
 ## Computing Pairwise Influence Scores
 
 To obtain a pairwise influence scores on 481 query data points using `ekfac`, run the following command:
+
 ```bash
 python analyze.py --query_batch_size 32 \
     --train_batch_size 64 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
+
 You can also use `identity`, `diagonal`, and `kfac`. On A100 (80GB), it takes roughly 50 minutes to compute the 
-pairwise scores (including computing EKFAC factors).
+pairwise scores (including computing EKFAC factors):
 
 
 ## Counterfactual Experiment

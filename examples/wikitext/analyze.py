@@ -12,6 +12,8 @@ from examples.wikitext.pipeline import construct_gpt2, get_wikitext_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
+from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
+from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 BATCH_TYPE = Dict[str, torch.Tensor]
@@ -28,6 +30,12 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--factor_strategy",
+        type=str,
+        default="ekfac",
+        help="Strategy to compute influence factors.",
+    )
+    parser.add_argument(
         "--query_gradient_rank",
         type=int,
         default=-1,
@@ -35,7 +43,7 @@ def parse_args():
     )
     parser.add_argument(
         "--use_half_precision",
-        type=bool,
+        action="store_true",
         default=False,
         help="Whether to use half precision for computing factors and scores.",
     )
@@ -52,12 +60,11 @@ def parse_args():
         help="Batch size for computing query gradients.",
     )
     parser.add_argument(
-        "--factor_strategy",
-        type=str,
-        default="ekfac",
-        help="Strategy to compute influence factors.",
+        "--profile",
+        action="store_true",
+        default=False,
+        help="Boolean flag to profile computations.",
     )
-
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -87,12 +94,12 @@ class LanguageModelingTask(Task):
         else:
             reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             with torch.no_grad():
-                probs = torch.nn.functional.softmax(reshaped_shift_logits, dim=-1)
+                probs = torch.nn.functional.softmax(reshaped_shift_logits.detach(), dim=-1)
                 sampled_labels = torch.multinomial(
                     probs,
                     num_samples=1,
                 ).flatten()
-            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels.detach(), reduction="sum")
+            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels, reduction="sum")
         return summed_loss
 
     def compute_measurement(
@@ -147,6 +154,7 @@ def main():
         analysis_name="wikitext",
         model=model,
         task=task,
+        profile=args.profile,
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(collate_fn=default_data_collator)
@@ -156,9 +164,7 @@ def main():
     factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
     if args.use_half_precision:
-        factor_args.activation_covariance_dtype = torch.bfloat16
-        factor_args.gradient_covariance_dtype = torch.bfloat16
-        factor_args.lambda_dtype = torch.bfloat16
+        factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
         factors_name += "_half"
 
     analyzer.fit_all_factors(
@@ -171,22 +177,23 @@ def main():
     )
 
     # Compute pairwise scores.
-    rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
-    score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
-    scores_name = f"{factor_args.strategy}_pairwise"
-    if rank is not None:
-        scores_name += f"_qlr{rank}"
+    score_args = ScoreArguments()
+    scores_name = f"{factor_args.strategy}"
 
     if args.use_half_precision:
-        score_args.per_sample_gradient_dtype = torch.bfloat16
-        score_args.score_dtype = torch.bfloat16
-        score_args.cached_activation_cpu_offload = True
+        score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
         scores_name += "_half"
+
+    rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
+    if rank is not None:
+        score_args.query_gradient_rank = rank
+        score_args.num_query_gradient_accumulations = 10
+        scores_name += f"_qlr{rank}"
 
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         score_args=score_args,
-        factors_name=args.factor_strategy,
+        factors_name=factors_name,
         query_dataset=eval_dataset,
         query_indices=list(range(min([len(eval_dataset), 2000]))),
         train_dataset=train_dataset,
