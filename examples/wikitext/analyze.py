@@ -75,6 +75,7 @@ def parse_args():
 
     if args.checkpoint_dir is not None:
         os.makedirs(args.checkpoint_dir, exist_ok=True)
+
     return args
 
 
@@ -188,8 +189,7 @@ def main():
 
     # Compute pairwise scores.
     score_args = ScoreArguments()
-    scores_name = f"{factor_args.strategy}"
-
+    scores_name = factor_args.strategy
     if args.use_half_precision:
         score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
         scores_name += "_half"
@@ -210,7 +210,7 @@ def main():
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
     scores = analyzer.load_pairwise_scores(scores_name)["all_modules"]
     logging.info(f"Scores shape: {scores.shape}")
