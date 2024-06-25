@@ -1,6 +1,6 @@
 # CIFAR-10 & ResNet-9 Example
 
-This directory contains scripts for training ResNet-9 on CIFAR-10. The pipeline is motivated from 
+This directory contains scripts for training ResNet-9 and computing influence scores on CIFAR-10 dataset. The pipeline is motivated from 
 [TRAK repository](https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb). To get started, please install the necessary packages by running the following command:
 
 ```bash
@@ -90,6 +90,10 @@ This reduces computation time to about 40 seconds on an A100 (80GB) GPU:
 ```
 
 You can run `half_precision_analysis.py` to verify that the scores computed with AMP have high correlations with those of the default configuration.
+
+<p align="center">
+<a href="#"><img width="380" img src="figure/half_precision.png" alt="Half Precision"/></a>
+</p>
 
 ## Visualizing Influential Training Images
 

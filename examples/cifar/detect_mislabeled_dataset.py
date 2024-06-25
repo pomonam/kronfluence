@@ -101,9 +101,9 @@ def main():
         scores_name=args.factor_strategy,
         factors_name=args.factor_strategy,
         train_dataset=train_dataset,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
-    scores = analyzer.load_pairwise_scores(args.factor_strategy)["all_modules"]
+    scores = analyzer.load_self_scores(args.factor_strategy)["all_modules"]
 
     total_corrupt_size = int(args.corrupt_percentage * len(train_dataset))
     corrupted_indices = list(range(int(args.corrupt_percentage * len(train_dataset))))
