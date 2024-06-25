@@ -1,21 +1,28 @@
 # CIFAR-10 & ResNet-9 Example
 
 This directory contains scripts for training ResNet-9 on CIFAR-10. The pipeline is motivated from 
-[TRAK repository](https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb). 
+[TRAK repository](https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb). To get started, please install the necessary packages by running the following command:
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Training
 
-To train ResNet-9 on CIFAR-10 dataset, run the following command:
+To train ResNet-9 on the CIFAR-10 dataset, run the following command:
+
 ```bash
 python train.py --dataset_dir ./data \
     --checkpoint_dir ./checkpoints \
     --train_batch_size 512 \
     --eval_batch_size 1024 \
     --learning_rate 0.4 \
-    --weight_decay 0.0001 \
+    --weight_decay 0.001 \
     --num_train_epochs 25 \
     --seed 1004
 ```
+
+This will train the model using the specified hyperparameters and save the trained checkpoint in the `./checkpoints` directory.
 
 ## Computing Pairwise Influence Scores
 
