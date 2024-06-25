@@ -67,10 +67,39 @@ python analyze.py --query_batch_size 1000 \
     --use_half_precision
 ```
 
+This reduces computation time to about 40 seconds on an A100 (80GB) GPU:
+
+```
+----------------------------------------------------------------------------------------------------------------------------------
+|  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Total                        |  -                    |  11                   |  42.316               |  100 %                |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Compute Pairwise Score       |  19.565               |  1                    |  19.565               |  46.235               |
+|  Fit Lambda                   |  9.173                |  1                    |  9.173                |  21.677               |
+|  Fit Covariance               |  7.3723               |  1                    |  7.3723               |  17.422               |
+|  Perform Eigendecomposition   |  2.6613               |  1                    |  2.6613               |  6.2891               |
+|  Save Pairwise Score          |  2.0156               |  1                    |  2.0156               |  4.7633               |
+|  Save Covariance              |  0.71699              |  1                    |  0.71699              |  1.6944               |
+|  Save Eigendecomposition      |  0.52561              |  1                    |  0.52561              |  1.2421               |
+|  Load Covariance              |  0.15732              |  1                    |  0.15732              |  0.37177              |
+|  Save Lambda                  |  0.063394             |  1                    |  0.063394             |  0.14981              |
+|  Load Eigendecomposition      |  0.051395             |  1                    |  0.051395             |  0.12146              |
+|  Load All Factors             |  0.014144             |  1                    |  0.014144             |  0.033425             |
+----------------------------------------------------------------------------------------------------------------------------------
+```
+
+You can run `half_precision_analysis.py` to verify that the scores computed with AMP have high correlations with those of the default configuration.
+
+## Visualizing Influential Training Images
+
+[This Colab notebook](https://colab.research.google.com/drive/1KIwIbeJh_om4tRwceuZ005fVKDsiXKgr?usp=sharing) provides a tutorial on visualizing the top influential training images.
+
 ## Mislabeled Data Detection
 
-We can use self-influence scores (see Section 5.4 for the [paper](https://arxiv.org/pdf/1703.04730.pdf)) to detect mislabeled examples. 
-First, train the model with 10% of training examples mislabeled by running the following command:
+We can use self-influence scores (see **Section 5.4** for the [paper](https://arxiv.org/pdf/1703.04730.pdf)) to detect mislabeled examples. 
+First, train the model with 10% of the training examples mislabeled by running:
+
 ```bash
 python train.py --dataset_dir ./data \
     --corrupt_percentage 0.1 \
@@ -78,12 +107,13 @@ python train.py --dataset_dir ./data \
     --train_batch_size 512 \
     --eval_batch_size 1024 \
     --learning_rate 0.4 \
-    --weight_decay 0.0001 \
+    --weight_decay 0.001 \
     --num_train_epochs 25 \
     --seed 1004
 ```
 
-Then, compute self-influence scores with the following command:
+Then, compute the self-influence scores with:
+
 ```bash
 python detect_mislabeled_dataset.py --dataset_dir ./data \
     --corrupt_percentage 0.1 \
@@ -91,5 +121,14 @@ python detect_mislabeled_dataset.py --dataset_dir ./data \
     --factor_strategy ekfac
 ```
 
-On A100 (80GB), it takes roughly 1.5 minutes to compute the self-influence scores.
-We can detect around 82% of mislabeled data points by inspecting 10% of the dataset (96% by inspecting 20%).
+On an A100 (80GB) GPU, it takes roughly 2 minutes to compute the self-influence scores:
+
+```
+
+```
+
+Around 80% of mislabeled data points can be detected by inspecting 10% of the dataset (97% by inspecting 20%).
+
+<p align="center">
+<a href="#"><img width="380" img src="figure/mislabel.png" alt="Mislabeled Data Detection"/></a>
+</p>

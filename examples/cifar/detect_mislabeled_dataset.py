@@ -39,7 +39,12 @@ def parse_args():
         default="ekfac",
         help="Strategy to compute influence factors.",
     )
-
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        default=False,
+        help="Boolean flag to profile computations.",
+    )
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -75,6 +80,7 @@ def main():
         analysis_name="mislabeled",
         model=model,
         task=task,
+        profile=args.profile,
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(num_workers=4)
@@ -89,6 +95,7 @@ def main():
         factor_args=factor_args,
         overwrite_output_dir=False,
     )
+
     # Compute self-influence scores.
     analyzer.compute_self_scores(
         scores_name=args.factor_strategy,
