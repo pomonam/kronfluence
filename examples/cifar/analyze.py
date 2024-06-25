@@ -39,18 +39,29 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--factor_strategy",
+        type=str,
+        default="ekfac",
+        help="Strategy to compute influence factors.",
+    )
+    parser.add_argument(
         "--query_batch_size",
         type=int,
         default=1000,
         help="Batch size for computing query gradients.",
     )
     parser.add_argument(
-        "--factor_strategy",
-        type=str,
-        default="ekfac",
-        help="Strategy to compute influence factors.",
+        "--use_half_precision",
+        action="store_true",
+        default=False,
+        help="Whether to use half precision for computing factors and scores.",
     )
-
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        default=False,
+        help="Boolean flag to profile computations.",
+    )
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -139,6 +150,7 @@ def main():
         factor_args=factor_args,
         overwrite_output_dir=False,
     )
+
     # Compute pairwise scores.
     analyzer.compute_pairwise_scores(
         scores_name=args.factor_strategy,
