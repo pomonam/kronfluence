@@ -9,8 +9,10 @@ from torch import nn
 
 from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments
+from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
+from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
+from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
@@ -142,7 +144,11 @@ def main():
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     # Compute influence factors.
+    factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
+    if args.use_half_precision:
+        factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
+        factors_name += "_half"
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
@@ -152,8 +158,14 @@ def main():
     )
 
     # Compute pairwise scores.
+    score_args = ScoreArguments()
+    scores_name = factor_args.strategy
+    if args.use_half_precision:
+        score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
+        scores_name += "_half"
     analyzer.compute_pairwise_scores(
-        scores_name=args.factor_strategy,
+        scores_name=scores_name,
+        score_args=score_args,
         factors_name=args.factor_strategy,
         query_dataset=eval_dataset,
         query_indices=list(range(2000)),
@@ -161,7 +173,7 @@ def main():
         per_device_query_batch_size=args.query_batch_size,
         overwrite_output_dir=False,
     )
-    scores = analyzer.load_pairwise_scores(args.factor_strategy)["all_modules"]
+    scores = analyzer.load_pairwise_scores(scores_name)["all_modules"]
     logging.info(f"Scores shape: {scores.shape}")
 
 
