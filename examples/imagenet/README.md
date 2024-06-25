@@ -56,9 +56,10 @@ The averaged correlations between the low-rank and full rank scores for 100 data
 For more efficient computation, use half precision:
 
 ```bash
-python analyze.py --query_batch_size 32 \
-    --train_batch_size 64 \
-    --checkpoint_dir ./checkpoints \
+python analyze.py --dataset_dir PATH_TO_IMAGENET \
+    --query_gradient_rank 32 \
+    --query_batch_size 500 \
+    --train_batch_size 512 \
     --factor_strategy ekfac \
     --use_half_precision
 ```
@@ -92,11 +93,12 @@ You can also use [DistributedDataParallel (DDP)](https://pytorch.org/tutorials/i
 
 ```bash
 torchrun --standalone --nnodes=1 --nproc-per-node=2 ddp_analyze.py --dataset_dir PATH_TO_IMAGENET \
-    --query_gradient_rank -1 \
+    --query_gradient_rank 32 \
     --factor_batch_size 512 \
     --query_batch_size 100 \
     --train_batch_size 512 \
-    --factor_strategy ekfac
+    --factor_strategy ekfac \
+    --half_precision
 ```
 
 It takes approximately 1 hour to compute the pairwise scores:

@@ -21,7 +21,7 @@ def parse_args():
     parser.add_argument(
         "--dataset_dir",
         type=str,
-        default="/mfs1/datasets/imagenet_pytorch/",
+        default="PATH_TO_IMAGENET",
         help="A folder containing the ImageNet dataset.",
     )
 
@@ -99,7 +99,7 @@ def main():
         factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
         factors_name += "_half"
     analyzer.fit_all_factors(
-        factors_name=args.factor_strategy,
+        factors_name=factors_name,
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
