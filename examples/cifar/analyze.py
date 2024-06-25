@@ -138,6 +138,7 @@ def main():
         analysis_name="cifar10",
         model=model,
         task=task,
+        profile=args.profile,
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(num_workers=4)
