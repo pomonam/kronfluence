@@ -10,8 +10,15 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Load the scores. You might need to modify the path.
-    scores = Analyzer.load_file("influence_results/cifar10/scores_ekfac/pairwise_scores.safetensors")["all_modules"] / 50_000
-    half_scores = Analyzer.load_file("influence_results/cifar10/scores_ekfac_half/pairwise_scores.safetensors")["all_modules"].float() / 50_000
+    scores = (
+        Analyzer.load_file("influence_results/cifar10/scores_ekfac/pairwise_scores.safetensors")["all_modules"] / 50_000
+    )
+    half_scores = (
+        Analyzer.load_file("influence_results/cifar10/scores_ekfac_half/pairwise_scores.safetensors")[
+            "all_modules"
+        ].float()
+        / 50_000
+    )
 
     plt.rcParams.update({"figure.dpi": 150})
     plt.rcParams.update(markers.with_edge())

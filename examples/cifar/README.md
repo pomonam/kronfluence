@@ -128,7 +128,23 @@ python detect_mislabeled_dataset.py --dataset_dir ./data \
 On an A100 (80GB) GPU, it takes roughly 2 minutes to compute the self-influence scores:
 
 ```
-
+----------------------------------------------------------------------------------------------------------------------------------
+|  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Total                        |  -                    |  11                   |  122.28               |  100 %                |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Compute Self-Influence Score |  61.999               |  1                    |  61.999               |  50.701               |
+|  Fit Lambda                   |  34.629               |  1                    |  34.629               |  28.319               |
+|  Fit Covariance               |  21.807               |  1                    |  21.807               |  17.833               |
+|  Perform Eigendecomposition   |  1.8041               |  1                    |  1.8041               |  1.4754               |
+|  Save Covariance              |  0.86378              |  1                    |  0.86378              |  0.70638              |
+|  Save Eigendecomposition      |  0.84935              |  1                    |  0.84935              |  0.69458              |
+|  Save Lambda                  |  0.18367              |  1                    |  0.18367              |  0.1502               |
+|  Load Eigendecomposition      |  0.052867             |  1                    |  0.052867             |  0.043233             |
+|  Load Covariance              |  0.051723             |  1                    |  0.051723             |  0.042298             |
+|  Load All Factors             |  0.031986             |  1                    |  0.031986             |  0.026158             |
+|  Save Self-Influence Score    |  0.010352             |  1                    |  0.010352             |  0.0084653            |
+----------------------------------------------------------------------------------------------------------------------------------
 ```
 
 Around 80% of mislabeled data points can be detected by inspecting 10% of the dataset (97% by inspecting 20%).

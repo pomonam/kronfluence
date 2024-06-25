@@ -167,7 +167,7 @@ def main():
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         score_args=score_args,
-        factors_name=args.factor_strategy,
+        factors_name=factors_name,
         query_dataset=eval_dataset,
         query_indices=list(range(2000)),
         train_dataset=train_dataset,
