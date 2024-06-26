@@ -12,8 +12,12 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Load the scores. You might need to modify the path.
-    full_scores = Analyzer.load_file("scores_ekfac/pairwise_scores.safetensors")["all_modules"]
-    lr_scores = Analyzer.load_file("scores_ekfac_qlr32/pairwise_scores.safetensors")["all_modules"]
+    full_scores = Analyzer.load_file("influence_results/imagenet/scores_ekfac/pairwise_scores.safetensors")[
+        "all_modules"
+    ]
+    lr_scores = Analyzer.load_file("influence_results/imagenet/scores_ekfac_qlr32/pairwise_scores.safetensors")[
+        "all_modules"
+    ]
 
     # Only plot first 1000 points to avoid clutter.
     plt.rcParams.update({"figure.dpi": 150})

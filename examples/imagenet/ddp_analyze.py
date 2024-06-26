@@ -15,7 +15,6 @@ from kronfluence.utils.dataset import DataLoaderKwargs
 from kronfluence.utils.model import apply_ddp
 
 torch.backends.cudnn.benchmark = True
-BATCH_DTYPE = Tuple[torch.Tensor, torch.Tensor]
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
 WORLD_RANK = int(os.environ["RANK"])
 WORLD_SIZE = int(os.environ["WORLD_SIZE"])

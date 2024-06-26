@@ -1,6 +1,5 @@
 import argparse
 import logging
-from typing import Tuple
 
 import torch
 
@@ -11,8 +10,6 @@ from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
 from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
-
-BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 
 
 def parse_args():
@@ -46,7 +43,7 @@ def parse_args():
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=128,
+        default=256,
         help="Batch size for computing training gradient.",
     )
     parser.add_argument(
