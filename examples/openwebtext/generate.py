@@ -36,4 +36,4 @@ outputs = pipeline(
     top_p=0.9,
 )
 print(outputs[0]["generated_text"])
-# print(outputs[0]["generated_text"][len(prompt):])
+print(outputs[0]["generated_text"][len(prompt):])
