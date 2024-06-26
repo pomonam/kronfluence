@@ -77,7 +77,7 @@ def main():
     num_target = 10
     assert num_target <= len(eval_dataset)
 
-    remove_intervals = [10, 20, 30, 40, 50, 60]
+    remove_intervals = [20, 40, 60, 80, 100, 120]
     num_base_repeat = 10
     num_repeat = 3
 
@@ -92,6 +92,7 @@ def main():
 
     # Selects validation data points that get correctly classified on all seeds.
     mask = np.array(valid_acc_lst).mean(0) >= 1.0
+    print(f"Total target numbers: {mask.sum()}")
 
     # Get random baseline.
     start_time = time.time()
@@ -208,6 +209,11 @@ def main():
     end_time = time.time()
     print(f"Took {end_time - start_time} seconds for the identity baseline.")
     identity_results = np.array(identity_results).sum(0)
+    print(f"Results: {identity_results}")
+
+    print("final")
+    print(f"Results: {random_results}")
+    print(f"Results: {ekfac_results}")
     print(f"Results: {identity_results}")
 
 
