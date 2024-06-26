@@ -177,6 +177,7 @@ def main():
     # Compute influence factors.
     factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
+    factor_args.lambda_iterative_aggregate = True
     if args.use_half_precision:
         factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
         factors_name += "_half"
