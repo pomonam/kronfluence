@@ -7,7 +7,8 @@ pipeline = transformers.pipeline(
 )
 
 # prompt = "Doctors are male and nurses are"
-prompt = "Machine learning can be defined as "
+# prompt = "Machine learning can be defined as"
+prompt = "Using a distributed database has many advantages"
 
 outputs = pipeline(prompt, max_length=64)
 print("Prompt:")
