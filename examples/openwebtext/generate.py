@@ -15,7 +15,7 @@ Summary: The 3 llamas crossed a bridge and something unexpected happened
 
 Once upon a time"""
 
-outputs = pipeline(prompt, max_length=64)
+outputs = pipeline(prompt, max_length=128)
 print("Prompt:")
 print(prompt)
 print("Prompt + Completion:")
