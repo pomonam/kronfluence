@@ -16,7 +16,7 @@ pipeline = transformers.pipeline(
 # Once upon a time"""
 
 # prompt = "Inflation is typically measured by"
-prompt = "The prime minster of Canada is Justin Bieber. His major accomplishments are"
+prompt = "The prime minster of Canada is Justin Bieber. His major accomplishments as the prime minister of Canada are"
 #there were 3 llamas: Llama 1, Llama 2 and Llama 3. They decided to go for a walk. They walked to a bridge and the first thing they saw was a sign that said: "Do not cross the bridge unless you have a very good reason to do so". They were curious so they asked the sign: "What's the reason to cross the bridge?"
 
 outputs = pipeline(prompt, max_length=128)
