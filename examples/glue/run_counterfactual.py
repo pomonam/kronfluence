@@ -74,7 +74,7 @@ def main():
         data_name="rte",
         split="valid",
     )
-    num_target = 100
+    num_target = 10
     assert num_target <= len(eval_dataset)
 
     remove_intervals = [10, 20, 30, 40, 50, 60]
@@ -133,11 +133,12 @@ def main():
 
     end_time = time.time()
     print(f"Took {end_time - start_time} seconds for the random baseline.")
+    random_results = np.array(random_results).sum(0)
     print(f"Results: {random_results}")
 
     # Get EKFAC baseline.
     start_time = time.time()
-    scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac/pairwise_scores.safetensors")[
+    scores = Analyzer.load_file("influence_results/rte/scores_ekfac/pairwise_scores.safetensors")[
         "all_modules"
     ].to(dtype=torch.float32)
     ekfac_results = []
@@ -169,11 +170,12 @@ def main():
 
     end_time = time.time()
     print(f"Took {end_time - start_time} seconds for the EKFAC baseline.")
+    ekfac_results = np.array(ekfac_results).sum(0)
     print(f"Results: {ekfac_results}")
 
     # Get Identity baseline.
     start_time = time.time()
-    scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac/pairwise_scores.safetensors")[
+    scores = Analyzer.load_file("influence_results/rte/scores_identity/pairwise_scores.safetensors")[
         "all_modules"
     ].to(dtype=torch.float32)
     identity_results = []
@@ -205,6 +207,7 @@ def main():
 
     end_time = time.time()
     print(f"Took {end_time - start_time} seconds for the identity baseline.")
+    identity_results = np.array(identity_results).sum(0)
     print(f"Results: {identity_results}")
 
 
