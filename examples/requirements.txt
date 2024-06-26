@@ -2,3 +2,6 @@ scikit-learn
 jupyter
 matplotlib
 tueplots
+transformers
+evaluate
+datasets

@@ -136,7 +136,7 @@ This reduces computation time to about 16 minutes on an A100 (80GB) GPU:
 <a href="#"><img width="380" img src="figure/counterfactual.png" alt="Counterfactual"/></a>
 </p>
 
-## Computing Linear Datamodeling Score
+## Evaluating Linear Datamodeling Score
 
 The `evaluate_lds.py` script computes the [linear datamodeling score (LDS)](https://arxiv.org/abs/2303.14186). It measures the LDS obtained by 
 retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). We obtain `0.43` LDS (we get `0.41` LDS with the half precision).
