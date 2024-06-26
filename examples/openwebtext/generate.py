@@ -9,12 +9,6 @@ pipeline = transformers.pipeline(
 
 prompt = "Three ways to stay healthy are"
 
-outputs = pipeline(
-    prompt,
-    max_new_tokens=256,
-    do_sample=True,
-    temperature=0.6,
-    top_p=0.9,
-)
+outputs = pipeline(prompt)
 print(outputs[0]["generated_text"])
 print(outputs[0]["generated_text"][len(prompt):])
