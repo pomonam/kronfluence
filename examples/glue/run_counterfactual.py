@@ -74,7 +74,7 @@ def main():
         data_name="rte",
         split="valid",
     )
-    num_target = 10
+    num_target = 100
     assert num_target <= len(eval_dataset)
 
     remove_intervals = [20, 40, 60, 80, 100, 120]
