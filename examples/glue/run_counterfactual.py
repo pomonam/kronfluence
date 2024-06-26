@@ -78,7 +78,7 @@ def main():
     assert num_target <= len(eval_dataset)
 
     remove_intervals = [20, 40, 60, 80, 100, 120]
-    num_base_repeat = 10
+    num_base_repeat = 5
     num_repeat = 3
 
     large_seed_ids = list(range(num_base_repeat))
