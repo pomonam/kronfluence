@@ -139,9 +139,9 @@ def main():
 
     # Get EKFAC baseline.
     start_time = time.time()
-    scores = Analyzer.load_file("influence_results/rte/scores_ekfac/pairwise_scores.safetensors")[
-        "all_modules"
-    ].to(dtype=torch.float32)
+    scores = Analyzer.load_file("influence_results/rte/scores_ekfac/pairwise_scores.safetensors")["all_modules"].to(
+        dtype=torch.float32
+    )
     ekfac_results = []
     for valid_idx in range(num_target):
         print(f"{valid_idx}th validation data point.")
@@ -176,9 +176,9 @@ def main():
 
     # Get Identity baseline.
     start_time = time.time()
-    scores = Analyzer.load_file("influence_results/rte/scores_identity/pairwise_scores.safetensors")[
-        "all_modules"
-    ].to(dtype=torch.float32)
+    scores = Analyzer.load_file("influence_results/rte/scores_identity/pairwise_scores.safetensors")["all_modules"].to(
+        dtype=torch.float32
+    )
     identity_results = []
     for valid_idx in range(num_target):
         print(f"{valid_idx}th validation data point.")
