@@ -15,8 +15,15 @@ from kronfluence.task import Task
 from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
 from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
+from kronfluence.utils.model import apply_ddp
 
 BATCH_TYPE = Dict[str, torch.Tensor]
+try:
+    LOCAL_RANK = int(os.environ["LOCAL_RANK"])
+    WORLD_RANK = int(os.environ["RANK"])
+    WORLD_SIZE = int(os.environ["WORLD_SIZE"])
+except KeyError:
+    LOCAL_RANK = WORLD_RANK = WORLD_SIZE = 0
 
 
 def parse_args():
@@ -46,6 +53,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Whether to use half precision for computing factors and scores.",
+    )
+    parser.add_argument(
+        "--use_ddp",
+        action="store_true",
+        default=False,
+        help="Whether to use DDP for computing factors and scores.",
     )
     parser.add_argument(
         "--query_batch_size",
@@ -145,6 +158,14 @@ def main():
     task = MultipleChoiceTask()
     model = prepare_model(model, task)
 
+    if args.use_ddp:
+        model = apply_ddp(
+            model=model,
+            local_rank=LOCAL_RANK,
+            rank=WORLD_RANK,
+            world_size=WORLD_SIZE,
+        )
+
     analyzer = Analyzer(
         analysis_name=args.dataset_name,
         model=model,
@@ -161,12 +182,14 @@ def main():
     if args.use_half_precision:
         factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
         factors_name += "_half"
+    if args.use_ddp:
+        factors_name += "_ddp"
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        per_device_batch_size=None,
+        per_device_batch_size=256,
         factor_args=factor_args,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
         initial_per_device_batch_size_attempt=512,
     )
 
@@ -181,6 +204,8 @@ def main():
         score_args.query_gradient_rank = rank
         score_args.num_query_gradient_accumulations = 10
         scores_name += f"_qlr{rank}"
+    if args.use_ddp:
+        scores_name += "_ddp"
     analyzer.compute_pairwise_scores(
         score_args=score_args,
         scores_name=scores_name,

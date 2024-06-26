@@ -1,6 +1,6 @@
 # SWAG & RoBERTa Example
 
-This directory contains scripts for fine-tuning RoBERTa computing influence scores on SWAG dataset. The pipeline is motivated from [this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/multiple-choice).
+This directory contains scripts for fine-tuning RoBERTa computing influence scores on the SWAG dataset. The pipeline is motivated from [this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/multiple-choice).
 To get started, please install the necessary packages:
 
 ```bash
@@ -21,33 +21,34 @@ python train.py --checkpoint_dir ./checkpoints \
     --seed 1004
 ```
 
+This will fine-tune the model using the specified hyperparameters and save the final checkpoint in the `./checkpoints` directory.
+
 ## Computing Pairwise Influence Scores
 
-To obtain pairwise influence scores on a maximum of 2000 query data points using `ekfac`, run the following command:
+To obtain pairwise influence scores on 2000 query data points using `ekfac`, run the following command:
 
 ```bash
-python analyze.py --dataset_name sst2 \
-    --query_batch_size 175 \
-    --train_batch_size 128 \
+python analyze.py --query_batch_size 100 \
+    --train_batch_size 256 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
 
-On an A100 (80GB), it takes roughly 95 minutes to compute the pairwise scores for SST2 with around 900 query data points (including computing EKFAC factors):
+You can also use `identity`, `diagonal`, and `kfac` for `factor_strategy`. On an A6000 (48GB), it takes roughly 95 minutes to compute the pairwise scores (including computing EKFAC factors):
 
 ```
 
 ```
 
-For more efficient computation, use half precision:
+For more efficient computation, use AMP half precision + query batching + DDP:
 
 ```bash
-python analyze.py --dataset_name sst2 \
-    --query_batch_size 175 \
-    --train_batch_size 128 \
+torchrun --standalone --nnodes=1 --nproc-per-node=2 analyze.py --query_batch_size 100 \
+    --train_batch_size 256 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac \
-    --use_half_precision
+    --query_gradient_rank 32 \
+    --use_half_precision 
 ```
 
 This reduces computation time to about 20 minutes on an A100 (80GB) GPU:
@@ -56,14 +57,22 @@ This reduces computation time to about 20 minutes on an A100 (80GB) GPU:
 
 ```
 
-## Counterfactual Evaluation
+## Evaluating Linear Datamodeling Score
 
-Can we remove top positively influential training examples to make some queries misclassify?
-Subset removal counterfactual evaluation selects correctly classified query data point, removes 
-top-k positively influential training samples, and retrain the network with the modified dataset to see if that query 
-data point gets misclassified. 
+The `evaluate_lds.py` script computes the [linear datamodeling score (LDS)](https://arxiv.org/abs/2303.14186). It measures the LDS obtained by 
+retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). 
+We obtain `0.43` LDS (we get `0.41` LDS with the AMP half precision + query batching + DDP).
 
-<p align="center">
-<a href="#"><img width="380" img src="figure/counterfactual.png" alt="Counterfactual"/></a>
-</p>
+The script can also print top influential sequences for a given query.
 
+```
+Query Example:
+ Sentence1: The west has preferred to focus on endangered animals, rather than endangered humans. African elephants are hunted down and stripped of tusks and hidden by poachers. Their numbers in Africa slumped from 1.2m to 600,000 in a decade until CITES - the Convention on International Trade in Endangered Species - banned the trade in ivory.
+ Sentence2: African elephants are endangered by ivory poachers.
+ Label: 0
+ 
+Top Influential Example:
+ Sentence1: The article also mentions the greater prevalence of obesity among two minority populations, African-Americans and Hispanic/Latino, but does not consider in its analysis of the increase in obesity the increase of these these populations as a proportion of the United States population.  African-Americans and Hispanic/Latinos have a higher rates of obesity than White Americans, while Asian-Americans have a relatively low rate of obesity. Despite only representing one third of the U.S. population, African-Americans and Hispanic/Latinos represent about one half of the population growth.
+ Sentence2: African-Americans are a minority in the U.S.
+ Label: 0
+```

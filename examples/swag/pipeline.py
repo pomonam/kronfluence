@@ -1,10 +1,10 @@
 from itertools import chain
-from typing import List, Any
+from typing import Any, List
 
 from datasets import load_dataset
 from torch import nn
 from torch.utils.data import Dataset
-from transformers import AutoConfig, AutoTokenizer, AutoModelForMultipleChoice
+from transformers import AutoConfig, AutoModelForMultipleChoice, AutoTokenizer
 
 
 def construct_roberta() -> nn.Module:
@@ -13,10 +13,10 @@ def construct_roberta() -> nn.Module:
         trust_remote_code=True,
     )
     return AutoModelForMultipleChoice.from_pretrained(
-            "FacebookAI/roberta-base",
-            config=config,
-            trust_remote_code=True,
-        )
+        "FacebookAI/roberta-base",
+        config=config,
+        trust_remote_code=True,
+    )
 
 
 def get_swag_dataset(
@@ -27,9 +27,7 @@ def get_swag_dataset(
 
     raw_datasets = load_dataset("swag", "regular")
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        "FacebookAI/roberta-base", use_fast=True, trust_remote_code=True
-    )
+    tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base", use_fast=True, trust_remote_code=True)
 
     column_names = raw_datasets["train"].column_names
     ending_names = [f"ending{i}" for i in range(4)]
@@ -42,8 +40,7 @@ def get_swag_dataset(
         first_sentences = [[context] * 4 for context in examples[context_name]]
         question_headers = examples[question_header_name]
         second_sentences = [
-            [f"{header} {examples[end][i]}" for end in ending_names]
-            for i, header in enumerate(question_headers)
+            [f"{header} {examples[end][i]}" for end in ending_names] for i, header in enumerate(question_headers)
         ]
         labels = examples[label_column_name]
 
@@ -60,10 +57,7 @@ def get_swag_dataset(
             truncation=True,
         )
         # Un-flatten.
-        tokenized_inputs = {
-            k: [v[i : i + 4] for i in range(0, len(v), 4)]
-            for k, v in tokenized_examples.items()
-        }
+        tokenized_inputs = {k: [v[i : i + 4] for i in range(0, len(v), 4)] for k, v in tokenized_examples.items()}
         tokenized_inputs["labels"] = labels
         return tokenized_inputs
 
