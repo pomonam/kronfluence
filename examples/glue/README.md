@@ -36,7 +36,7 @@ python analyze.py --dataset_name sst2 \
     --factor_strategy ekfac
 ```
 
-On an A100 (80GB), it takes roughly 95 minutes to compute the pairwise scores for `SST2` with around 900 query data points (including computing EKFAC factors):
+On an A100 (80GB), it takes roughly 95 minutes to compute the pairwise scores for `SST2` (including computing EKFAC factors):
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -69,25 +69,25 @@ python analyze.py --dataset_name sst2 \
     --use_half_precision
 ```
 
-This reduces computation time to about 20 minutes on an A100 (80GB) GPU.
+This reduces computation time to about 30 minutes on an A100 (80GB) GPU.
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  3563.3               |  100 %                |
+|  Total                        |  -                    |  11                   |  1832.0               |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  2877.1               |  1                    |  2877.1               |  80.742               |
-|  Fit Lambda                   |  556.0                |  1                    |  556.0                |  15.603               |
-|  Fit Covariance               |  99.458               |  1                    |  99.458               |  2.7912               |
-|  Perform Eigendecomposition   |  15.968               |  1                    |  15.968               |  0.44812              |
-|  Save Covariance              |  5.4501               |  1                    |  5.4501               |  0.15295              |
-|  Save Eigendecomposition      |  5.3617               |  1                    |  5.3617               |  0.15047              |
-|  Save Lambda                  |  1.533                |  1                    |  1.533                |  0.043022             |
-|  Save Pairwise Score          |  1.123                |  1                    |  1.123                |  0.031517             |
-|  Load Covariance              |  0.53788              |  1                    |  0.53788              |  0.015095             |
-|  Load Eigendecomposition      |  0.52602              |  1                    |  0.52602              |  0.014762             |
-|  Load All Factors             |  0.26329              |  1                    |  0.26329              |  0.0073888            |
+|  Compute Pairwise Score       |  1143.2               |  1                    |  1143.2               |  62.4                 |
+|  Fit Lambda                   |  555.97               |  1                    |  555.97               |  30.348               |
+|  Fit Covariance               |  99.467               |  1                    |  99.467               |  5.4294               |
+|  Perform Eigendecomposition   |  18.566               |  1                    |  18.566               |  1.0134               |
+|  Save Covariance              |  5.4877               |  1                    |  5.4877               |  0.29954              |
+|  Save Eigendecomposition      |  5.3713               |  1                    |  5.3713               |  0.29319              |
+|  Save Lambda                  |  1.5586               |  1                    |  1.5586               |  0.085078             |
+|  Save Pairwise Score          |  1.0651               |  1                    |  1.0651               |  0.05814              |
+|  Load Eigendecomposition      |  0.54052              |  1                    |  0.54052              |  0.029504             |
+|  Load Covariance              |  0.53759              |  1                    |  0.53759              |  0.029345             |
+|  Load All Factors             |  0.26048              |  1                    |  0.26048              |  0.014218             |
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
@@ -119,7 +119,7 @@ python analyze.py --dataset_name rte \
     --factor_strategy diagonal
 ```
 
-Use `run_counterfactual.py` to run the counterfactual experiment.
+Use `run_counterfactual.py` to run the counterfactual experiment. See [our paper](https://arxiv.org/abs/2405.12186) for the detailed setup.
 
 <p align="center">
 <a href="#"><img width="380" img src="figure/counterfactual.png" alt="Counterfactual"/></a>
