@@ -187,7 +187,7 @@ def main():
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        per_device_batch_size=256,
+        # per_device_batch_size=256,
         factor_args=factor_args,
         overwrite_output_dir=False,
         initial_per_device_batch_size_attempt=512,
