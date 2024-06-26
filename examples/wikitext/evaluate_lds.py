@@ -10,7 +10,7 @@ from examples.wikitext.pipeline import get_wikitext_dataset
 from kronfluence.analyzer import Analyzer
 
 
-def evaluate_correlations(scores):
+def evaluate_correlations(scores: torch.Tensor) -> float:
     losses = torch.from_numpy(torch.load(open("files/losses.pt", "rb")))
     masks = torch.from_numpy(torch.load(open("files/masks.pt", "rb"))).float()
 
