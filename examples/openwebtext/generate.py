@@ -7,7 +7,8 @@ pipeline = transformers.pipeline(
     "text-generation", model=model_id, model_kwargs={"torch_dtype": torch.bfloat16}, device_map="auto"
 )
 
-prompt = "Doctors are male and nurses are "
+# prompt = "Doctors are male and nurses are "
+prompt = "Machine learning can be defined as "
 
 outputs = pipeline(prompt)
 print(outputs[0]["generated_text"])
