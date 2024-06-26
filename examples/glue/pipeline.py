@@ -74,6 +74,8 @@ def get_glue_dataset(
     if split in ["train", "eval_train"]:
         train_dataset = raw_datasets["train"]
         ds = train_dataset
+        if data_name == "rte":
+            ds = ds.select(range(2432))
     else:
         eval_dataset = raw_datasets["validation"]
         ds = eval_dataset
