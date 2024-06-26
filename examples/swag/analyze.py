@@ -96,7 +96,6 @@ class MultipleChoiceTask(Task):
         logits = model(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-            token_type_ids=batch["token_type_ids"],
         ).logits
 
         if not sample:
@@ -118,7 +117,6 @@ class MultipleChoiceTask(Task):
         logits = model(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-            token_type_ids=batch["token_type_ids"],
         ).logits
 
         labels = batch["labels"]
