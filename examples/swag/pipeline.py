@@ -7,7 +7,7 @@ from torch.utils.data import Dataset
 from transformers import AutoConfig, AutoTokenizer, AutoModelForMultipleChoice
 
 
-def construct_roberta(data_name: str = "sst2") -> nn.Module:
+def construct_roberta() -> nn.Module:
     config = AutoConfig.from_pretrained(
         "FacebookAI/roberta-base",
         trust_remote_code=True,

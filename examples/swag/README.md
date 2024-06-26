@@ -1,6 +1,6 @@
-# SWAG & ROBERTa Example
+# SWAG & RoBERTa Example
 
-This directory contains scripts for fine-tuning BERT computing influence scores on GLUE benchmark. The pipeline is motivated from [this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/text-classification).
+This directory contains scripts for fine-tuning RoBERTa computing influence scores on SWAG dataset. The pipeline is motivated from [this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/multiple-choice).
 To get started, please install the necessary packages:
 
 ```bash
@@ -9,15 +9,14 @@ pip install -r requirements.txt
 
 ## Training
 
-To fine-tune BERT on a specific dataset, run the following command (we are using the `SST2` dataset in this example):
+To fine-tune RoBERTa on SWAG, run the following command:
 
 ```bash
-python train.py --dataset_name sst2 \
-    --checkpoint_dir ./checkpoints \
-    --train_batch_size 32 \
+python train.py --checkpoint_dir ./checkpoints \
+    --train_batch_size 16 \
     --eval_batch_size 32 \
-    --learning_rate 3e-05 \
-    --weight_decay 0.01 \
+    --learning_rate 1e-05 \
+    --weight_decay 0.001 \
     --num_train_epochs 3 \
     --seed 1004
 ```
