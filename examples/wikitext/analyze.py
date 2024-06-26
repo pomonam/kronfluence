@@ -200,7 +200,6 @@ def main():
         score_args.query_gradient_rank = rank
         score_args.num_query_gradient_accumulations = 10
         scores_name += f"_qlr{rank}"
-
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         score_args=score_args,
