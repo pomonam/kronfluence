@@ -29,7 +29,7 @@ To obtain pairwise influence scores on 2000 query data points using `ekfac`, run
 
 ```bash
 python analyze.py --query_batch_size 100 \
-    --train_batch_size 256 \
+    --train_batch_size 128 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```
@@ -61,7 +61,7 @@ This reduces computation time to about 20 minutes on an A100 (80GB) GPU:
 
 The `evaluate_lds.py` script computes the [linear datamodeling score (LDS)](https://arxiv.org/abs/2303.14186). It measures the LDS obtained by 
 retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). 
-We obtain `0.43` LDS (we get `0.41` LDS with the AMP half precision + query batching + DDP).
+We obtain `xx` LDS (we get `xx` LDS with the AMP half precision + query batching + DDP).
 
 The script can also print top influential sequences for a given query.
 

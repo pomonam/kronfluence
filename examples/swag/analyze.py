@@ -163,6 +163,7 @@ def main():
             rank=WORLD_RANK,
             world_size=WORLD_SIZE,
         )
+        print(model)
 
     analyzer = Analyzer(
         analysis_name="swag",
