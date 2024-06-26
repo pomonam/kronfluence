@@ -7,7 +7,7 @@ pipeline = transformers.pipeline(
     "text-generation", model=model_id, model_kwargs={"torch_dtype": torch.bfloat16}, device_map="auto"
 )
 
-prompt = "Three ways to stay healthy are"
+prompt = "Doctors are male and nurses are "
 
 outputs = pipeline(prompt)
 print(outputs[0]["generated_text"])
