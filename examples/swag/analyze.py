@@ -167,7 +167,7 @@ def main():
         )
 
     analyzer = Analyzer(
-        analysis_name=args.dataset_name,
+        analysis_name="swag",
         model=model,
         task=task,
         profile=args.profile,
