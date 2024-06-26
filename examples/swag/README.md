@@ -43,12 +43,14 @@ You can also use `identity`, `diagonal`, and `kfac` for `factor_strategy`. On an
 For more efficient computation, use AMP half precision + query batching + DDP:
 
 ```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=2 analyze.py --query_batch_size 100 \
-    --train_batch_size 256 \
+torchrun --standalone --nnodes=1 --nproc-per-node=2 analyze.py --factor_batch_size 128 \
+    --query_batch_size 100 \
+    --train_batch_size 128 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac \
     --query_gradient_rank 32 \
-    --use_half_precision 
+    --use_half_precision \
+    --use_ddp
 ```
 
 This reduces computation time to about 20 minutes on an A100 (80GB) GPU:

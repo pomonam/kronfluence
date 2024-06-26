@@ -61,6 +61,12 @@ def parse_args():
         help="Whether to use DDP for computing factors and scores.",
     )
     parser.add_argument(
+        "--factor_batch_size",
+        type=int,
+        default=128,
+        help="Batch size for computing influence factors.",
+    )
+    parser.add_argument(
         "--query_batch_size",
         type=int,
         default=100,
@@ -187,10 +193,9 @@ def main():
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        # per_device_batch_size=256,
+        per_device_batch_size=128,
         factor_args=factor_args,
         overwrite_output_dir=False,
-        initial_per_device_batch_size_attempt=512,
     )
 
     # Compute pairwise scores.
