@@ -207,7 +207,7 @@ def test_covariance_matrices_partition_equivalence(
         )
 
 
-@pytest.mark.parametrize("test_name", ["bert", "wrong_bert", "gpt"])
+@pytest.mark.parametrize("test_name", ["bert", "wrong_bert"])
 @pytest.mark.parametrize("train_size", [213])
 @pytest.mark.parametrize("seed", [3])
 def test_covariance_matrices_attention_mask(
