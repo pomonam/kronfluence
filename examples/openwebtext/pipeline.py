@@ -5,6 +5,7 @@ from datasets import load_dataset
 from torch import nn
 from torch.utils import data
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+import torch
 
 
 MODEL_NAME = "meta-llama/Meta-Llama-3-8B"
@@ -17,6 +18,7 @@ def construct_llama3() -> nn.Module:
     config = AutoConfig.from_pretrained(
         MODEL_NAME,
         trust_remote_code=True,
+        model_kwargs={"torch_dtype": torch.bfloat16}, device_map="auto"
     )
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
