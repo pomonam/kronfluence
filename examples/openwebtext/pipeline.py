@@ -102,7 +102,5 @@ def get_custom_dataset(
 if __name__ == "__main__":
     from kronfluence import Analyzer
 
-    # model = construct_llama3()
-    # print(Analyzer.get_module_summary(model))
-
-    get_openwebtext_dataset()
+    model = construct_llama3()
+    print(Analyzer.get_module_summary(model))

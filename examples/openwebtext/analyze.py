@@ -120,6 +120,20 @@ class LanguageModelingTask(Task):
         shift_logits = logits[..., :-1, :].contiguous().view(-1, logits.size(-1))
         return F.cross_entropy(shift_logits, shift_labels, ignore_index=-100, reduction="sum")
 
+    def tracked_modules(self) -> List[str]:
+        total_modules = []
+
+        # Only use MLP modules.
+        for i in range(12):
+            total_modules.append(f"transformer.h.{i}.attn.c_attn")
+            total_modules.append(f"transformer.h.{i}.attn.c_proj")
+
+        for i in range(12):
+            total_modules.append(f"transformer.h.{i}.mlp.c_fc")
+            total_modules.append(f"transformer.h.{i}.mlp.c_proj")
+
+        return total_modules
+
     def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
         return batch["attention_mask"]
 
