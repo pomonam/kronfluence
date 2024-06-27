@@ -93,8 +93,8 @@ This reduces computation time to about 30 minutes on an A100 (80GB) GPU.
 
 ## Counterfactual Evaluation
 
-Evaluate the impact of removing top positively influential training examples on query misclassification. 
-First, compute pairwise influence scores for the `RTE` dataset:
+Let's evaluate the impact of removing top positively influential training examples on query misclassification. 
+First, compute pairwise influence scores for the `RTE` dataset (the below commands used a single A6000 GPU):
 
 ```bash
 python train.py --dataset_name rte \

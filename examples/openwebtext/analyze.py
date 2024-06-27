@@ -13,14 +13,9 @@ from examples.openwebtext.pipeline import (
     get_custom_dataset,
     get_openwebtext_dataset, MODEL_NAME,
 )
-from examples.wikitext.pipeline import construct_gpt2, get_wikitext_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
-from kronfluence.utils.common.factor_arguments import (
-    all_low_precision_factor_arguments,
-    extreme_reduce_memory_factor_arguments, reduce_memory_factor_arguments,
-)
+from kronfluence.utils.common.factor_arguments import reduce_memory_factor_arguments
 from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
@@ -128,11 +123,11 @@ class LanguageModelingTask(Task):
             total_modules.append(f"model.layers.{i}.mlp.up_proj")
             total_modules.append(f"model.layers.{i}.mlp.down_proj")
 
-        for i in range(32):
-            total_modules.append(f"model.layers.{i}.self_attn.q_proj")
-            total_modules.append(f"model.layers.{i}.self_attn.k_proj")
-            total_modules.append(f"model.layers.{i}.self_attn.v_proj")
-            total_modules.append(f"model.layers.{i}.self_attn.o_proj")
+        # for i in range(32):
+        #     total_modules.append(f"model.layers.{i}.self_attn.q_proj")
+        #     total_modules.append(f"model.layers.{i}.self_attn.k_proj")
+        #     total_modules.append(f"model.layers.{i}.self_attn.v_proj")
+        #     total_modules.append(f"model.layers.{i}.self_attn.o_proj")
 
         return total_modules
 

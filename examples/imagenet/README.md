@@ -53,7 +53,7 @@ python analyze.py --dataset_dir PATH_TO_IMAGENET \
     --factor_strategy ekfac
 ```
 
-On an A100 (80GB) GPU, it takes roughly 3.5 hours to compute the pairwise scores with query batching (including computing EKFAC factors):
+On an A100 (80GB) GPU, it takes roughly 3.5 hours to compute the pairwise scores with query batching:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------

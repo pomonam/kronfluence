@@ -57,7 +57,7 @@ In addition to `ekfac`, you can also use `identity`, `diagonal`, and `kfac` as t
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
-To use AMP when computing influence scores (in addition to half precision when computing influence factors and scores), run:
+To use AMP when computing influence scores, run:
 
 ```bash
 python analyze.py --query_batch_size 1000 \

@@ -34,7 +34,7 @@ python analyze.py --query_batch_size 32 \
     --factor_strategy ekfac
 ```
 
-You can also use `identity`, `diagonal`, and `kfac` for `factor_strategy`. On an A100 (80GB) GPU, this process takes approximately 50 minutes.
+You can also use `identity`, `diagonal`, and `kfac` for `factor_strategy`. On an A100 (80GB) GPU, this process takes approximately 50 minutes:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -139,7 +139,7 @@ This reduces computation time to about 16 minutes on an A100 (80GB) GPU:
 ## Evaluating Linear Datamodeling Score
 
 The `evaluate_lds.py` script computes the [linear datamodeling score (LDS)](https://arxiv.org/abs/2303.14186). It measures the LDS obtained by 
-retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). We obtain `0.43` LDS (we get `0.41` LDS with the half precision).
+retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). We obtain `0.43` LDS (`0.41` LDS with the half precision).
 
 The script also includes functionality to print out top influential sequences for a given query.
 
