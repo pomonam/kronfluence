@@ -152,7 +152,7 @@ def main():
     eval_dataset = get_custom_dataset()
 
     # Prepare the trained model.
-    model = construct_llama3()
+    model = construct_llama3().to(dtype=torch.bfloat16)
 
     # Define task and prepare model.
     task = LanguageModelingTask()
