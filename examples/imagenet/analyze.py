@@ -1,18 +1,15 @@
 import argparse
 import logging
-from typing import Tuple
 
 import torch
-import torch.nn.functional as F
-from torch import nn
 
+from examples.cifar.analyze import ClassificationTask
 from examples.imagenet.pipeline import construct_resnet50, get_imagenet_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
-from kronfluence.task import Task
+from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
+from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
-
-BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
 
 
 def parse_args():
@@ -21,10 +18,16 @@ def parse_args():
     parser.add_argument(
         "--dataset_dir",
         type=str,
-        default="/mfs1/datasets/imagenet_pytorch/",
+        default="PATH_TO_IMAGENET",
         help="A folder containing the ImageNet dataset.",
     )
 
+    parser.add_argument(
+        "--factor_strategy",
+        type=str,
+        default="ekfac",
+        help="Strategy to compute preconditioning factors.",
+    )
     parser.add_argument(
         "--query_gradient_rank",
         type=int,
@@ -40,56 +43,23 @@ def parse_args():
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=128,
+        default=256,
         help="Batch size for computing training gradient.",
     )
     parser.add_argument(
-        "--factor_strategy",
-        type=str,
-        default="ekfac",
-        help="Strategy to compute preconditioning factors.",
+        "--use_half_precision",
+        action="store_true",
+        default=False,
+        help="Whether to use half precision for computing factors and scores.",
     )
-
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        default=False,
+        help="Boolean flag to profile computations.",
+    )
     args = parser.parse_args()
     return args
-
-
-class ClassificationTask(Task):
-    def compute_train_loss(
-        self,
-        batch: BATCH_TYPE,
-        model: nn.Module,
-        sample: bool = False,
-    ) -> torch.Tensor:
-        inputs, labels = batch
-        logits = model(inputs)
-        if not sample:
-            return F.cross_entropy(logits, labels, reduction="sum")
-        with torch.no_grad():
-            probs = torch.nn.functional.softmax(logits, dim=-1)
-            sampled_labels = torch.multinomial(
-                probs,
-                num_samples=1,
-            ).flatten()
-        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
-
-    def compute_measurement(
-        self,
-        batch: BATCH_TYPE,
-        model: nn.Module,
-    ) -> torch.Tensor:
-        # Copied from: https://github.com/MadryLab/trak/blob/main/trak/modelout_functions.py.
-        inputs, labels = batch
-        logits = model(inputs)
-
-        bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
-        logits_correct = logits[bindex, labels]
-
-        cloned_logits = logits.clone()
-        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
-
-        margins = logits_correct - cloned_logits.logsumexp(dim=-1)
-        return -margins.sum()
 
 
 def main():
@@ -111,6 +81,7 @@ def main():
         analysis_name="imagenet",
         model=model,
         task=task,
+        profile=args.profile,
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(
@@ -119,9 +90,13 @@ def main():
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     # Compute influence factors.
+    factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
+    if args.use_half_precision:
+        factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
+        factors_name += "_half"
     analyzer.fit_all_factors(
-        factors_name=args.factor_strategy,
+        factors_name=factors_name,
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
@@ -129,21 +104,26 @@ def main():
     )
 
     # Compute pairwise scores.
+    score_args = ScoreArguments()
+    scores_name = factor_args.strategy
+    if args.use_half_precision:
+        score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
+        scores_name += "_half"
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
-    score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
-    scores_name = args.factor_strategy
     if rank is not None:
+        score_args.query_gradient_rank = rank
+        score_args.num_query_gradient_accumulations = 10
         scores_name += f"_qlr{rank}"
     analyzer.compute_pairwise_scores(
-        score_args=score_args,
         scores_name=scores_name,
-        factors_name=args.factor_strategy,
+        score_args=score_args,
+        factors_name=factors_name,
         query_dataset=eval_dataset,
         query_indices=list(range(1000)),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
     scores = analyzer.load_pairwise_scores(scores_name)["all_modules"]
     logging.info(f"Scores shape: {scores.shape}")

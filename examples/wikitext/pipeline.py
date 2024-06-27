@@ -1,6 +1,7 @@
 from itertools import chain
 from typing import List
 
+import torch
 from datasets import load_dataset
 from torch import nn
 from torch.utils import data
@@ -8,6 +9,7 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from transformers.pytorch_utils import Conv1D
 
 
+@torch.no_grad()
 def replace_conv1d_modules(model: nn.Module) -> None:
     # GPT-2 is defined in terms of Conv1D. However, this does not work for Kronfluence.
     # Here, we convert these Conv1D modules to linear modules recursively.

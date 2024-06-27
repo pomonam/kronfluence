@@ -37,6 +37,7 @@ def parse_args():
         default="./checkpoints",
         help="A path that is storing the final checkpoint of the model.",
     )
+
     parser.add_argument(
         "--factor_strategy",
         type=str,
@@ -80,7 +81,7 @@ class RegressionTask(Task):
         model: nn.Module,
     ) -> torch.Tensor:
         # The measurement function is set as a training loss. Alternatively, we can
-        # use mean absolute error, as done in https://arxiv.org/abs/2405.12186.
+        # use the mean absolute error (MAE), as done in https://arxiv.org/abs/2405.12186.
         return self.compute_train_loss(batch, model, sample=False)
 
 
@@ -117,10 +118,11 @@ def main():
     analyzer.fit_all_factors(
         factors_name=args.factor_strategy,
         dataset=train_dataset,
-        per_device_batch_size=None,
+        per_device_batch_size=len(train_dataset),
         factor_args=factor_args,
         overwrite_output_dir=False,
     )
+
     # Compute pairwise scores.
     analyzer.compute_pairwise_scores(
         scores_name=args.factor_strategy,
@@ -129,6 +131,7 @@ def main():
         train_dataset=train_dataset,
         # Use full batch for computing query gradient.
         per_device_query_batch_size=len(eval_dataset),
+        per_device_train_batch_size=len(train_dataset),
         overwrite_output_dir=False,
     )
     scores = analyzer.load_pairwise_scores(args.factor_strategy)["all_modules"]

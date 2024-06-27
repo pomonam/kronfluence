@@ -1,0 +1,87 @@
+from itertools import chain
+from typing import Any, List
+
+from datasets import load_dataset
+from torch import nn
+from torch.utils.data import Dataset
+from transformers import AutoConfig, AutoModelForMultipleChoice, AutoTokenizer
+
+
+def construct_roberta() -> nn.Module:
+    config = AutoConfig.from_pretrained(
+        "FacebookAI/roberta-base",
+        trust_remote_code=True,
+    )
+    return AutoModelForMultipleChoice.from_pretrained(
+        "FacebookAI/roberta-base",
+        config=config,
+        trust_remote_code=True,
+    )
+
+
+def get_swag_dataset(
+    split: str,
+    indices: List[int] = None,
+) -> Dataset:
+    assert split in ["train", "eval_train", "valid"]
+
+    raw_datasets = load_dataset("swag", "regular")
+
+    tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base", use_fast=True, trust_remote_code=True)
+
+    column_names = raw_datasets["train"].column_names
+    ending_names = [f"ending{i}" for i in range(4)]
+    context_name = "sent1"
+    question_header_name = "sent2"
+    label_column_name = "label" if "label" in column_names else "labels"
+    padding = "max_length"
+
+    def preprocess_function(examples: Any):
+        first_sentences = [[context] * 4 for context in examples[context_name]]
+        question_headers = examples[question_header_name]
+        second_sentences = [
+            [f"{header} {examples[end][i]}" for end in ending_names] for i, header in enumerate(question_headers)
+        ]
+        labels = examples[label_column_name]
+
+        # Flatten out.
+        first_sentences = list(chain(*first_sentences))
+        second_sentences = list(chain(*second_sentences))
+
+        # Tokenize.
+        tokenized_examples = tokenizer(
+            first_sentences,
+            second_sentences,
+            max_length=128,
+            padding=padding,
+            truncation=True,
+        )
+        # Un-flatten.
+        tokenized_inputs = {k: [v[i : i + 4] for i in range(0, len(v), 4)] for k, v in tokenized_examples.items()}
+        tokenized_inputs["labels"] = labels
+        return tokenized_inputs
+
+    processed_datasets = raw_datasets.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=raw_datasets["train"].column_names,
+    )
+
+    if split == "train" or split == "eval_train":
+        dataset = processed_datasets["train"]
+        dataset = dataset.select(list(range(73_536)))
+    else:
+        dataset = processed_datasets["validation"]
+        dataset = dataset.select(list(range(2000)))
+
+    if indices is not None:
+        dataset = dataset.select(indices)
+
+    return dataset
+
+
+if __name__ == "__main__":
+    from kronfluence import Analyzer
+
+    model = construct_roberta()
+    print(Analyzer.get_module_summary(model))

@@ -9,8 +9,10 @@ from torch import nn
 
 from examples.cifar.pipeline import construct_resnet9, get_cifar10_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments
+from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
+from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
+from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 BATCH_TYPE = Tuple[torch.Tensor, torch.Tensor]
@@ -39,18 +41,29 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--factor_strategy",
+        type=str,
+        default="ekfac",
+        help="Strategy to compute influence factors.",
+    )
+    parser.add_argument(
         "--query_batch_size",
         type=int,
         default=1000,
         help="Batch size for computing query gradients.",
     )
     parser.add_argument(
-        "--factor_strategy",
-        type=str,
-        default="ekfac",
-        help="Strategy to compute influence factors.",
+        "--use_half_precision",
+        action="store_true",
+        default=False,
+        help="Whether to use half precision for computing factors and scores.",
     )
-
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        default=False,
+        help="Boolean flag to profile computations.",
+    )
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -71,12 +84,12 @@ class ClassificationTask(Task):
         if not sample:
             return F.cross_entropy(logits, labels, reduction="sum")
         with torch.no_grad():
-            probs = torch.nn.functional.softmax(logits, dim=-1)
+            probs = torch.nn.functional.softmax(logits.detach(), dim=-1)
             sampled_labels = torch.multinomial(
                 probs,
                 num_samples=1,
             ).flatten()
-        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
+        return F.cross_entropy(logits, sampled_labels, reduction="sum")
 
     def compute_measurement(
         self,
@@ -125,31 +138,43 @@ def main():
         analysis_name="cifar10",
         model=model,
         task=task,
+        profile=args.profile,
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(num_workers=4)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     # Compute influence factors.
+    factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
+    if args.use_half_precision:
+        factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
+        factors_name += "_half"
     analyzer.fit_all_factors(
-        factors_name=args.factor_strategy,
+        factors_name=factors_name,
+        factor_args=factor_args,
         dataset=train_dataset,
         per_device_batch_size=None,
-        factor_args=factor_args,
         overwrite_output_dir=False,
     )
+
     # Compute pairwise scores.
+    score_args = ScoreArguments()
+    scores_name = factor_args.strategy
+    if args.use_half_precision:
+        score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
+        scores_name += "_half"
     analyzer.compute_pairwise_scores(
-        scores_name=args.factor_strategy,
-        factors_name=args.factor_strategy,
+        scores_name=scores_name,
+        score_args=score_args,
+        factors_name=factors_name,
         query_dataset=eval_dataset,
         query_indices=list(range(2000)),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         overwrite_output_dir=False,
     )
-    scores = analyzer.load_pairwise_scores(args.factor_strategy)["all_modules"]
+    scores = analyzer.load_pairwise_scores(scores_name)["all_modules"]
     logging.info(f"Scores shape: {scores.shape}")
 
 

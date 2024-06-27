@@ -12,27 +12,31 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Load the scores. You might need to modify the path.
-    full_scores = Analyzer.load_file("influence_results/imagenet/scores_ekfac/pairwise_scores.safetensors")[
+    full_scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac/pairwise_scores.safetensors")[
         "all_modules"
     ]
-    lr_scores = Analyzer.load_file("influence_results/imagenet/scores_ekfac_qlr32/pairwise_scores.safetensors")[
+    half_scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac_half/pairwise_scores.safetensors")[
         "all_modules"
-    ]
+    ].float()
+    # half_scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac_half_compile/pairwise_scores.safetensors")[
+    #     "all_modules"
+    # ].float()
 
     # Only plot first 1000 points to avoid clutter.
+    index = 5
     plt.rcParams.update({"figure.dpi": 150})
     plt.rcParams.update(markers.with_edge())
     plt.rcParams["axes.axisbelow"] = True
-    plt.scatter(lr_scores[0][:1000], full_scores[0][:1000], edgecolor="k")
+    plt.scatter(half_scores[index], full_scores[index], edgecolor="k")
     plt.grid()
-    plt.xlabel("Full Rank Score")
-    plt.ylabel("Low Rank (32) Score")
+    plt.xlabel("bfloat32 Score")
+    plt.ylabel("float32 Score")
     plt.show()
 
     # Compute the averaged spearman correlation.
     all_corr = []
-    for i in range(100):
-        all_corr.append(spearmanr(full_scores[i], lr_scores[i])[0])
+    for i in range(481):
+        all_corr.append(spearmanr(full_scores[i], half_scores[i])[0])
     logging.info(f"Averaged Spearman Correlation: {np.array(all_corr).mean()}")
 
 

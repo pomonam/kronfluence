@@ -8,26 +8,27 @@ import torch.nn.functional as F
 from torch import nn
 from transformers import default_data_collator
 
-from examples.glue.pipeline import construct_bert, get_glue_dataset
+from examples.swag.pipeline import construct_roberta, get_swag_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
 from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
 from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
+from kronfluence.utils.model import apply_ddp
 
 BATCH_TYPE = Dict[str, torch.Tensor]
+try:
+    LOCAL_RANK = int(os.environ["LOCAL_RANK"])
+    WORLD_RANK = int(os.environ["RANK"])
+    WORLD_SIZE = int(os.environ["WORLD_SIZE"])
+except KeyError:
+    LOCAL_RANK = WORLD_RANK = WORLD_SIZE = 0
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on GLUE dataset.")
+    parser = argparse.ArgumentParser(description="Influence analysis on SWAG dataset.")
 
-    parser.add_argument(
-        "--dataset_name",
-        type=str,
-        default="sst2",
-        help="A name of GLUE dataset.",
-    )
     parser.add_argument(
         "--checkpoint_dir",
         type=str,
@@ -54,6 +55,18 @@ def parse_args():
         help="Whether to use half precision for computing factors and scores.",
     )
     parser.add_argument(
+        "--use_ddp",
+        action="store_true",
+        default=False,
+        help="Whether to use DDP for computing factors and scores.",
+    )
+    parser.add_argument(
+        "--factor_batch_size",
+        type=int,
+        default=128,
+        help="Batch size for computing influence factors.",
+    )
+    parser.add_argument(
         "--query_batch_size",
         type=int,
         default=100,
@@ -75,13 +88,11 @@ def parse_args():
 
     if args.checkpoint_dir is not None:
         os.makedirs(args.checkpoint_dir, exist_ok=True)
-        args.checkpoint_dir = os.path.join(args.checkpoint_dir, args.dataset_name)
-        os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     return args
 
 
-class TextClassificationTask(Task):
+class MultipleChoiceTask(Task):
     def compute_train_loss(
         self,
         batch: BATCH_TYPE,
@@ -91,18 +102,17 @@ class TextClassificationTask(Task):
         logits = model(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-            token_type_ids=batch["token_type_ids"],
         ).logits
 
         if not sample:
             return F.cross_entropy(logits, batch["labels"], reduction="sum")
         with torch.no_grad():
-            probs = torch.nn.functional.softmax(logits.detach(), dim=-1)
+            probs = torch.nn.functional.softmax(logits, dim=-1)
             sampled_labels = torch.multinomial(
                 probs,
                 num_samples=1,
             ).flatten()
-        return F.cross_entropy(logits, sampled_labels, reduction="sum")
+        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
 
     def compute_measurement(
         self,
@@ -113,7 +123,6 @@ class TextClassificationTask(Task):
         logits = model(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-            token_type_ids=batch["token_type_ids"],
         ).logits
 
         labels = batch["labels"]
@@ -135,28 +144,35 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Prepare the dataset.
-    train_dataset = get_glue_dataset(
-        data_name=args.dataset_name,
+    train_dataset = get_swag_dataset(
         split="eval_train",
     )
-    eval_dataset = get_glue_dataset(
-        data_name=args.dataset_name,
+    eval_dataset = get_swag_dataset(
         split="valid",
     )
 
     # Prepare the trained model.
-    model = construct_bert()
+    model = construct_roberta()
     checkpoint_path = os.path.join(args.checkpoint_dir, "model.pth")
     if not os.path.isfile(checkpoint_path):
         raise ValueError(f"No checkpoint found at {checkpoint_path}.")
     model.load_state_dict(torch.load(checkpoint_path))
 
     # Define task and prepare model.
-    task = TextClassificationTask()
+    task = MultipleChoiceTask()
     model = prepare_model(model, task)
 
+    if args.use_ddp:
+        model = apply_ddp(
+            model=model,
+            local_rank=LOCAL_RANK,
+            rank=WORLD_RANK,
+            world_size=WORLD_SIZE,
+        )
+        print(model)
+
     analyzer = Analyzer(
-        analysis_name=args.dataset_name,
+        analysis_name="swag",
         model=model,
         task=task,
         profile=args.profile,
@@ -168,16 +184,18 @@ def main():
     # Compute influence factors.
     factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
+    # factor_args.lambda_iterative_aggregate = True
     if args.use_half_precision:
         factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
         factors_name += "_half"
+    if args.use_ddp:
+        factors_name += "_ddp"
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        per_device_batch_size=None,
+        per_device_batch_size=args.factor_batch_size,
         factor_args=factor_args,
         overwrite_output_dir=False,
-        initial_per_device_batch_size_attempt=512,
     )
 
     # Compute pairwise scores.
@@ -191,6 +209,8 @@ def main():
         score_args.query_gradient_rank = rank
         score_args.num_query_gradient_accumulations = 10
         scores_name += f"_qlr{rank}"
+    if args.use_ddp:
+        scores_name += "_ddp"
     analyzer.compute_pairwise_scores(
         score_args=score_args,
         scores_name=scores_name,
