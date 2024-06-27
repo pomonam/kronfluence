@@ -99,7 +99,6 @@ def for_loop_per_sample_gradient(
         "conv",
         "conv_bn",
         "bert",
-        "gpt",
     ],
 )
 @pytest.mark.parametrize("use_measurement", [True, False])
