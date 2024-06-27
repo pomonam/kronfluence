@@ -1,4 +1,4 @@
-from itertools import chain
+import copy
 from typing import List
 
 from datasets import load_dataset
@@ -22,20 +22,21 @@ def construct_llama3() -> nn.Module:
     return model
 
 
-def get_wikitext_dataset(
-    split: str,
+def get_openwebtext_dataset(
     indices: List[int] = None,
 ) -> data.Dataset:
-    assert split in ["train", "eval_train", "valid"]
+    raw_datasets = load_dataset("stas/openwebtext-10k")
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B", use_fast=True, trust_remote_code=True)
 
-    raw_datasets = load_dataset("wikitext", "wikitext-2-raw-v1")
-    tokenizer = AutoTokenizer.from_pretrained("gpt2", use_fast=True, trust_remote_code=True)
+    tokenizer.pad_token = tokenizer.eos_token
 
     column_names = raw_datasets["train"].column_names
     text_column_name = "text" if "text" in column_names else column_names[0]
 
     def tokenize_function(examples):
-        return tokenizer(examples[text_column_name])
+        results = tokenizer(examples[text_column_name], truncation=True, padding=True, max_length=64)
+        results["labels"] = results["input_ids"].copy()
+        return results
 
     tokenized_datasets = raw_datasets.map(
         tokenize_function,
@@ -45,33 +46,9 @@ def get_wikitext_dataset(
         load_from_cache_file=True,
         desc="Running tokenizer on dataset",
     )
-    block_size = 512
 
-    def group_texts(examples):
-        concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
-        total_length = len(concatenated_examples[list(examples.keys())[0]])
-        total_length = (total_length // block_size) * block_size
-        result = {
-            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-            for k, t in concatenated_examples.items()
-        }
-        result["labels"] = result["input_ids"].copy()
-        return result
-
-    lm_datasets = tokenized_datasets.map(
-        group_texts,
-        batched=True,
-        num_proc=None,
-        load_from_cache_file=True,
-        desc=f"Grouping texts in chunks of {block_size}",
-    )
-
-    if split in ["train", "eval_train"]:
-        train_dataset = lm_datasets["train"]
-        ds = train_dataset
-    else:
-        eval_dataset = lm_datasets["validation"]
-        ds = eval_dataset
+    train_dataset = tokenized_datasets["train"]
+    ds = train_dataset
 
     if indices is not None:
         ds = ds.select(indices)
@@ -79,8 +56,46 @@ def get_wikitext_dataset(
     return ds
 
 
+def get_custom_dataset(
+    indices: List[int] = None,
+) -> data.Dataset:
+    data_kwargs = {
+        "path": "json",
+        "data_files": f"./data/data.json",
+        "num_proc": 4,
+    }
+    raw_datasets = load_dataset(**data_kwargs)["train"]
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B", use_fast=True, trust_remote_code=True)
+
+    def tokenize_function(examples):
+        data_dict = {}
+        prompt_results = tokenizer(text=examples["prompt"])
+        completion_results = tokenizer(text=examples["completion"])
+        input_ids = prompt_results["input_ids"] + completion_results["input_ids"][1:]
+        attention_mask = prompt_results["attention_mask"] + completion_results["attention_mask"][1:]
+        data_dict["input_ids"] = input_ids
+        data_dict["labels"] = copy.deepcopy(input_ids)
+        data_dict["labels"][:len(prompt_results["input_ids"])] = [-100 for _ in range(len(prompt_results["input_ids"]))]
+        data_dict["attention_mask"] = attention_mask
+        return data_dict
+
+    tokenized_datasets = raw_datasets.map(
+        tokenize_function,
+        batched=False,
+        num_proc=None,
+        load_from_cache_file=True,
+        desc="Running tokenizer on dataset",
+    )
+
+    if indices is not None:
+        tokenized_datasets = tokenized_datasets.select(indices)
+
+    return tokenized_datasets
+
+
 if __name__ == "__main__":
     from kronfluence import Analyzer
 
     model = construct_llama3()
     print(Analyzer.get_module_summary(model))
+

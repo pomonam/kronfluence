@@ -28,8 +28,9 @@ This will fine-tune the model using the specified hyperparameters and save the f
 To obtain pairwise influence scores on 2000 query data points using `ekfac`, run the following command:
 
 ```bash
-python analyze.py --query_batch_size 100 \
+python analyze.py --query_batch_size 64 \
     --train_batch_size 128 \
+    --use_half_precision \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
 ```

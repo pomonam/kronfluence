@@ -68,7 +68,7 @@ def get_glue_dataset(
     raw_datasets = raw_datasets.map(
         preprocess_function,
         batched=True,
-        load_from_cache_file=not False,
+        load_from_cache_file=True,
     )
 
     if split in ["train", "eval_train"]:
