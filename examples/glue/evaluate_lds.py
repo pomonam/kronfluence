@@ -10,8 +10,8 @@ from kronfluence.analyzer import Analyzer
 
 
 def evaluate_correlations(scores: torch.Tensor) -> float:
-    margins = torch.from_numpy(torch.load(open(f"files/margins.pt", "rb")))
-    masks = torch.from_numpy(torch.load(open(f"files/masks.pt", "rb"))).float()
+    margins = torch.from_numpy(torch.load(open("files/margins.pt", "rb")))
+    masks = torch.from_numpy(torch.load(open("files/masks.pt", "rb"))).float()
 
     val_indices = np.arange(277)
     preds = masks @ scores.T

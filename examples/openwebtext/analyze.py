@@ -6,15 +6,21 @@ from typing import Dict, List, Optional
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers import default_data_collator, AutoTokenizer
+from transformers import default_data_collator
 
-from examples.openwebtext.pipeline import get_openwebtext_dataset, get_custom_dataset, construct_llama3
+from examples.openwebtext.pipeline import (
+    construct_llama3,
+    get_custom_dataset,
+    get_openwebtext_dataset,
+)
 from examples.wikitext.pipeline import construct_gpt2, get_wikitext_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
-from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments, \
-    extreme_reduce_memory_factor_arguments
+from kronfluence.utils.common.factor_arguments import (
+    all_low_precision_factor_arguments,
+    extreme_reduce_memory_factor_arguments,
+)
 from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
@@ -102,7 +108,9 @@ class LanguageModelingTask(Task):
             labels = batch["labels"]
             shift_labels = labels[..., 1:].contiguous()
             reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
-            summed_loss = F.cross_entropy(reshaped_shift_logits, shift_labels.view(-1), reduction="sum", ignore_index=-100)
+            summed_loss = F.cross_entropy(
+                reshaped_shift_logits, shift_labels.view(-1), reduction="sum", ignore_index=-100
+            )
         else:
             reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             with torch.no_grad():

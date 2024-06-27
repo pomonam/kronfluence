@@ -61,7 +61,7 @@ def get_custom_dataset(
 ) -> data.Dataset:
     data_kwargs = {
         "path": "json",
-        "data_files": f"./data/data.json",
+        "data_files": "./data/data.json",
         "num_proc": 4,
     }
     raw_datasets = load_dataset(**data_kwargs)["train"]
@@ -75,7 +75,9 @@ def get_custom_dataset(
         attention_mask = prompt_results["attention_mask"] + completion_results["attention_mask"][1:]
         data_dict["input_ids"] = input_ids
         data_dict["labels"] = copy.deepcopy(input_ids)
-        data_dict["labels"][:len(prompt_results["input_ids"])] = [-100 for _ in range(len(prompt_results["input_ids"]))]
+        data_dict["labels"][: len(prompt_results["input_ids"])] = [
+            -100 for _ in range(len(prompt_results["input_ids"]))
+        ]
         data_dict["attention_mask"] = attention_mask
         return data_dict
 
@@ -98,4 +100,3 @@ if __name__ == "__main__":
 
     model = construct_llama3()
     print(Analyzer.get_module_summary(model))
-
