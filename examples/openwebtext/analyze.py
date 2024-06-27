@@ -1,27 +1,27 @@
 import argparse
 import logging
-import os
 from typing import Dict, List, Optional
 
 import torch
 import torch.nn.functional as F
 from accelerate import Accelerator
 from torch import nn
-from transformers import default_data_collator, AutoTokenizer
+from transformers import default_data_collator
+
 from examples.openwebtext.pipeline import (
     construct_llama3,
     get_custom_dataset,
-    get_openwebtext_dataset, MODEL_NAME,
+    get_openwebtext_dataset,
 )
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.task import Task
-from kronfluence.utils.common.factor_arguments import reduce_memory_factor_arguments, \
-    extreme_reduce_memory_factor_arguments
+from kronfluence.utils.common.factor_arguments import (
+    extreme_reduce_memory_factor_arguments,
+)
 from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 BATCH_TYPE = Dict[str, torch.Tensor]
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True, trust_remote_code=True)
 
 if torch.cuda.is_available():
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument(
         "--factor_strategy",
         type=str,
-        default="identity",
+        default="ekfac",
         help="Strategy to compute influence factors.",
     )
     parser.add_argument(
@@ -51,13 +51,13 @@ def parse_args():
     parser.add_argument(
         "--factor_batch_size",
         type=int,
-        default=2,
+        default=4,
         help="Batch size for computing influence factors.",
     )
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=8,
+        default=4,
         help="Batch size for computing query gradients.",
     )
     parser.add_argument(
@@ -81,7 +81,7 @@ class LanguageModelingTask(Task):
         logits = model(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-        ).logits
+        ).logits.float()
         shift_logits = logits[..., :-1, :].contiguous()
         reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
 
@@ -98,9 +98,7 @@ class LanguageModelingTask(Task):
                     probs,
                     num_samples=1,
                 ).flatten()
-            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels,
-                                          ignore_index=-100,
-                                          reduction="sum")
+            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels, ignore_index=-100, reduction="sum")
         return summed_loss
 
     def compute_measurement(
@@ -111,7 +109,7 @@ class LanguageModelingTask(Task):
         logits = model(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-        ).logits
+        ).logits.float()
         shift_labels = batch["labels"][..., 1:].contiguous().view(-1)
         shift_logits = logits[..., :-1, :].contiguous().view(-1, logits.size(-1))
         return F.cross_entropy(shift_logits, shift_labels, ignore_index=-100, reduction="sum")
@@ -123,12 +121,6 @@ class LanguageModelingTask(Task):
             total_modules.append(f"model.layers.{i}.mlp.gate_proj")
             total_modules.append(f"model.layers.{i}.mlp.up_proj")
             total_modules.append(f"model.layers.{i}.mlp.down_proj")
-
-        # for i in range(32):
-        #     total_modules.append(f"model.layers.{i}.self_attn.q_proj")
-        #     total_modules.append(f"model.layers.{i}.self_attn.k_proj")
-        #     total_modules.append(f"model.layers.{i}.self_attn.v_proj")
-        #     total_modules.append(f"model.layers.{i}.self_attn.o_proj")
 
         return total_modules
 
@@ -145,7 +137,7 @@ def main():
     eval_dataset = get_custom_dataset()
 
     # Prepare the trained model.
-    model = construct_llama3()
+    model = construct_llama3().to(dtype=torch.bfloat16)
 
     # Define task and prepare model.
     task = LanguageModelingTask()
@@ -167,10 +159,6 @@ def main():
     # Compute influence factors.
     factors_name = args.factor_strategy
     factor_args = extreme_reduce_memory_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
-    # factor_args.covariance_module_partition_size = 2
-    # factor_args.lambda_module_partition_size = 2
-    # factor_args.covariance_max_examples = 100_000
-    # factor_args.lambda_max_examples = 100_000
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
