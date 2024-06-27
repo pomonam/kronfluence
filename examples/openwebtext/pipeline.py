@@ -7,9 +7,10 @@ from torch.utils import data
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 
-# MODEL_NAME = "meta-llama/Meta-Llama-3-8B"
-MODEL_NAME = "EleutherAI/pythia-70m"
-MAX_LENGTH = 128
+MODEL_NAME = "meta-llama/Meta-Llama-3-8B"
+# MODEL_NAME = "EleutherAI/pythia-70m"
+
+MAX_LENGTH = 512
 
 
 def construct_llama3() -> nn.Module:
@@ -101,7 +102,7 @@ def get_custom_dataset(
 if __name__ == "__main__":
     from kronfluence import Analyzer
 
-    model = construct_llama3()
-    print(Analyzer.get_module_summary(model))
+    # model = construct_llama3()
+    # print(Analyzer.get_module_summary(model))
 
     get_openwebtext_dataset()
