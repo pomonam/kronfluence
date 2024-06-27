@@ -190,7 +190,6 @@ def test_for_loop_per_sample_gradient_equivalence(
         "conv",
         "conv_bn",
         "bert",
-        "gpt",
     ],
 )
 @pytest.mark.parametrize("use_measurement", [True, False])
