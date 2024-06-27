@@ -13,7 +13,8 @@ from examples.wikitext.pipeline import construct_gpt2, get_wikitext_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
-from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
+from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments, \
+    extreme_reduce_memory_factor_arguments
 from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
@@ -170,7 +171,7 @@ def main():
 
     # Compute influence factors.
     factors_name = args.factor_strategy
-    factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
+    factor_args = extreme_reduce_memory_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
