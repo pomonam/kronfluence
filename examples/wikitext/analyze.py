@@ -92,14 +92,13 @@ class LanguageModelingTask(Task):
         ).logits
 
         shift_logits = logits[..., :-1, :].contiguous()
+        reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
 
         if not sample:
             labels = batch["labels"]
             shift_labels = labels[..., 1:].contiguous()
-            reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             summed_loss = F.cross_entropy(reshaped_shift_logits, shift_labels.view(-1), reduction="sum")
         else:
-            reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             with torch.no_grad():
                 probs = torch.nn.functional.softmax(reshaped_shift_logits.detach(), dim=-1)
                 sampled_labels = torch.multinomial(

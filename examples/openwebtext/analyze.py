@@ -5,13 +5,13 @@ from typing import Dict, List, Optional
 
 import torch
 import torch.nn.functional as F
+from accelerate import Accelerator
 from torch import nn
-from transformers import default_data_collator
-
+from transformers import default_data_collator, AutoTokenizer
 from examples.openwebtext.pipeline import (
     construct_llama3,
     get_custom_dataset,
-    get_openwebtext_dataset,
+    get_openwebtext_dataset, MODEL_NAME,
 )
 from examples.wikitext.pipeline import construct_gpt2, get_wikitext_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
@@ -19,32 +19,25 @@ from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
 from kronfluence.utils.common.factor_arguments import (
     all_low_precision_factor_arguments,
-    extreme_reduce_memory_factor_arguments,
+    extreme_reduce_memory_factor_arguments, reduce_memory_factor_arguments,
 )
 from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 BATCH_TYPE = Dict[str, torch.Tensor]
-
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True, trust_remote_code=True)
 
 if torch.cuda.is_available():
     torch.backends.cuda.matmul.allow_tf32 = True
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on WikiText dataset.")
-
-    parser.add_argument(
-        "--checkpoint_dir",
-        type=str,
-        default="./checkpoints",
-        help="A path that is storing the final checkpoint of the model.",
-    )
+    parser = argparse.ArgumentParser(description="Influence analysis on Openwebtext dataset.")
 
     parser.add_argument(
         "--factor_strategy",
         type=str,
-        default="ekfac",
+        default="identity",
         help="Strategy to compute influence factors.",
     )
     parser.add_argument(
@@ -60,16 +53,10 @@ def parse_args():
         help="Whether to use half precision for computing factors and scores.",
     )
     parser.add_argument(
-        "--use_compile",
-        action="store_true",
-        default=False,
-        help="Whether to use torch compile for computing factors and scores.",
-    )
-    parser.add_argument(
-        "--query_batch_size",
+        "--factor_batch_size",
         type=int,
-        default=1,
-        help="Batch size for computing query gradients.",
+        default=2,
+        help="Batch size for computing influence factors.",
     )
     parser.add_argument(
         "--train_batch_size",
@@ -84,9 +71,6 @@ def parse_args():
         help="Boolean flag to profile computations.",
     )
     args = parser.parse_args()
-
-    if args.checkpoint_dir is not None:
-        os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     return args
 
@@ -103,23 +87,24 @@ class LanguageModelingTask(Task):
             attention_mask=batch["attention_mask"],
         ).logits
         shift_logits = logits[..., :-1, :].contiguous()
+        reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
 
         if not sample:
             labels = batch["labels"]
             shift_labels = labels[..., 1:].contiguous()
-            reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             summed_loss = F.cross_entropy(
                 reshaped_shift_logits, shift_labels.view(-1), reduction="sum", ignore_index=-100
             )
         else:
-            reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             with torch.no_grad():
                 probs = torch.nn.functional.softmax(reshaped_shift_logits.detach(), dim=-1)
                 sampled_labels = torch.multinomial(
                     probs,
                     num_samples=1,
                 ).flatten()
-            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels, reduction="sum")
+            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels,
+                                          ignore_index=-100,
+                                          reduction="sum")
         return summed_loss
 
     def compute_measurement(
@@ -131,22 +116,9 @@ class LanguageModelingTask(Task):
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
         ).logits
-        shift_logits = logits[..., :-1, :].contiguous()
-        labels = batch["labels"]
-        shift_labels = labels[..., 1:].contiguous().view(-1)
-        reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
-        return F.cross_entropy(reshaped_shift_logits, shift_labels, reduction="sum", ignore_index=-100)
-
-    def tracked_modules(self) -> List[str]:
-        total_modules = []
-
-        for i in range(32):
-            # Only uses the MLP modules.
-            total_modules.append(f"model.layers.{i}.mlp.gate_proj")
-            total_modules.append(f"model.layers.{i}.mlp.up_proj")
-            total_modules.append(f"model.layers.{i}.mlp.down_proj")
-
-        return total_modules
+        shift_labels = batch["labels"][..., 1:].contiguous().view(-1)
+        shift_logits = logits[..., :-1, :].contiguous().view(-1, logits.size(-1))
+        return F.cross_entropy(shift_logits, shift_labels, ignore_index=-100, reduction="sum")
 
     def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
         return batch["attention_mask"]
@@ -161,11 +133,14 @@ def main():
     eval_dataset = get_custom_dataset()
 
     # Prepare the trained model.
-    model = construct_llama3().to(dtype=torch.bfloat16)
+    model = construct_llama3()
 
     # Define task and prepare model.
     task = LanguageModelingTask()
     model = prepare_model(model, task)
+
+    accelerator = Accelerator()
+    model = accelerator.prepare_model(model)
 
     analyzer = Analyzer(
         analysis_name="openwebtext",
@@ -174,27 +149,27 @@ def main():
         profile=args.profile,
     )
     # Configure parameters for DataLoader.
-    dataloader_kwargs = DataLoaderKwargs(collate_fn=default_data_collator)
+    dataloader_kwargs = DataLoaderKwargs(num_workers=4, collate_fn=default_data_collator)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     # Compute influence factors.
     factors_name = args.factor_strategy
-    factor_args = extreme_reduce_memory_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
+    factor_args = reduce_memory_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
+    factor_args.covariance_module_partition_size = 2
+    factor_args.lambda_module_partition_size = 2
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        per_device_batch_size=None,
+        per_device_batch_size=args.factor_batch_size,
         factor_args=factor_args,
         overwrite_output_dir=False,
-        initial_per_device_batch_size_attempt=64,
     )
 
     # Compute pairwise scores.
     scores_name = factor_args.strategy
     score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
-
-    rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     score_args.num_query_gradient_accumulations = 10
+    rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     if rank is not None:
         score_args.query_gradient_rank = rank
         scores_name += f"_qlr{rank}"
@@ -203,9 +178,8 @@ def main():
         score_args=score_args,
         factors_name=factors_name,
         query_dataset=eval_dataset,
-        query_indices=list(range(min([len(eval_dataset), 2000]))),
         train_dataset=train_dataset,
-        per_device_query_batch_size=args.query_batch_size,
+        per_device_query_batch_size=1,
         per_device_train_batch_size=args.train_batch_size,
         overwrite_output_dir=False,
     )
