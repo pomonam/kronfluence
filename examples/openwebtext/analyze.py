@@ -123,14 +123,16 @@ class LanguageModelingTask(Task):
     def tracked_modules(self) -> List[str]:
         total_modules = []
 
-        # Only use MLP modules.
-        for i in range(12):
-            total_modules.append(f"transformer.h.{i}.attn.c_attn")
-            total_modules.append(f"transformer.h.{i}.attn.c_proj")
+        for i in range(32):
+            total_modules.append(f"model.layers.{i}.mlp.gate_proj")
+            total_modules.append(f"model.layers.{i}.mlp.up_proj")
+            total_modules.append(f"model.layers.{i}.mlp.down_proj")
 
-        for i in range(12):
-            total_modules.append(f"transformer.h.{i}.mlp.c_fc")
-            total_modules.append(f"transformer.h.{i}.mlp.c_proj")
+        for i in range(32):
+            total_modules.append(f"model.layers.{i}.self_attn.q_proj")
+            total_modules.append(f"model.layers.{i}.self_attn.k_proj")
+            total_modules.append(f"model.layers.{i}.self_attn.v_proj")
+            total_modules.append(f"model.layers.{i}.self_attn.o_proj")
 
         return total_modules
 
