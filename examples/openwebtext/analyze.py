@@ -15,7 +15,8 @@ from examples.openwebtext.pipeline import (
 )
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.task import Task
-from kronfluence.utils.common.factor_arguments import reduce_memory_factor_arguments
+from kronfluence.utils.common.factor_arguments import reduce_memory_factor_arguments, \
+    extreme_reduce_memory_factor_arguments
 from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
@@ -165,7 +166,7 @@ def main():
 
     # Compute influence factors.
     factors_name = args.factor_strategy
-    factor_args = reduce_memory_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
+    factor_args = extreme_reduce_memory_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
     # factor_args.covariance_module_partition_size = 2
     # factor_args.lambda_module_partition_size = 2
     # factor_args.covariance_max_examples = 100_000
