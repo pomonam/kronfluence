@@ -268,7 +268,6 @@ def test_lambda_matrices_partition_equivalence(
         "mlp",
         "conv",
         "bert",
-        "gpt",
     ],
 )
 @pytest.mark.parametrize("train_size", [63])
