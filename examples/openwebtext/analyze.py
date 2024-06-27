@@ -166,8 +166,8 @@ def main():
     # Compute influence factors.
     factors_name = args.factor_strategy
     factor_args = reduce_memory_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
-    factor_args.covariance_module_partition_size = 2
-    factor_args.lambda_module_partition_size = 2
+    # factor_args.covariance_module_partition_size = 2
+    # factor_args.lambda_module_partition_size = 2
     # factor_args.covariance_max_examples = 100_000
     # factor_args.lambda_max_examples = 100_000
     analyzer.fit_all_factors(
