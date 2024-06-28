@@ -21,7 +21,7 @@ def construct_llama3() -> nn.Module:
         config=config,
         ignore_mismatched_sizes=False,
         trust_remote_code=True,
-    )
+    ).to(dtype=torch.bfloat16)
     return model
 
 
