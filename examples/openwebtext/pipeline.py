@@ -13,7 +13,7 @@ MAX_LENGTH = 512
 
 def construct_llama3() -> nn.Module:
     config = AutoConfig.from_pretrained(
-        MODEL_NAME, trust_remote_code=True, device_map="auto"
+        MODEL_NAME, trust_remote_code=True, torch_dtype=torch.bfloat16, device_map="auto"
     )
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_NAME,
