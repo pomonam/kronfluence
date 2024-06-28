@@ -22,6 +22,11 @@ from tests.testable_tasks.language_modeling import (
     make_gpt_dataset,
     make_tiny_gpt,
 )
+from tests.testable_tasks.multiple_choice import (
+    MultipleChoiceTask,
+    make_roberta_dataset,
+    make_tiny_roberta,
+)
 from tests.testable_tasks.regression import (
     GradientCheckpointRegressionTask,
     RegressionTask,
@@ -107,6 +112,12 @@ def prepare_test(
         train_dataset = make_bert_dataset(num_data=train_size, seed=seed, do_not_pad=do_not_pad)
         query_dataset = make_bert_dataset(num_data=query_size, seed=seed + 1, do_not_pad=do_not_pad)
         task = WrongTextClassificationTask()
+        data_collator = default_data_collator
+    elif test_name == "roberta":
+        model = make_tiny_roberta(seed=seed)
+        train_dataset = make_roberta_dataset(num_data=train_size, seed=seed)
+        query_dataset = make_roberta_dataset(num_data=query_size, seed=seed + 1)
+        task = MultipleChoiceTask()
         data_collator = default_data_collator
     elif test_name == "gpt":
         model = make_tiny_gpt(seed=seed)

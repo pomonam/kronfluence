@@ -39,7 +39,6 @@ from kronfluence.utils.exceptions import (
     TrackedModuleNotFoundError,
 )
 from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger
-from kronfluence.utils.model import apply_ddp
 from kronfluence.utils.save import (
     FACTOR_ARGUMENTS_NAME,
     FACTOR_SAVE_PREFIX,
@@ -94,11 +93,10 @@ class Computer(ABC):
             )
             self.logger.warning(warning_msg)
             self.model.to(self.state.device)
-            self.model = apply_ddp(
-                model=self.model,
-                local_rank=self.state.local_process_index,
-                rank=self.state.process_index,
-                world_size=self.state.num_processes,
+            self.model = DDP(
+                self.model,
+                device_ids=[self.state.local_process_index],
+                output_device=self.state.local_process_index,
             )
 
         if cpu and isinstance(model, (DataParallel, DDP, FSDP)):

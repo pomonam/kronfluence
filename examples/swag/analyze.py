@@ -93,6 +93,8 @@ def parse_args():
 
 
 class MultipleChoiceTask(Task):
+    do_post_process_per_sample_gradient = True
+
     def compute_train_loss(
         self,
         batch: BATCH_TYPE,
@@ -138,6 +140,12 @@ class MultipleChoiceTask(Task):
     def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
         return batch["attention_mask"]
 
+    def post_process_per_sample_gradient(self, module_name: str, gradient: torch.Tensor) -> torch.Tensor:
+        del module_name
+        total_batch_size = gradient.size(0)
+        true_batch_size = int(total_batch_size / 4)
+        return gradient.reshape(true_batch_size, 4, *gradient.size()[1:]).sum(dim=1)
+
 
 def main():
     args = parse_args()
@@ -169,7 +177,6 @@ def main():
             rank=WORLD_RANK,
             world_size=WORLD_SIZE,
         )
-        print(model)
 
     analyzer = Analyzer(
         analysis_name="swag",
@@ -184,7 +191,6 @@ def main():
     # Compute influence factors.
     factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
-    # factor_args.lambda_iterative_aggregate = True
     if args.use_half_precision:
         factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
         factors_name += "_half"

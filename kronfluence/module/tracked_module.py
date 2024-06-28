@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import torch
 import torch.distributed as dist
@@ -60,6 +60,7 @@ class TrackedModule(nn.Module):
         original_module: nn.Module,
         factor_args: Optional[FactorArguments] = None,
         score_args: Optional[ScoreArguments] = None,
+        per_sample_gradient_process_fnc: Optional[Callable] = None,
     ) -> None:
         """Initializes an instance of the TrackedModule class.
 
@@ -72,6 +73,8 @@ class TrackedModule(nn.Module):
                 Arguments for computing influence factors.
             score_args (ScoreArguments, optional):
                 Arguments for computing influence scores.
+            per_sample_gradient_process_fnc (Callable, optional):
+                An optional function to post process per-sample-gradient.
         """
         super().__init__()
 
@@ -87,6 +90,7 @@ class TrackedModule(nn.Module):
         )
         self.factor_args = FactorArguments() if factor_args is None else factor_args
         self.score_args = ScoreArguments() if score_args is None else score_args
+        self.per_sample_gradient_process_fnc = per_sample_gradient_process_fnc
 
         self._cached_activations: Optional[Union[List[torch.Tensor]], torch.Tensor] = None
         self._cached_per_sample_gradient: Optional[torch.Tensor] = None
@@ -471,6 +475,10 @@ class TrackedModule(nn.Module):
             ).to(dtype=self.factor_args.lambda_dtype)
             del self._cached_activations
             self._cached_activations = None
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             self._update_lambda_matrix(per_sample_gradient=per_sample_gradient)
 
         @torch.no_grad()
@@ -480,6 +488,10 @@ class TrackedModule(nn.Module):
                 input_activation=cached_activation.to(device=output_gradient.device),
                 output_gradient=output_gradient.detach().to(dtype=self.factor_args.per_sample_gradient_dtype),
             )
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             if self._cached_per_sample_gradient is None:
                 self._cached_per_sample_gradient = per_sample_gradient
             else:
@@ -621,6 +633,10 @@ class TrackedModule(nn.Module):
             ).to(dtype=self.score_args.precondition_dtype)
             del self._cached_activations
             self._cached_activations = None
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             self._compute_preconditioned_gradient(per_sample_gradient=per_sample_gradient)
 
         @torch.no_grad()
@@ -630,6 +646,10 @@ class TrackedModule(nn.Module):
                 input_activation=cached_activation.to(device=output_gradient.device),
                 output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
             )
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             if self._cached_per_sample_gradient is None:
                 self._cached_per_sample_gradient = per_sample_gradient
             else:
@@ -817,6 +837,10 @@ class TrackedModule(nn.Module):
             ).to(dtype=self.score_args.score_dtype)
             del self._cached_activations
             self._cached_activations = None
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             self._compute_pairwise_score(per_sample_gradient=per_sample_gradient)
 
         @torch.no_grad()
@@ -826,6 +850,10 @@ class TrackedModule(nn.Module):
                 input_activation=cached_activation.to(device=output_gradient.device),
                 output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
             )
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             if self._cached_per_sample_gradient is None:
                 self._cached_per_sample_gradient = per_sample_gradient
             else:
@@ -900,6 +928,10 @@ class TrackedModule(nn.Module):
             ).to(dtype=self.score_args.precondition_dtype)
             del self._cached_activations
             self._cached_activations = None
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             self._compute_self_score(per_sample_gradient=per_sample_gradient)
 
         @torch.no_grad()
@@ -909,6 +941,10 @@ class TrackedModule(nn.Module):
                 input_activation=cached_activation.to(device=output_gradient.device),
                 output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
             )
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             if self._cached_per_sample_gradient is None:
                 self._cached_per_sample_gradient = per_sample_gradient
             else:
@@ -974,6 +1010,10 @@ class TrackedModule(nn.Module):
             ).to(dtype=self.score_args.score_dtype)
             del self._cached_activations
             self._cached_activations = None
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             self._compute_self_measurement_score(per_sample_gradient=per_sample_gradient)
 
         @torch.no_grad()
@@ -983,6 +1023,10 @@ class TrackedModule(nn.Module):
                 input_activation=cached_activation.to(device=output_gradient.device),
                 output_gradient=output_gradient.detach().to(dtype=self.score_args.per_sample_gradient_dtype),
             )
+            if self.per_sample_gradient_process_fnc is not None:
+                per_sample_gradient = self.per_sample_gradient_process_fnc(
+                    module_name=self.name, gradient=per_sample_gradient
+                )
             if self._cached_per_sample_gradient is None:
                 self._cached_per_sample_gradient = per_sample_gradient
             else:

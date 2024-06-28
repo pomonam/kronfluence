@@ -12,6 +12,8 @@ class Task(ABC):
     with custom pipelines (models, data loaders, training objectives).
     """
 
+    do_post_process_per_sample_gradient: bool = False
+
     @abstractmethod
     def compute_train_loss(
         self,
@@ -89,3 +91,20 @@ class Task(ABC):
                 (e.g., encoder-decoder architectures), returns a dictionary mapping module names to their
                 corresponding masks.
         """
+
+    def post_process_per_sample_gradient(self, module_name: str, gradient: torch.Tensor) -> torch.Tensor:
+        """Post-processes the per-sample-gradient of the module with the given name. The attribute
+        `do_post_process_per_sample_gradient` needs to be set to `True` to enable post-processing.
+
+        Args:
+            module_name (str):
+                Name of the module.
+            gradient (torch.Tensor):
+                The per-sample-gradient tensor. The per-sample-gradient is a 3-dimensional matrix
+                with dimension `batch_size x gradient_dim x activation_dim`.
+
+        Returns:
+            torch.Tensor:
+                The modified per-sample-gradient tensor.
+        """
+        return gradient

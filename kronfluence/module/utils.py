@@ -68,6 +68,9 @@ def wrap_tracked_modules(
             tracked_module = TrackedModule.SUPPORTED_MODULES[type(module)](
                 name=module_name,
                 original_module=module,
+                per_sample_gradient_process_fnc=task.post_process_per_sample_gradient
+                if task.do_post_process_per_sample_gradient
+                else None,
                 factor_args=factor_args,
                 score_args=score_args,
             )

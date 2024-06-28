@@ -13,7 +13,7 @@ def evaluate_correlations(scores: torch.Tensor) -> float:
     margins = torch.from_numpy(torch.load(open("files/margins.pt", "rb")))
     masks = torch.from_numpy(torch.load(open("files/masks.pt", "rb"))).float()
 
-    val_indices = np.arange(277)
+    val_indices = np.arange(2000)
     preds = masks @ scores.T
 
     rs = []
@@ -31,33 +31,16 @@ def main():
 
     # You might need to change the path.
     strategy = "ekfac"
-    scores = Analyzer.load_file(f"influence_results/swag/scores_{strategy}/pairwise_scores.safetensors")[
+    scores = Analyzer.load_file(f"influence_results/swag/scores_{strategy}_half/pairwise_scores.safetensors")[
         "all_modules"
     ].to(dtype=torch.float32)
 
-    corr_mean = evaluate_correlations(scores)
+    # Reformat the scores.
+    split1 = torch.cat([torch.sum(a, dim=0, keepdim=True) for a in scores.split(4)], dim=0)
+    split2 = torch.cat([torch.sum(a, dim=1, keepdim=True) for a in split1.split(4, dim=1)], dim=1)
+
+    corr_mean = evaluate_correlations(split2)
     logging.info(f"LDS: {np.mean(corr_mean)}")
-
-    # We can also visualize the top influential sequences.
-    eval_idx = 79
-    train_dataset = get_glue_dataset(
-        data_name="rte",
-        split="eval_train",
-    )
-    eval_dataset = get_glue_dataset(
-        data_name="rte",
-        split="valid",
-    )
-    print("Query Data Example:")
-    print(f"Sentence1: {eval_dataset[eval_idx]['sentence1']}")
-    print(f"Sentence2: {eval_dataset[eval_idx]['sentence2']}")
-    print(f"Label: {eval_dataset[eval_idx]['label']}")
-
-    top_idx = int(torch.argsort(scores[eval_idx], descending=True)[0])
-    print("Top Influential Example:")
-    print(f"Sentence1: {train_dataset[top_idx]['sentence1']}")
-    print(f"Sentence2: {train_dataset[top_idx]['sentence2']}")
-    print(f"Label: {train_dataset[top_idx]['label']}")
 
 
 if __name__ == "__main__":
