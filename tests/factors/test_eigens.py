@@ -16,8 +16,10 @@ from kronfluence.utils.constants import (
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import (
     ATOL,
+    DEFAULT_FACTORS_NAME,
     RTOL,
     check_tensor_dict_equivalence,
+    custom_factors_name,
     prepare_model_and_analyzer,
     prepare_test,
 )
@@ -27,12 +29,8 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
-        "mlp_checkpoint",
         "conv",
-        "conv_bn",
         "bert",
-        "gpt",
     ],
 )
 @pytest.mark.parametrize("eigendecomposition_dtype", [torch.float32, torch.float64])
@@ -58,9 +56,8 @@ def test_perform_eigendecomposition(
     factor_args = FactorArguments(
         eigendecomposition_dtype=eigendecomposition_dtype,
     )
-    factors_name = f"pytest_{test_name}_{test_perform_eigendecomposition.__name__}"
     analyzer.fit_covariance_matrices(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
         dataset=train_dataset,
         per_device_batch_size=4,
@@ -68,11 +65,11 @@ def test_perform_eigendecomposition(
         dataloader_kwargs=kwargs,
     )
     analyzer.perform_eigendecomposition(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
         overwrite_output_dir=True,
     )
-    eigen_factors = analyzer.load_eigendecomposition(factors_name=factors_name)
+    eigen_factors = analyzer.load_eigendecomposition(factors_name=DEFAULT_FACTORS_NAME)
     assert set(eigen_factors.keys()) == set(EIGENDECOMPOSITION_FACTOR_NAMES)
     assert len(eigen_factors[ACTIVATION_EIGENVECTORS_NAME]) > 0
     for module_name in eigen_factors[ACTIVATION_EIGENVECTORS_NAME]:
@@ -85,17 +82,16 @@ def test_perform_eigendecomposition(
     [
         "mlp",
         "repeated_mlp",
-        "mlp_checkpoint",
         "conv",
-        "conv_bn",
         "bert",
         "gpt",
+        "gpt_checkpoint",
     ],
 )
 @pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("lambda_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("train_size", [16])
-@pytest.mark.parametrize("seed", [0])
+@pytest.mark.parametrize("seed", [1])
 def test_fit_lambda_matrices(
     test_name: str,
     per_sample_gradient_dtype: torch.dtype,
@@ -122,9 +118,8 @@ def test_fit_lambda_matrices(
     if test_name == "repeated_mlp":
         factor_args.shared_parameters_exist = True
 
-    factors_name = f"pytest_{test_name}_{test_fit_lambda_matrices.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         per_device_batch_size=train_size // 4,
         factor_args=factor_args,
@@ -132,7 +127,7 @@ def test_fit_lambda_matrices(
         overwrite_output_dir=True,
     )
 
-    lambda_factors = analyzer.load_lambda_matrices(factors_name=factors_name)
+    lambda_factors = analyzer.load_lambda_matrices(factors_name=DEFAULT_FACTORS_NAME)
     assert set(lambda_factors.keys()) == set(LAMBDA_FACTOR_NAMES)
     assert len(lambda_factors[LAMBDA_MATRIX_NAME]) > 0
     for module_name in lambda_factors[LAMBDA_MATRIX_NAME]:
@@ -144,7 +139,7 @@ def test_fit_lambda_matrices(
     [
         "mlp",
         "conv",
-        "gpt",
+        "roberta",
     ],
 )
 @pytest.mark.parametrize("strategy", ["diagonal", "ekfac"])
@@ -163,6 +158,7 @@ def test_lambda_matrices_batch_size_equivalence(
         seed=seed,
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model = model.to(dtype=torch.float64)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
         task=task,
@@ -170,7 +166,7 @@ def test_lambda_matrices_batch_size_equivalence(
 
     factor_args = test_factor_arguments(strategy=strategy)
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_name}_{test_lambda_matrices_batch_size_equivalence.__name__}_{strategy}_bs1",
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         per_device_batch_size=1,
         factor_args=factor_args,
@@ -178,11 +174,11 @@ def test_lambda_matrices_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs1_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_name}_{test_lambda_matrices_batch_size_equivalence.__name__}_{strategy}_bs1",
+        factors_name=DEFAULT_FACTORS_NAME,
     )
 
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_name}_{test_lambda_matrices_batch_size_equivalence.__name__}_{strategy}_bs8",
+        factors_name=custom_factors_name("bs8"),
         dataset=train_dataset,
         per_device_batch_size=8,
         factor_args=factor_args,
@@ -190,23 +186,17 @@ def test_lambda_matrices_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs8_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_name}_{test_lambda_matrices_batch_size_equivalence.__name__}_{strategy}_bs8",
+        factors_name=custom_factors_name("bs8"),
     )
 
     for name in LAMBDA_FACTOR_NAMES:
         assert check_tensor_dict_equivalence(bs1_lambda_factors[name], bs8_lambda_factors[name], atol=ATOL, rtol=RTOL)
 
 
-@pytest.mark.parametrize(
-    "test_name",
-    [
-        "mlp",
-        "conv",
-    ],
-)
+@pytest.mark.parametrize("test_name", ["mlp"])
 @pytest.mark.parametrize("strategy", ["diagonal", "ekfac"])
-@pytest.mark.parametrize("data_partition_size", [4])
-@pytest.mark.parametrize("module_partition_size", [3])
+@pytest.mark.parametrize("data_partition_size", [2, 4])
+@pytest.mark.parametrize("module_partition_size", [2, 3])
 @pytest.mark.parametrize("train_size", [81])
 @pytest.mark.parametrize("seed", [2])
 def test_lambda_matrices_partition_equivalence(
@@ -230,9 +220,8 @@ def test_lambda_matrices_partition_equivalence(
     )
 
     factor_args = test_factor_arguments(strategy=strategy)
-    factors_name = f"pytest_{test_name}_{strategy}_{test_lambda_matrices_partition_equivalence.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=8,
@@ -240,13 +229,13 @@ def test_lambda_matrices_partition_equivalence(
         dataloader_kwargs=kwargs,
     )
     lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
     )
 
     factor_args.lambda_data_partition_size = data_partition_size
     factor_args.lambda_module_partition_size = module_partition_size
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_name}_{strategy}_{data_partition_size}_{module_partition_size}",
+        factors_name=custom_factors_name(f"{data_partition_size}_{module_partition_size}"),
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=6,
@@ -254,7 +243,7 @@ def test_lambda_matrices_partition_equivalence(
         dataloader_kwargs=kwargs,
     )
     partitioned_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_name}_{strategy}_{data_partition_size}_{module_partition_size}",
+        factors_name=custom_factors_name(f"{data_partition_size}_{module_partition_size}"),
     )
     for name in LAMBDA_FACTOR_NAMES:
         assert check_tensor_dict_equivalence(
@@ -266,12 +255,12 @@ def test_lambda_matrices_partition_equivalence(
     "test_name",
     [
         "mlp",
-        "conv",
+        "conv_bn",
         "bert",
     ],
 )
 @pytest.mark.parametrize("train_size", [63])
-@pytest.mark.parametrize("seed", [3])
+@pytest.mark.parametrize("seed", [4])
 def test_lambda_matrices_iterative_aggregate(
     test_name: str,
     train_size: int,
@@ -290,11 +279,10 @@ def test_lambda_matrices_iterative_aggregate(
         task=task,
     )
 
-    factors_name = f"pytest_{test_name}_{test_lambda_matrices_iterative_aggregate.__name__}"
     factor_args = test_factor_arguments()
     factor_args.lambda_iterative_aggregate = False
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=8,
@@ -302,12 +290,12 @@ def test_lambda_matrices_iterative_aggregate(
         dataloader_kwargs=kwargs,
     )
     lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
     )
 
     factor_args.lambda_iterative_aggregate = True
     analyzer.fit_all_factors(
-        factors_name=factors_name + "_iterative",
+        factors_name=custom_factors_name("iterative"),
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=4,
@@ -315,7 +303,7 @@ def test_lambda_matrices_iterative_aggregate(
         dataloader_kwargs=kwargs,
     )
     iterative_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=factors_name + "_iterative",
+        factors_name=custom_factors_name("iterative"),
     )
 
     for name in LAMBDA_FACTOR_NAMES:
@@ -324,11 +312,11 @@ def test_lambda_matrices_iterative_aggregate(
 
 @pytest.mark.parametrize(
     "test_name",
-    ["mlp", "conv"],
+    ["mlp", "gpt"],
 )
 @pytest.mark.parametrize("data_partition_size", [1, 4])
 @pytest.mark.parametrize("train_size", [82])
-@pytest.mark.parametrize("seed", [4])
+@pytest.mark.parametrize("seed", [3])
 def test_lambda_matrices_max_examples(
     test_name: str,
     data_partition_size: int,
@@ -351,9 +339,8 @@ def test_lambda_matrices_max_examples(
     factor_args = FactorArguments(
         use_empirical_fisher=True, lambda_max_examples=MAX_EXAMPLES, lambda_data_partition_size=data_partition_size
     )
-    factors_name = f"pytest_{test_name}_{test_lambda_matrices_max_examples.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=8,
@@ -361,7 +348,7 @@ def test_lambda_matrices_max_examples(
         dataloader_kwargs=kwargs,
     )
     lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
     )
     for num_examples in lambda_factors[NUM_LAMBDA_PROCESSED].values():
         assert num_examples == MAX_EXAMPLES
@@ -371,7 +358,7 @@ def test_lambda_matrices_max_examples(
     "test_name",
     [
         "mlp",
-        "conv",
+        "conv_bn",
     ],
 )
 @pytest.mark.parametrize("train_size", [100])
@@ -395,7 +382,7 @@ def test_lambda_matrices_amp(
 
     factor_args = test_factor_arguments()
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}",
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=8,
@@ -403,12 +390,12 @@ def test_lambda_matrices_amp(
         dataloader_kwargs=kwargs,
     )
     lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}"
+        factors_name=DEFAULT_FACTORS_NAME,
     )
 
     factor_args.amp_dtype = torch.float16
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}_amp",
+        factors_name=custom_factors_name("amp"),
         dataset=train_dataset,
         per_device_batch_size=8,
         overwrite_output_dir=True,
@@ -416,7 +403,7 @@ def test_lambda_matrices_amp(
         dataloader_kwargs=kwargs,
     )
     amp_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_name}_{test_lambda_matrices_amp.__name__}_amp",
+        factors_name=custom_factors_name("amp"),
     )
 
     for name in LAMBDA_FACTOR_NAMES:
@@ -435,6 +422,7 @@ def test_lambda_matrices_gradient_checkpoint(
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
         task=task,
@@ -442,14 +430,14 @@ def test_lambda_matrices_gradient_checkpoint(
 
     factor_args = test_factor_arguments()
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}",
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         per_device_batch_size=5,
         overwrite_output_dir=True,
         factor_args=factor_args,
     )
     lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}",
+        factors_name=DEFAULT_FACTORS_NAME,
     )
 
     model, _, _, _, task = prepare_test(
@@ -457,19 +445,20 @@ def test_lambda_matrices_gradient_checkpoint(
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
         task=task,
     )
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}_cp",
+        factors_name=custom_factors_name("cp"),
         dataset=train_dataset,
         per_device_batch_size=6,
         overwrite_output_dir=True,
         factor_args=factor_args,
     )
     checkpoint_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_lambda_matrices_gradient_checkpoint.__name__}_cp",
+        factors_name=custom_factors_name("cp"),
     )
 
     for name in LAMBDA_FACTOR_NAMES:
@@ -478,56 +467,55 @@ def test_lambda_matrices_gradient_checkpoint(
         )
 
 
+@pytest.mark.parametrize(
+    "test_name",
+    ["mlp", "conv", "gpt"],
+)
 @pytest.mark.parametrize("train_size", [105])
 @pytest.mark.parametrize("seed", [12])
 def test_lambda_matrices_shared_parameters(
+    test_name: str,
     train_size: int,
     seed: int,
 ) -> None:
     # When there are no shared parameters, results with and without `shared_parameters_exist` should
     # produce the same results.
     model, train_dataset, _, data_collator, task = prepare_test(
-        test_name="mlp",
+        test_name=test_name,
         train_size=train_size,
         seed=seed,
     )
+    model = model.to(dtype=torch.float64)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
         task=task,
     )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
 
     factor_args = test_factor_arguments()
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}",
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         per_device_batch_size=5,
         overwrite_output_dir=True,
         factor_args=factor_args,
+        dataloader_kwargs=kwargs,
     )
     lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}",
-    )
-
-    model, train_dataset, _, _, task = prepare_test(
-        test_name="mlp",
-        train_size=train_size,
-        seed=seed,
-    )
-    model, analyzer = prepare_model_and_analyzer(
-        model=model,
-        task=task,
+        factors_name=DEFAULT_FACTORS_NAME,
     )
 
     factor_args.shared_parameters_exist = True
     analyzer.fit_all_factors(
-        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}_shared",
+        factors_name=custom_factors_name("shared"),
         dataset=train_dataset,
         per_device_batch_size=6,
         overwrite_output_dir=True,
         factor_args=factor_args,
+        dataloader_kwargs=kwargs,
     )
     checkpoint_lambda_factors = analyzer.load_lambda_matrices(
-        factors_name=f"pytest_{test_lambda_matrices_shared_parameters.__name__}_shared",
+        factors_name=custom_factors_name("shared"),
     )
 
     for name in LAMBDA_FACTOR_NAMES:

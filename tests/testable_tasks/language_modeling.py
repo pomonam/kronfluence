@@ -1,13 +1,14 @@
 # pylint: skip-file
 
 from itertools import chain
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import torch
 import torch.nn.functional as F
 from datasets import load_dataset
 from torch import nn
 from torch.utils import data
+from torch.utils.checkpoint import checkpoint_sequential
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, Conv1D
 
 from kronfluence.task import Task
@@ -15,6 +16,7 @@ from kronfluence.task import Task
 BATCH_TYPE = Dict[str, torch.Tensor]
 
 
+@torch.no_grad()
 def _replace_conv1d_modules(model: nn.Module) -> None:
     for name, module in model.named_children():
         if len(list(module.children())) > 0:
@@ -142,5 +144,5 @@ class LanguageModelingTask(Task):
 
         return total_modules
 
-    def get_attention_mask(self, batch: Any) -> Optional[torch.Tensor]:
+    def get_attention_mask(self, batch: Any) -> torch.Tensor:
         return batch["attention_mask"]

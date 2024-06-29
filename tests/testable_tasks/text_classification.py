@@ -113,7 +113,7 @@ class TextClassificationTask(Task):
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
 
-    def get_attention_mask(self, batch: Any) -> Optional[torch.Tensor]:
+    def get_attention_mask(self, batch: Any) -> torch.Tensor:
         return batch["attention_mask"]
 
 

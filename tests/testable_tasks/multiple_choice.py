@@ -1,7 +1,7 @@
 # pylint: skip-file
 
 from itertools import chain
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import torch
 import torch.nn.functional as F
@@ -125,10 +125,10 @@ class MultipleChoiceTask(Task):
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
 
-    def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
+    def get_attention_mask(self, batch: Any) -> torch.Tensor:
         return batch["attention_mask"]
 
-    def post_process_per_sample_gradient(self, module_name: str, gradient: torch.Tensor) -> Optional[torch.Tensor]:
+    def post_process_per_sample_gradient(self, module_name: str, gradient: torch.Tensor) -> torch.Tensor:
         del module_name
         total_batch_size = gradient.size(0)
         true_batch_size = int(total_batch_size / 4)

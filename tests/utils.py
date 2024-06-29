@@ -44,11 +44,17 @@ from tests.testable_tasks.text_classification import (
 RTOL = 1.3e-6
 ATOL = 1e-5
 
+DEFAULT_FACTORS_NAME = "pytest"
+
+
+def custom_factors_name(name: str) -> str:
+    return f"{DEFAULT_FACTORS_NAME}_{name}"
+
 
 def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
     model = prepare_model(model=model, task=task)
     analyzer = Analyzer(
-        analysis_name=f"pytest_{__name__}",
+        analysis_name=f"pytest",
         model=model,
         task=task,
         disable_model_save=True,
@@ -121,6 +127,13 @@ def prepare_test(
         data_collator = default_data_collator
     elif test_name == "gpt":
         model = make_tiny_gpt(seed=seed)
+        train_dataset = make_gpt_dataset(num_data=train_size, seed=seed)
+        query_dataset = make_gpt_dataset(num_data=query_size, seed=seed + 1)
+        task = LanguageModelingTask()
+        data_collator = default_data_collator
+    elif test_name == "gpt_checkpoint":
+        model = make_tiny_gpt(seed=seed)
+        model.gradient_checkpointing_enable()
         train_dataset = make_gpt_dataset(num_data=train_size, seed=seed)
         query_dataset = make_gpt_dataset(num_data=query_size, seed=seed + 1)
         task = LanguageModelingTask()
