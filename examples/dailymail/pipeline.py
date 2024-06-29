@@ -19,7 +19,7 @@ summarization_name_mapping = {
 }
 
 
-MODEL_NAME = "google-t5/t5-base"
+MODEL_NAME = "google-t5/t5-small"
 
 
 def construct_t5() -> nn.Module:

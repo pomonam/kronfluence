@@ -3,8 +3,10 @@ import logging
 import os
 import time
 from typing import Any, Dict
-import numpy as np
+
 import evaluate
+import nltk
+import numpy as np
 import torch
 import torch.nn.functional as F
 from accelerate.utils import set_seed
@@ -12,10 +14,13 @@ from filelock import FileLock
 from torch import nn
 from torch.nn import CrossEntropyLoss
 from torch.utils import data
-from transformers import  DataCollatorForSeq2Seq
-import nltk
+from transformers import DataCollatorForSeq2Seq
 
-from examples.dailymail.pipeline import construct_t5, get_tokenizer, get_dailymail_dataset
+from examples.dailymail.pipeline import (
+    construct_t5,
+    get_dailymail_dataset,
+    get_tokenizer,
+)
 
 try:
     nltk.data.find("tokenizers/punkt")
@@ -46,13 +51,13 @@ def parse_args():
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-05,
+        default=5e-05,
         help="Fixed learning rate to train the model.",
     )
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=0.001,
+        default=0.01,
         help="Weight decay to train the model.",
     )
     parser.add_argument(
@@ -118,7 +123,9 @@ def train(
                 decoder_input_ids=batch["decoder_input_ids"].to(device=DEVICE),
             ).logits
             loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), batch["labels"].view(-1).to(device=DEVICE), ignore_index=-100,
+                logits.view(-1, logits.size(-1)),
+                batch["labels"].view(-1).to(device=DEVICE),
+                ignore_index=-100,
             )
             loss.backward()
             optimizer.step()
@@ -178,13 +185,9 @@ def evaluate_model(model: nn.Module, tokenizer: Any, dataset: data.Dataset, batc
             )
             if isinstance(generated_tokens, tuple):
                 generated_tokens = generated_tokens[0]
-            decoded_preds = tokenizer.batch_decode(
-                generated_tokens, skip_special_tokens=True
-            )
+            decoded_preds = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
             decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-            decoded_preds, decoded_labels = postprocess_text(
-                decoded_preds, decoded_labels
-            )
+            decoded_preds, decoded_labels = postprocess_text(decoded_preds, decoded_labels)
             metric.add_batch(
                 predictions=decoded_preds,
                 references=decoded_labels,
@@ -216,7 +219,9 @@ def main():
     )
 
     eval_train_dataset = get_dailymail_dataset(split="eval_train")
-    results = evaluate_model(model=model, tokenizer=tokenizer, dataset=eval_train_dataset, batch_size=args.eval_batch_size)
+    results = evaluate_model(
+        model=model, tokenizer=tokenizer, dataset=eval_train_dataset, batch_size=args.eval_batch_size
+    )
     logger.info(f"Train evaluation results: {results}")
 
     eval_dataset = get_dailymail_dataset(split="valid")
