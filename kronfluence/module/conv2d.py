@@ -67,6 +67,14 @@ def extract_patches(
 class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
     """A tracking wrapper for `nn.Conv2D` modules."""
 
+    @property
+    def weight(self) -> torch.Tensor:
+        return self.original_module.weight
+
+    @property
+    def bias(self) -> torch.Tensor:
+        return self.original_module.bias
+
     def _get_flattened_activation(
         self, input_activation: torch.Tensor
     ) -> Tuple[torch.Tensor, Union[torch.Tensor, int]]:

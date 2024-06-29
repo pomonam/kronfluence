@@ -12,11 +12,10 @@ from filelock import FileLock
 from torch import nn
 from torch.nn import CrossEntropyLoss
 from torch.utils import data
-from transformers import default_data_collator, DataCollatorForSeq2Seq
+from transformers import  DataCollatorForSeq2Seq
 import nltk
 
 from examples.dailymail.pipeline import construct_t5, get_tokenizer, get_dailymail_dataset
-from examples.swag.pipeline import construct_roberta, get_swag_dataset
 
 try:
     nltk.data.find("tokenizers/punkt")
@@ -114,12 +113,12 @@ def train(
         for batch in train_dataloader:
             optimizer.zero_grad(set_to_none=True)
             logits = model(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                decoder_input_ids=batch["decoder_input_ids"],
+                input_ids=batch["input_ids"].to(device=DEVICE),
+                attention_mask=batch["attention_mask"].to(device=DEVICE),
+                decoder_input_ids=batch["decoder_input_ids"].to(device=DEVICE),
             ).logits
             loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), batch["labels"].view(-1), ignore_index=-100,
+                logits.view(-1, logits.size(-1)), batch["labels"].view(-1).to(device=DEVICE), ignore_index=-100,
             )
             loss.backward()
             optimizer.step()
@@ -162,9 +161,9 @@ def evaluate_model(model: nn.Module, tokenizer: Any, dataset: data.Dataset, batc
     for step, batch in enumerate(dataloader):
         with torch.no_grad():
             logits = model(
-                input_ids=batch["input_ids"],
-                attention_mask=batch["attention_mask"],
-                decoder_input_ids=batch["decoder_input_ids"],
+                input_ids=batch["input_ids"].to(device=DEVICE),
+                attention_mask=batch["attention_mask"].to(device=DEVICE),
+                decoder_input_ids=batch["decoder_input_ids"].to(device=DEVICE),
             ).logits
             labels = batch["labels"].to(device=DEVICE)
             loss = loss_fn(logits.view(-1, logits.size(-1)), labels.view(-1))

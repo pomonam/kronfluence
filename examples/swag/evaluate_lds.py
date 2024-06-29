@@ -4,8 +4,9 @@ import numpy as np
 import torch
 import tqdm
 from scipy.stats import spearmanr
+from transformers import AutoTokenizer
 
-from examples.glue.pipeline import get_glue_dataset
+from examples.swag.pipeline import get_swag_dataset
 from kronfluence.analyzer import Analyzer
 
 
@@ -34,13 +35,36 @@ def main():
     scores = Analyzer.load_file(f"influence_results/swag/scores_{strategy}_half/pairwise_scores.safetensors")[
         "all_modules"
     ].to(dtype=torch.float32)
+    # scores = Analyzer.load_file(f"influence_results/swag/scores_{strategy}_half_ddp/pairwise_scores.safetensors")[
+    #     "all_modules"
+    # ].to(dtype=torch.float32)
 
-    # Reformat the scores.
-    split1 = torch.cat([torch.sum(a, dim=0, keepdim=True) for a in scores.split(4)], dim=0)
-    split2 = torch.cat([torch.sum(a, dim=1, keepdim=True) for a in split1.split(4, dim=1)], dim=1)
-
-    corr_mean = evaluate_correlations(split2)
+    corr_mean = evaluate_correlations(scores)
     logging.info(f"LDS: {np.mean(corr_mean)}")
+
+    # We can also visualize the top influential sequences.
+    eval_idx = 1004
+    tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base", use_fast=True, trust_remote_code=True)
+
+    train_dataset = get_swag_dataset(
+        split="eval_train",
+    )
+    eval_dataset = get_swag_dataset(
+        split="valid",
+    )
+
+    print("Query Data Example:")
+    for i in range(4):
+        text = tokenizer.decode(eval_dataset[eval_idx]["input_ids"][i])
+        print(f"Option {i}: {text}")
+    print(f"Label: {eval_dataset[eval_idx]['labels']}")
+
+    top_idx = int(torch.argsort(scores[eval_idx], descending=True)[0])
+    print("Top Influential Example:")
+    for i in range(4):
+        text = tokenizer.decode(train_dataset[top_idx]["input_ids"][i])
+        print(f"Option {i}: {text}")
+    print(f"Label: {train_dataset[top_idx]['labels']}")
 
 
 if __name__ == "__main__":

@@ -12,7 +12,6 @@ pip install -r requirements.txt
 
 Alternatively, navigate to each example folder and run `pip install -r requirements.txt`.
 
-
 ## List of Tasks
 
 Our examples cover the following tasks:
@@ -25,6 +24,7 @@ Our examples cover the following tasks:
 | Image Classification |   CIFAR-10 / ImageNet    |
 | Text Classification  |           GLUE           |
 | Multiple-Choice      |           SWAG           |
+| Summarization        |        DailyMail         |
 | Language Modeling    | WikiText-2 / OpenWebText |
 
 </div>

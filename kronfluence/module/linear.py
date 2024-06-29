@@ -11,6 +11,14 @@ from kronfluence.module.tracked_module import TrackedModule
 class TrackedLinear(TrackedModule, module_type=nn.Linear):
     """A tracking wrapper for `nn.Linear` modules."""
 
+    @property
+    def weight(self) -> torch.Tensor:
+        return self.original_module.weight
+
+    @property
+    def bias(self) -> torch.Tensor:
+        return self.original_module.bias
+
     def _get_flattened_activation(
         self, input_activation: torch.Tensor
     ) -> Tuple[torch.Tensor, Union[torch.Tensor, int]]:

@@ -23,7 +23,12 @@ from kronfluence.factor.eigen import (
     load_eigendecomposition,
     load_lambda_matrices,
 )
-from kronfluence.module.utils import get_tracked_module_names, make_modules_partition
+from kronfluence.module.tracked_module import ModuleMode
+from kronfluence.module.utils import (
+    get_tracked_module_names,
+    make_modules_partition,
+    set_mode,
+)
 from kronfluence.score.pairwise import load_pairwise_scores, pairwise_scores_exist
 from kronfluence.score.self import load_self_scores, self_scores_exist
 from kronfluence.task import Task
@@ -47,7 +52,7 @@ from kronfluence.utils.save import (
     load_json,
     save_json,
 )
-from kronfluence.utils.state import State
+from kronfluence.utils.state import State, release_memory
 
 
 class Computer(ABC):
@@ -113,9 +118,6 @@ class Computer(ABC):
 
         # Creates and configures profiler.
         self.profiler = Profiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
-        # Creates directory to save profiler output.
-        self.profiler_dir = (self.output_dir / "profiler_output").resolve()
-        os.makedirs(name=self.profiler_dir, exist_ok=True)
         self.disable_tqdm = disable_tqdm
 
         # Sets PyTorch DataLoader arguments.
@@ -320,12 +322,20 @@ class Computer(ABC):
 
         return modules_partition_list, target_module_partitions
 
-    def _log_profile_summary(self) -> None:
+    def _reset_memory(self) -> None:
+        """Clears all cached memory."""
+        self.model.zero_grad(set_to_none=True)
+        set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
+        release_memory()
+
+    def _log_profile_summary(self, name: str) -> None:
         """Saves the summary of the profiling results."""
         profile_summary = self.profiler.summary()
         time_str = time.strftime("%Y%m%d_%H%M%S")
-        profile_save_path = (self.profiler_dir / f"summary_rank_{self.state.process_index}_{time_str}.txt").resolve()
+        profiler_dir = (self.output_dir / "profiler_output").resolve()
+        profile_save_path = (profiler_dir / f"{name}_summary_rank_{self.state.process_index}_{time_str}.txt").resolve()
         if profile_summary != "":
+            os.makedirs(name=profiler_dir, exist_ok=True)
             self.logger.info(profile_summary)
             with open(profile_save_path, "a", encoding="utf-8") as f:
                 f.write(profile_summary)

@@ -11,6 +11,16 @@ pip install -r requirements.txt
 
 We will be using the pre-trained model.
 
+```bash
+python train.py --checkpoint_dir ./checkpoints \
+    --train_batch_size 16 \
+    --eval_batch_size 32 \
+    --learning_rate 5e-05 \
+    --weight_decay 0.01 \
+    --num_train_epochs 3 \
+    --seed 1004
+```
+
 ## Computing Pairwise Influence Scores
 
 To calculate pairwise influence scores on 10 query data points using `ekfac`, run:
@@ -60,7 +70,23 @@ torchrun --standalone --nnodes=1 --nproc-per-node=2 analyze.py --factor_batch_si
 The overall computation time reduces to xx hours using 2 A100 GPUs:
 
 ```
-
+----------------------------------------------------------------------------------------------------------------------------------
+|  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Total                        |  -                    |  11                   |  7737.8               |  100 %                |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Compute Pairwise Score       |  6835.5               |  1                    |  6835.5               |  88.339               |
+|  Fit Lambda                   |  629.93               |  1                    |  629.93               |  8.1409               |
+|  Fit Covariance               |  242.46               |  1                    |  242.46               |  3.1334               |
+|  Perform Eigendecomposition   |  12.882               |  1                    |  12.882               |  0.16648              |
+|  Save Covariance              |  5.414                |  1                    |  5.414                |  0.069968             |
+|  Save Eigendecomposition      |  5.3198               |  1                    |  5.3198               |  0.06875              |
+|  Save Pairwise Score          |  2.6157               |  1                    |  2.6157               |  0.033805             |
+|  Save Lambda                  |  1.5766               |  1                    |  1.5766               |  0.020375             |
+|  Load Covariance              |  1.1093               |  1                    |  1.1093               |  0.014336             |
+|  Load Eigendecomposition      |  0.51414              |  1                    |  0.51414              |  0.0066445            |
+|  Load All Factors             |  0.49749              |  1                    |  0.49749              |  0.0064293            |
+----------------------------------------------------------------------------------------------------------------------------------
 ```
 
 ## Evaluating Linear Datamodeling Score

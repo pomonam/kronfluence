@@ -140,9 +140,7 @@ class FactorComputer(Computer):
         def executable_batch_size_func(batch_size: int) -> None:
             self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
             # Releases all memory that could be caused by the previous OOM.
-            self.model.zero_grad(set_to_none=True)
-            set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
-            release_memory()
+            self._reset_memory()
             total_batch_size = batch_size * self.state.num_processes
             loader = self._get_dataloader(
                 dataset=dataset,
@@ -304,7 +302,7 @@ class FactorComputer(Computer):
                         total_data_examples=max_partition_examples,
                     )
 
-                release_memory()
+                self._reset_memory()
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Fit Covariance"):
                     loader = self._get_dataloader(
@@ -350,7 +348,7 @@ class FactorComputer(Computer):
                 self.aggregate_covariance_matrices(factors_name=factors_name)
                 self.logger.info(f"Saved aggregated covariance matrices at `{factors_output_dir}`.")
             self.state.wait_for_everyone()
-        self._log_profile_summary()
+        self._log_profile_summary(name=f"factors_{factors_name}_covariance")
 
     @torch.no_grad()
     def aggregate_covariance_matrices(
@@ -453,7 +451,7 @@ class FactorComputer(Computer):
 
         eigen_factors = None
         if self.state.is_main_process:
-            release_memory()
+            self._reset_memory()
             start_time = time.time()
             with self.profiler.profile("Perform Eigendecomposition"):
                 eigen_factors = perform_eigendecomposition(
@@ -473,7 +471,7 @@ class FactorComputer(Computer):
                 )
             self.logger.info(f"Saved Eigendecomposition results at `{factors_output_dir}`.")
         self.state.wait_for_everyone()
-        self._log_profile_summary()
+        self._log_profile_summary(name=f"factors_{factors_name}_eigendecomposition")
 
     def fit_lambda_matrices(
         self,
@@ -703,7 +701,7 @@ class FactorComputer(Computer):
                 self.aggregate_lambda_matrices(factors_name=factors_name)
                 self.logger.info(f"Saved aggregated Lambda matrices at `{factors_output_dir}`.")
             self.state.wait_for_everyone()
-        self._log_profile_summary()
+        self._log_profile_summary(name=f"factors_{factors_name}_lambda")
 
     @torch.no_grad()
     def aggregate_lambda_matrices(
