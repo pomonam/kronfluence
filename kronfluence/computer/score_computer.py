@@ -8,8 +8,6 @@ from torch.utils import data
 
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.computer.computer import Computer
-from kronfluence.module.tracked_module import ModuleMode
-from kronfluence.module.utils import set_mode
 from kronfluence.score.pairwise import (
     compute_pairwise_scores_with_loaders,
     load_pairwise_scores,

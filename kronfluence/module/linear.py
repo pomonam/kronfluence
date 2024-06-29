@@ -13,10 +13,12 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
 
     @property
     def weight(self) -> torch.Tensor:
+        """Returns the weight matrix."""
         return self.original_module.weight
 
     @property
     def bias(self) -> torch.Tensor:
+        """Returns the bias."""
         return self.original_module.bias
 
     def _get_flattened_activation(

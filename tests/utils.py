@@ -59,7 +59,7 @@ def custom_scores_name(name: str) -> str:
 def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
     model = prepare_model(model=model, task=task)
     analyzer = Analyzer(
-        analysis_name=f"pytest",
+        analysis_name="pytest",
         model=model,
         task=task,
         disable_model_save=True,
