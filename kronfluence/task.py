@@ -107,4 +107,5 @@ class Task(ABC):
             torch.Tensor:
                 The modified per-sample-gradient tensor.
         """
+        del module_name
         return gradient
