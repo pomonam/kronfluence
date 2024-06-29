@@ -1,6 +1,6 @@
 # DailyMail & T5 Example
 
-This directory contains scripts for fine-tuning RoBERTa computing influence scores on the SWAG dataset. The pipeline is motivated from [this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/multiple-choice) demonstrates how to define `post_process_per_sample_gradient`.
+This directory contains scripts for fine-tuning T5 and computing influence scores on the DailyMail dataset. The pipeline is motivated from [this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/summarization).
 To begin, install the necessary packages:
 
 ```bash

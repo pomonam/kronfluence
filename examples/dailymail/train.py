@@ -9,7 +9,7 @@ import nltk
 import numpy as np
 import torch
 import torch.nn.functional as F
-from accelerate.utils import set_seed
+from accelerate.utils import set_seed, send_to_device
 from filelock import FileLock
 from torch import nn
 from torch.nn import CrossEntropyLoss
@@ -30,7 +30,7 @@ except (LookupError, OSError):
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+print(DEVICE)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Train seq2seq models on DailyMail dataset.")
@@ -115,18 +115,12 @@ def train(
     model.train()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
+        print("epoch start")
         for batch in train_dataloader:
+            print("done")
             optimizer.zero_grad(set_to_none=True)
-            logits = model(
-                input_ids=batch["input_ids"].to(device=DEVICE),
-                attention_mask=batch["attention_mask"].to(device=DEVICE),
-                decoder_input_ids=batch["decoder_input_ids"].to(device=DEVICE),
-            ).logits
-            loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                batch["labels"].view(-1).to(device=DEVICE),
-                ignore_index=-100,
-            )
+            batch = send_to_device(batch, device=DEVICE)
+            loss = model(**batch).loss
             loss.backward()
             optimizer.step()
             total_loss += loss.detach().float()
