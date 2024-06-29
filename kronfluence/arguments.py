@@ -200,6 +200,13 @@ class ScoreArguments(Arguments):
         default=None,
         metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
     )
+    use_full_svd: bool = field(
+        default=True,
+        metadata={
+            "help": "Whether to perform to use `torch.linalg.svd` instead of `torch.svd_lowrank` for "
+            "query batching. `torch.svd_lowrank` can result in a more inaccurate low-rank approximations."
+        },
+    )
     use_measurement_for_self_influence: bool = field(
         default=False,
         metadata={"help": "Whether to use the measurement (instead of the loss) for computing self-influence scores."},

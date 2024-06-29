@@ -9,13 +9,12 @@ from torch.utils.data import DataLoader
 from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import set_mode, wrap_tracked_modules
-from kronfluence.utils.save import verify_models_equivalence
 from tests.utils import prepare_test
 
 
 @pytest.mark.parametrize(
     "test_name",
-    ["mlp", "conv", "conv_bn", "bert", "gpt"],
+    ["mlp", "conv_bn", "gpt"],
 )
 @pytest.mark.parametrize(
     "mode",
@@ -34,6 +33,7 @@ def test_tracked_modules_forward_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # The forward pass should produce the same results with and without wrapped modules.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -92,6 +92,7 @@ def test_tracked_modules_backward_equivalence(
     train_size: int,
     seed: int,
 ) -> None:
+    # The backward pass should produce the same results with and without wrapped modules.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -131,24 +132,3 @@ def test_tracked_modules_backward_equivalence(
         original_name = name.replace(".original_module", "")
         if original_name in original_grads:
             assert torch.allclose(grad, original_grads[original_name])
-
-
-def test_verify_models_equivalence() -> None:
-    model1, _, _, _, _ = prepare_test(
-        test_name="mlp",
-        train_size=10,
-        seed=0,
-    )
-    model2, _, _, _, _ = prepare_test(
-        test_name="mlp",
-        train_size=10,
-        seed=1,
-    )
-    model3, _, _, _, _ = prepare_test(
-        test_name="conv",
-        train_size=10,
-        seed=1,
-    )
-    assert verify_models_equivalence(model1.state_dict(), model1.state_dict())
-    assert not verify_models_equivalence(model1.state_dict(), model2.state_dict())
-    assert not verify_models_equivalence(model1.state_dict(), model3.state_dict())

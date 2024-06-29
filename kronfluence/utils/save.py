@@ -46,7 +46,7 @@ def verify_models_equivalence(state_dict1: Dict[str, torch.Tensor], state_dict2:
     for name in state_dict1:
         tensor1 = state_dict1[name].to(dtype=torch.float32).cpu()
         tensor2 = state_dict2[name].to(dtype=torch.float32).cpu()
-        if not torch.allclose(tensor1, tensor2, rtol=1e-3, atol=1e-5):
+        if not torch.allclose(tensor1, tensor2, rtol=1.3e-6, atol=1e-5):
             return False
 
     return True

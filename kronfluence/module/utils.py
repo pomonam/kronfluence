@@ -53,6 +53,9 @@ def wrap_tracked_modules(
     tracked_module_exists_dict = None
     if tracked_module_names is not None:
         tracked_module_exists_dict = {name: False for name in tracked_module_names}
+    per_sample_gradient_process_fnc = None
+    if task is not None and task.do_post_process_per_sample_gradient:
+        per_sample_gradient_process_fnc = task.post_process_per_sample_gradient
 
     named_modules = model.named_modules()
     for module_name, module in named_modules:
@@ -68,9 +71,7 @@ def wrap_tracked_modules(
             tracked_module = TrackedModule.SUPPORTED_MODULES[type(module)](
                 name=module_name,
                 original_module=module,
-                per_sample_gradient_process_fnc=task.post_process_per_sample_gradient
-                if task.do_post_process_per_sample_gradient
-                else None,
+                per_sample_gradient_process_fnc=per_sample_gradient_process_fnc,
                 factor_args=factor_args,
                 score_args=score_args,
             )

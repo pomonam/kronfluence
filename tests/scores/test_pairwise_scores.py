@@ -4,16 +4,20 @@ from typing import Optional
 
 import pytest
 import torch
+from scipy.stats import spearmanr
 
-from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.arguments import ScoreArguments
 from kronfluence.utils.common.factor_arguments import test_factor_arguments
 from kronfluence.utils.common.score_arguments import test_score_arguments
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import (
     ATOL,
+    DEFAULT_FACTORS_NAME,
+    DEFAULT_SCORES_NAME,
     RTOL,
     check_tensor_dict_equivalence,
+    custom_scores_name,
     prepare_model_and_analyzer,
     prepare_test,
 )
@@ -24,11 +28,11 @@ from tests.utils import (
     [
         "mlp",
         "repeated_mlp",
-        "mlp_checkpoint",
         "conv",
-        "conv_bn",
         "bert",
+        "roberta",
         "gpt",
+        "gpt_checkpoint",
     ],
 )
 @pytest.mark.parametrize("score_dtype", [torch.float32, torch.bfloat16])
@@ -60,9 +64,8 @@ def test_compute_pairwise_scores(
     if test_name == "repeated_mlp":
         factor_args.shared_parameters_exist = True
 
-    factors_name = f"pytest_{test_name}_{test_compute_pairwise_scores.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
@@ -74,10 +77,9 @@ def test_compute_pairwise_scores(
         score_dtype=score_dtype,
         query_gradient_rank=query_gradient_rank,
     )
-    scores_name = f"pytest_{test_name}_{test_compute_pairwise_scores.__name__}_{query_gradient_rank}_scores"
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -87,18 +89,13 @@ def test_compute_pairwise_scores(
         overwrite_output_dir=True,
     )
 
-    pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    pairwise_scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
     assert pairwise_scores[ALL_MODULE_NAME].size(0) == query_size
     assert pairwise_scores[ALL_MODULE_NAME].size(1) == train_size
     assert pairwise_scores[ALL_MODULE_NAME].dtype == score_dtype
 
 
-@pytest.mark.parametrize(
-    "test_name",
-    [
-        "mlp",
-    ],
-)
+@pytest.mark.parametrize("test_name", ["mlp"])
 @pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("precondition_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("score_dtype", [torch.float32, torch.bfloat16])
@@ -130,9 +127,8 @@ def test_compute_pairwise_scores_dtype(
         model=model,
         task=task,
     )
-    factors_name = f"pytest_{test_name}_{test_compute_pairwise_scores_dtype.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=32,
@@ -146,10 +142,9 @@ def test_compute_pairwise_scores_dtype(
         per_sample_gradient_dtype=per_sample_gradient_dtype,
         precondition_dtype=precondition_dtype,
     )
-    scores_name = f"pytest_{test_name}_{test_compute_pairwise_scores_dtype.__name__}_{query_gradient_rank}_scores"
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -159,7 +154,7 @@ def test_compute_pairwise_scores_dtype(
         overwrite_output_dir=True,
     )
 
-    pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    pairwise_scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
     assert pairwise_scores[ALL_MODULE_NAME].size(0) == query_size
     assert pairwise_scores[ALL_MODULE_NAME].size(1) == train_size
     assert pairwise_scores[ALL_MODULE_NAME].dtype == score_dtype
@@ -169,8 +164,7 @@ def test_compute_pairwise_scores_dtype(
     "test_name",
     [
         "mlp",
-        "conv",
-        "gpt",
+        "conv_bn",
     ],
 )
 @pytest.mark.parametrize("strategy", ["identity", "diagonal", "kfac", "ekfac"])
@@ -198,12 +192,9 @@ def test_pairwise_scores_batch_size_equivalence(
         task=task,
     )
 
-    factor_args = FactorArguments(
-        strategy=strategy,
-    )
-    factors_name = f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}"
+    factor_args = test_factor_arguments(strategy=strategy)
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=4,
@@ -213,8 +204,8 @@ def test_pairwise_scores_batch_size_equivalence(
 
     score_args = test_score_arguments()
     analyzer.compute_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_bs1",
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -224,12 +215,12 @@ def test_pairwise_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs1_scores = analyzer.load_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_bs1",
+        scores_name=DEFAULT_SCORES_NAME,
     )
 
     analyzer.compute_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_bs8",
-        factors_name=factors_name,
+        scores_name=custom_scores_name("bs8"),
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=3,
         train_dataset=train_dataset,
@@ -239,7 +230,7 @@ def test_pairwise_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs8_scores = analyzer.load_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_bs8",
+        scores_name=custom_scores_name("bs8"),
     )
 
     assert check_tensor_dict_equivalence(
@@ -250,8 +241,8 @@ def test_pairwise_scores_batch_size_equivalence(
     )
 
     analyzer.compute_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_auto",
-        factors_name=factors_name,
+        scores_name=custom_scores_name("auto"),
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=10,
         train_dataset=train_dataset,
@@ -261,7 +252,7 @@ def test_pairwise_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs_auto_scores = analyzer.load_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_pairwise_scores_batch_size_equivalence.__name__}_{strategy}_score_auto",
+        scores_name=custom_scores_name("auto"),
     )
 
     assert check_tensor_dict_equivalence(
@@ -308,21 +299,19 @@ def test_pairwise_scores_partition_equivalence(
         task=task,
     )
 
-    factors_name = f"pytest_{test_name}_{test_pairwise_scores_partition_equivalence.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
 
-    scores_name = f"pytest_{test_name}_{test_pairwise_scores_partition_equivalence.__name__}_scores"
     score_args = test_score_arguments()
     score_args.per_module_score = per_module_score
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -331,13 +320,13 @@ def test_pairwise_scores_partition_equivalence(
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
     score_args.data_partition_size = data_partition_size
     score_args.module_partition_size = module_partition_size
     analyzer.compute_pairwise_scores(
-        scores_name=f"pytest_{test_name}_partition_{data_partition_size}_{module_partition_size}",
-        factors_name=factors_name,
+        scores_name=custom_scores_name(f"{data_partition_size}_{module_partition_size}"),
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=10,
         train_dataset=train_dataset,
@@ -347,7 +336,7 @@ def test_pairwise_scores_partition_equivalence(
         overwrite_output_dir=True,
     )
     partitioned_scores = analyzer.load_pairwise_scores(
-        scores_name=f"pytest_{test_name}_partition_{data_partition_size}_{module_partition_size}",
+        scores_name=custom_scores_name(f"{data_partition_size}_{module_partition_size}"),
     )
 
     assert check_tensor_dict_equivalence(
@@ -389,20 +378,18 @@ def test_per_module_scores_equivalence(
         task=task,
     )
 
-    factors_name = f"pytest_{test_name}_{test_per_module_scores_equivalence.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
 
-    scores_name = f"pytest_{test_name}_{test_per_module_scores_equivalence.__name__}_scores"
     score_args = test_score_arguments()
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -411,12 +398,12 @@ def test_per_module_scores_equivalence(
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
     score_args.per_module_score = True
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name + "_per_module",
-        factors_name=factors_name,
+        scores_name=custom_scores_name("per_module"),
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -425,7 +412,7 @@ def test_per_module_scores_equivalence(
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    per_module_scores = analyzer.load_pairwise_scores(scores_name=scores_name + "_per_module")
+    per_module_scores = analyzer.load_pairwise_scores(scores_name=custom_scores_name("per_module"))
 
     total_scores = None
     for module_name in per_module_scores:
@@ -465,9 +452,8 @@ def test_compute_pairwise_scores_with_indices(
         model=model,
         task=task,
     )
-    factors_name = f"pytest_{test_name}_{test_compute_pairwise_scores_with_indices.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=32,
@@ -476,10 +462,9 @@ def test_compute_pairwise_scores_with_indices(
 
     score_args = test_score_arguments()
     score_args.data_partition_size = 2
-    scores_name = f"pytest_{test_name}_{test_compute_pairwise_scores_with_indices.__name__}_scores"
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         query_indices=list(range(30)),
         per_device_query_batch_size=4,
@@ -491,7 +476,7 @@ def test_compute_pairwise_scores_with_indices(
         overwrite_output_dir=True,
     )
 
-    pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    pairwise_scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
     assert pairwise_scores[ALL_MODULE_NAME].size(0) == 30
     assert pairwise_scores[ALL_MODULE_NAME].size(1) == 50
 
@@ -500,7 +485,7 @@ def test_compute_pairwise_scores_with_indices(
     "test_name",
     [
         "mlp",
-        "conv",
+        "conv_bn",
     ],
 )
 @pytest.mark.parametrize("query_size", [64])
@@ -528,20 +513,18 @@ def test_query_accumulation(
         task=task,
     )
 
-    factors_name = f"pytest_{test_name}_{test_query_accumulation.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
 
-    scores_name = f"pytest_{test_name}_{test_query_accumulation.__name__}_scores"
     score_args = test_score_arguments(query_gradient_rank=8)
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -550,12 +533,12 @@ def test_query_accumulation(
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
     score_args.num_query_gradient_accumulations = num_query_gradient_accumulations
     analyzer.compute_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_query_accumulation.__name__}_accumulated_scores",
-        factors_name=factors_name,
+        scores_name=custom_scores_name("accumulation"),
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=10,
         train_dataset=train_dataset,
@@ -565,7 +548,7 @@ def test_query_accumulation(
         overwrite_output_dir=True,
     )
     partitioned_scores = analyzer.load_pairwise_scores(
-        scores_name=f"pytest_{test_name}_{test_query_accumulation.__name__}_accumulated_scores",
+        scores_name=custom_scores_name("accumulation"),
     )
 
     assert check_tensor_dict_equivalence(
@@ -607,19 +590,17 @@ def test_pairwise_shared_parameters(
     )
     factor_args = test_factor_arguments()
     factor_args.shared_parameters_exist = False
-    factors_name = f"pytest_{test_name}_{test_pairwise_shared_parameters.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
-    scores_name = f"pytest_{test_name}_{test_pairwise_shared_parameters.__name__}_scores"
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -627,22 +608,20 @@ def test_pairwise_shared_parameters(
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
     factor_args.shared_parameters_exist = True
-    factors_name = f"pytest_{test_name}_{test_pairwise_shared_parameters.__name__}_shared"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
-    scores_name = f"pytest_{test_name}_{test_pairwise_shared_parameters.__name__}_shared_scores"
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=custom_scores_name("shared"),
+        factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
@@ -650,7 +629,7 @@ def test_pairwise_shared_parameters(
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
     )
-    shared_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    shared_scores = analyzer.load_pairwise_scores(scores_name=custom_scores_name("shared"))
 
     assert check_tensor_dict_equivalence(
         scores,
@@ -658,3 +637,78 @@ def test_pairwise_shared_parameters(
         atol=ATOL,
         rtol=RTOL,
     )
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    ["mlp", "conv_bn", "gpt"],
+)
+@pytest.mark.parametrize("query_gradient_rank", [16, 32])
+@pytest.mark.parametrize("use_full_svd", [False, True])
+@pytest.mark.parametrize("num_query_gradient_accumulations", [1, 3])
+@pytest.mark.parametrize("query_size", [64])
+@pytest.mark.parametrize("train_size", [160])
+@pytest.mark.parametrize("seed", [9])
+def test_pairwise_query_batching(
+    test_name: str,
+    query_gradient_rank: int,
+    use_full_svd: bool,
+    num_query_gradient_accumulations: int,
+    query_size: int,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Makes sure similar results are obtained with and without query batching.
+    model, train_dataset, test_dataset, data_collator, task = prepare_test(
+        test_name=test_name,
+        query_size=query_size,
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    factor_args = test_factor_arguments()
+    analyzer.fit_all_factors(
+        factors_name=DEFAULT_FACTORS_NAME,
+        factor_args=factor_args,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+    score_args = test_score_arguments()
+    analyzer.compute_pairwise_scores(
+        scores_name=DEFAULT_SCORES_NAME,
+        score_args=score_args,
+        factors_name=DEFAULT_FACTORS_NAME,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=4,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        overwrite_output_dir=True,
+    )
+    scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
+
+    score_args.query_gradient_rank = query_gradient_rank
+    score_args.use_full_svd = use_full_svd
+    score_args.num_query_gradient_accumulations = num_query_gradient_accumulations
+    analyzer.compute_pairwise_scores(
+        scores_name=custom_scores_name("qb"),
+        score_args=score_args,
+        factors_name=DEFAULT_FACTORS_NAME,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=3,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=9,
+        dataloader_kwargs=kwargs,
+        overwrite_output_dir=True,
+    )
+    qb_scores = analyzer.load_pairwise_scores(scores_name=custom_scores_name("qb"))
+
+    for i in range(query_size):
+        assert spearmanr(scores[ALL_MODULE_NAME][i], qb_scores[ALL_MODULE_NAME][i])[0] > 0.9

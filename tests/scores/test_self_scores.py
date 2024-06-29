@@ -16,7 +16,7 @@ from tests.utils import (
     RTOL,
     check_tensor_dict_equivalence,
     prepare_model_and_analyzer,
-    prepare_test,
+    prepare_test, DEFAULT_FACTORS_NAME, DEFAULT_SCORES_NAME, custom_scores_name, custom_factors_name,
 )
 
 
@@ -25,11 +25,11 @@ from tests.utils import (
     [
         "mlp",
         "repeated_mlp",
-        "mlp_checkpoint",
         "conv",
-        "conv_bn",
         "bert",
+        "roberta",
         "gpt",
+        "gpt_checkpoint",
     ],
 )
 @pytest.mark.parametrize("use_measurement_for_self_influence", [False, True])
@@ -58,9 +58,8 @@ def test_compute_self_scores(
     if test_name == "repeated_mlp":
         factor_args.shared_parameters_exist = True
 
-    factors_name = f"pytest_{test_name}_{test_compute_self_scores.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
@@ -72,10 +71,9 @@ def test_compute_self_scores(
         use_measurement_for_self_influence=use_measurement_for_self_influence,
         score_dtype=score_dtype,
     )
-    scores_name = f"pytest_{test_name}_{test_compute_self_scores.__name__}_scores"
     analyzer.compute_self_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=4,
         dataloader_kwargs=kwargs,
@@ -83,16 +81,13 @@ def test_compute_self_scores(
         overwrite_output_dir=True,
     )
 
-    self_scores = analyzer.load_self_scores(scores_name=scores_name)
+    self_scores = analyzer.load_self_scores(scores_name=DEFAULT_SCORES_NAME)
     assert self_scores[ALL_MODULE_NAME].size(0) == train_size
     assert len(self_scores[ALL_MODULE_NAME].shape) == 1
     assert self_scores[ALL_MODULE_NAME].dtype == score_dtype
 
 
-@pytest.mark.parametrize(
-    "test_name",
-    ["mlp"],
-)
+@pytest.mark.parametrize("test_name", ["mlp"])
 @pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("precondition_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("score_dtype", [torch.float32, torch.bfloat16])
@@ -118,9 +113,8 @@ def test_compute_self_scores_dtype(
         model=model,
         task=task,
     )
-    factors_name = f"pytest_{test_name}_{test_compute_self_scores_dtype.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=32,
@@ -132,17 +126,16 @@ def test_compute_self_scores_dtype(
         per_sample_gradient_dtype=per_sample_gradient_dtype,
         precondition_dtype=precondition_dtype,
     )
-    scores_name = f"pytest_{test_name}_{test_compute_self_scores_dtype.__name__}_scores"
     analyzer.compute_self_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    self_scores = analyzer.load_self_scores(scores_name=scores_name)
+    self_scores = analyzer.load_self_scores(scores_name=DEFAULT_SCORES_NAME)
     assert self_scores[ALL_MODULE_NAME].size(0) == train_size
     assert len(self_scores[ALL_MODULE_NAME].shape) == 1
     assert self_scores[ALL_MODULE_NAME].dtype == score_dtype
@@ -179,9 +172,8 @@ def test_self_scores_batch_size_equivalence(
     )
 
     factor_args = test_factor_arguments(strategy=strategy)
-    factors_name = f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=4,
@@ -191,8 +183,8 @@ def test_self_scores_batch_size_equivalence(
 
     score_args = test_score_arguments()
     analyzer.compute_self_scores(
-        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_bs1",
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=1,
         dataloader_kwargs=kwargs,
@@ -200,12 +192,12 @@ def test_self_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs1_scores = analyzer.load_self_scores(
-        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_bs1",
+        scores_name=DEFAULT_SCORES_NAME,
     )
 
     analyzer.compute_self_scores(
-        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_bs8",
-        factors_name=factors_name,
+        scores_name=custom_scores_name("bs8"),
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
@@ -213,7 +205,7 @@ def test_self_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs8_scores = analyzer.load_self_scores(
-        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_bs8",
+        scores_name=custom_scores_name("bs8"),
     )
 
     assert check_tensor_dict_equivalence(
@@ -224,8 +216,8 @@ def test_self_scores_batch_size_equivalence(
     )
 
     analyzer.compute_self_scores(
-        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_auto",
-        factors_name=factors_name,
+        scores_name=custom_scores_name("auto"),
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=None,
         dataloader_kwargs=kwargs,
@@ -233,7 +225,7 @@ def test_self_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
     bs_auto_scores = analyzer.load_self_scores(
-        scores_name=f"pytest_{test_name}_{test_self_scores_batch_size_equivalence.__name__}_{strategy}_score_auto",
+        scores_name=custom_scores_name("auto"),
     )
 
     assert check_tensor_dict_equivalence(
@@ -276,33 +268,31 @@ def test_self_scores_partition_equivalence(
         task=task,
     )
 
-    factors_name = f"pytest_{test_name}_{test_self_scores_partition_equivalence.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
 
-    scores_name = f"pytest_{test_name}_{test_self_scores_partition_equivalence.__name__}_scores"
     score_args = test_score_arguments()
     analyzer.compute_self_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_self_scores(scores_name=scores_name)
+    scores = analyzer.load_self_scores(scores_name=DEFAULT_SCORES_NAME)
 
     score_args.data_partition_size = data_partition_size
     score_args.module_partition_size = module_partition_size
     analyzer.compute_self_scores(
-        scores_name=f"pytest_{test_name}_partition_{data_partition_size}_{module_partition_size}",
-        factors_name=factors_name,
+        scores_name=custom_scores_name(f"{data_partition_size}_{module_partition_size}"),
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=5,
         dataloader_kwargs=kwargs,
@@ -310,7 +300,7 @@ def test_self_scores_partition_equivalence(
         overwrite_output_dir=True,
     )
     partitioned_scores = analyzer.load_self_scores(
-        scores_name=f"pytest_{test_name}_partition_{data_partition_size}_{module_partition_size}",
+        scores_name=custom_scores_name(f"{data_partition_size}_{module_partition_size}"),
     )
 
     assert check_tensor_dict_equivalence(
@@ -325,7 +315,7 @@ def test_self_scores_partition_equivalence(
     "test_name",
     [
         "mlp",
-        "conv",
+        "conv_bn",
         "gpt",
     ],
 )
@@ -349,39 +339,37 @@ def test_per_module_scores_equivalence(
         task=task,
     )
 
-    factors_name = f"pytest_{test_name}_{test_per_module_scores_equivalence.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
 
-    scores_name = f"pytest_{test_name}_{test_per_module_scores_equivalence.__name__}_scores"
     score_args = test_score_arguments()
     analyzer.compute_self_scores(
-        scores_name=scores_name,
+        scores_name=DEFAULT_SCORES_NAME,
         score_args=score_args,
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_self_scores(scores_name=scores_name)
+    scores = analyzer.load_self_scores(scores_name=DEFAULT_SCORES_NAME)
 
     score_args.per_module_score = True
     analyzer.compute_self_scores(
-        scores_name=scores_name + "_per_module",
-        factors_name=factors_name,
+        scores_name=custom_scores_name("per_module"),
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    per_module_scores = analyzer.load_self_scores(scores_name=scores_name + "_per_module")
+    per_module_scores = analyzer.load_self_scores(custom_scores_name("per_module"))
 
     total_scores = None
     for module_name in per_module_scores:
@@ -419,9 +407,8 @@ def test_compute_self_scores_with_indices(
         model=model,
         task=task,
     )
-    factors_name = f"pytest_{test_name}_{test_compute_self_scores_with_indices.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=32,
@@ -430,10 +417,9 @@ def test_compute_self_scores_with_indices(
 
     score_args = test_score_arguments()
     score_args.data_partition_size = 2
-    scores_name = f"pytest_{test_name}_{test_compute_self_scores_with_indices.__name__}_scores"
     analyzer.compute_self_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         train_indices=list(range(48)),
         per_device_train_batch_size=8,
@@ -442,16 +428,11 @@ def test_compute_self_scores_with_indices(
         overwrite_output_dir=True,
     )
 
-    self_scores = analyzer.load_self_scores(scores_name=scores_name)
+    self_scores = analyzer.load_self_scores(scores_name=DEFAULT_SCORES_NAME)
     assert self_scores[ALL_MODULE_NAME].size(0) == 48
 
 
-@pytest.mark.parametrize(
-    "test_name",
-    [
-        "mlp",
-    ],
-)
+@pytest.mark.parametrize("test_name",["mlp",],)
 @pytest.mark.parametrize("train_size", [60])
 @pytest.mark.parametrize("seed", [1])
 def test_compute_self_scores_with_diagonal_pairwise_equivalence(
@@ -471,31 +452,29 @@ def test_compute_self_scores_with_diagonal_pairwise_equivalence(
         model=model,
         task=task,
     )
-    factors_name = f"pytest_{test_name}_{test_compute_self_scores_with_diagonal_pairwise_equivalence.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=32,
         overwrite_output_dir=True,
     )
 
-    scores_name = f"pytest_{test_name}_{test_compute_self_scores_with_diagonal_pairwise_equivalence.__name__}_scores"
     score_args = test_score_arguments()
     analyzer.compute_self_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    self_scores = analyzer.load_self_scores(scores_name=scores_name)
+    self_scores = analyzer.load_self_scores(scores_name=DEFAULT_SCORES_NAME)
 
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         query_dataset=train_dataset,
@@ -504,7 +483,7 @@ def test_compute_self_scores_with_diagonal_pairwise_equivalence(
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    pairwise_scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
     assert torch.allclose(
         torch.diag(pairwise_scores[ALL_MODULE_NAME]),
@@ -537,36 +516,30 @@ def test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence(
         model=model,
         task=task,
     )
-    factors_name = (
-        f"pytest_{test_name}_{test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence.__name__}"
-    )
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=32,
         overwrite_output_dir=True,
     )
 
-    scores_name = (
-        f"pytest_{test_name}_{test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence.__name__}_scores"
-    )
     score_args = test_score_arguments()
     score_args.use_measurement_for_self_influence = True
     analyzer.compute_self_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    self_scores = analyzer.load_self_scores(scores_name=scores_name)
+    self_scores = analyzer.load_self_scores(scores_name=DEFAULT_SCORES_NAME)
 
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
-        factors_name=factors_name,
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         query_dataset=train_dataset,
@@ -575,7 +548,7 @@ def test_compute_self_measurement_scores_with_diagonal_pairwise_equivalence(
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
+    pairwise_scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
     assert torch.allclose(
         torch.diag(pairwise_scores[ALL_MODULE_NAME]),
@@ -620,48 +593,44 @@ def test_self_shared_parameters(
     factor_args.shared_parameters_exist = False
     score_args = test_score_arguments()
     score_args.use_measurement_for_self_influence = use_measurement_for_self_influence
-    factors_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
-    scores_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}_scores"
     analyzer.compute_self_scores(
-        scores_name=scores_name,
+        scores_name=DEFAULT_SCORES_NAME,
         score_args=score_args,
-        factors_name=factors_name,
+        factors_name=DEFAULT_FACTORS_NAME,
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_self_scores(scores_name=scores_name)
+    scores = analyzer.load_self_scores(scores_name=DEFAULT_SCORES_NAME)
 
     factor_args.shared_parameters_exist = True
-    factors_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}_shared"
     analyzer.fit_all_factors(
-        factors_name=factors_name,
+        factors_name=custom_factors_name("shared"),
         factor_args=factor_args,
         dataset=train_dataset,
         dataloader_kwargs=kwargs,
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
-    scores_name = f"pytest_{test_name}_{test_self_shared_parameters.__name__}_shared_scores"
     analyzer.compute_self_scores(
-        scores_name=scores_name,
+        scores_name=custom_scores_name("shared"),
         score_args=score_args,
-        factors_name=factors_name,
+        factors_name=custom_factors_name("shared"),
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
     )
-    shared_scores = analyzer.load_self_scores(scores_name=scores_name)
+    shared_scores = analyzer.load_self_scores(scores_name=custom_scores_name("shared"))
 
     assert check_tensor_dict_equivalence(
         scores,

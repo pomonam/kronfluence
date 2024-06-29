@@ -28,7 +28,6 @@ from kronfluence.utils.dataset import DataLoaderKwargs, find_executable_batch_si
 from kronfluence.utils.exceptions import FactorsNotFoundError
 from kronfluence.utils.logger import get_time
 from kronfluence.utils.save import FACTOR_ARGUMENTS_NAME, SCORE_ARGUMENTS_NAME
-from kronfluence.utils.state import release_memory
 
 
 class ScoreComputer(Computer):
@@ -157,7 +156,7 @@ class ScoreComputer(Computer):
         if self.state.use_distributed:
             error_msg = (
                 "Automatic batch size search is currently not supported for multi-GPU training. "
-                "Please manually configure the batch size by passing in `per_device_train_batch_size`."
+                "Please manually configure the batch size by passing in `per_device_batch_size`."
             )
             self.logger.error(error_msg)
             raise NotImplementedError(error_msg)
@@ -174,9 +173,7 @@ class ScoreComputer(Computer):
         def executable_batch_size_func(batch_size: int) -> None:
             self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
             # Releases all memory that could be caused by the previous OOM.
-            self.model.zero_grad(set_to_none=True)
-            set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
-            release_memory()
+            self._reset_memory()
             total_batch_size = batch_size * self.state.num_processes
             query_loader = self._get_dataloader(
                 dataset=query_dataset,
@@ -377,7 +374,7 @@ class ScoreComputer(Computer):
                         tracked_modules_name=module_partition_names[module_partition],
                     )
 
-                release_memory()
+                self._reset_memory()
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Compute Pairwise Score"):
                     query_loader = self._get_dataloader(
@@ -431,7 +428,7 @@ class ScoreComputer(Computer):
                 self.aggregate_pairwise_scores(scores_name=scores_name)
                 self.logger.info(f"Saved aggregated pairwise scores at `{scores_output_dir}`.")
             self.state.wait_for_everyone()
-        self._log_profile_summary()
+        self._log_profile_summary(name=f"scores_{scores_name}_pairwise")
 
     @torch.no_grad()
     def aggregate_pairwise_scores(self, scores_name: str) -> None:
@@ -491,9 +488,7 @@ class ScoreComputer(Computer):
         def executable_batch_size_func(batch_size: int) -> None:
             self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
             # Releases all memory that could be caused by the previous OOM.
-            self.model.zero_grad(set_to_none=True)
-            set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
-            release_memory()
+            self._reset_memory()
             total_batch_size = batch_size * self.state.num_processes
             train_loader = self._get_dataloader(
                 dataset=train_dataset,
@@ -672,7 +667,7 @@ class ScoreComputer(Computer):
                         tracked_modules_name=module_partition_names[module_partition],
                     )
 
-                release_memory()
+                self._reset_memory()
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Compute Self-Influence Score"):
                     train_loader = self._get_dataloader(
@@ -722,7 +717,7 @@ class ScoreComputer(Computer):
                 self.aggregate_self_scores(scores_name=scores_name)
                 self.logger.info(f"Saved aggregated self-influence scores at `{scores_output_dir}`.")
             self.state.wait_for_everyone()
-        self._log_profile_summary()
+        self._log_profile_summary(name=f"scores_{scores_name}_self")
 
     @torch.no_grad()
     def aggregate_self_scores(self, scores_name: str) -> None:

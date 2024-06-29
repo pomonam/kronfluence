@@ -557,19 +557,29 @@ class TrackedModule(nn.Module):
             List[torch.Tensor, torch.Tensor]:
                 Low-rank matrices that approximate the original preconditioned query gradient.
         """
-        U, S, V = torch.linalg.svd(  # pylint: disable=not-callable
-            preconditioned_gradient.contiguous().to(dtype=self.score_args.query_gradient_svd_dtype),
-            full_matrices=False,
-        )
         rank = self.score_args.query_gradient_rank
-        U_k = U[:, :, :rank]
-        S_k = S[:, :rank]
-        # Avoids holding the full memory of the original tensor before indexing.
-        V_k = V[:, :rank, :].contiguous().clone()
-        return [
-            torch.matmul(U_k, torch.diag_embed(S_k)).to(dtype=self.score_args.score_dtype).contiguous().clone(),
-            V_k.to(dtype=self.score_args.score_dtype),
-        ]
+        if self.score_args.use_full_svd:
+            U, S, V = torch.linalg.svd(  # pylint: disable=not-callable
+                preconditioned_gradient.contiguous().to(dtype=self.score_args.query_gradient_svd_dtype),
+                full_matrices=False,
+            )
+            U_k = U[:, :, :rank]
+            S_k = S[:, :rank]
+            # Avoids holding the full memory of the original tensor before indexing.
+            V_k = V[:, :rank, :].contiguous().clone()
+            return [
+                torch.matmul(U_k, torch.diag_embed(S_k)).to(dtype=self.score_args.score_dtype).contiguous().clone(),
+                V_k.to(dtype=self.score_args.score_dtype),
+            ]
+        else:
+            U, S, V = torch.svd_lowrank(
+                preconditioned_gradient.contiguous().to(dtype=self.score_args.query_gradient_svd_dtype),
+                q=rank,
+            )
+            return [
+                torch.matmul(U, torch.diag_embed(S)).to(dtype=self.score_args.score_dtype).contiguous().clone(),
+                V.transpose(1, 2).contiguous().to(dtype=self.score_args.score_dtype),
+            ]
 
     def _compute_preconditioned_gradient(self, per_sample_gradient: torch.Tensor) -> None:
         """Computes the preconditioned per-sample-gradient.

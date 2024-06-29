@@ -100,6 +100,7 @@ def for_loop_per_sample_gradient(
         "conv_bn",
         "bert",
         "roberta",
+        "gpt",
     ],
 )
 @pytest.mark.parametrize("use_measurement", [True, False])
@@ -192,6 +193,7 @@ def test_for_loop_per_sample_gradient_equivalence(
         "conv_bn",
         "bert",
         "roberta",
+        "gpt",
     ],
 )
 @pytest.mark.parametrize("use_measurement", [True, False])
@@ -305,7 +307,7 @@ def test_mean_gradient_equivalence(
     [
         "mlp",
         "conv",
-        "gpt",
+        "roberta",
     ],
 )
 @pytest.mark.parametrize("train_size", [32])

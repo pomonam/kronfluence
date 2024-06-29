@@ -45,9 +45,14 @@ RTOL = 1.3e-6
 ATOL = 1e-5
 
 DEFAULT_FACTORS_NAME = "pytest"
+DEFAULT_SCORES_NAME = "pytest"
 
 
 def custom_factors_name(name: str) -> str:
+    return f"{DEFAULT_FACTORS_NAME}_{name}"
+
+
+def custom_scores_name(name: str) -> str:
     return f"{DEFAULT_FACTORS_NAME}_{name}"
 
 

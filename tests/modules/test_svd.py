@@ -91,7 +91,7 @@ def test_query_gradient_svd(
 @pytest.mark.parametrize("output_dim", [512, 1024])
 @pytest.mark.parametrize("batch_dim", [8, 16])
 @pytest.mark.parametrize("qbatch_dim", [8, 16])
-@pytest.mark.parametrize("rank", [32])
+@pytest.mark.parametrize("rank", [8])
 @pytest.mark.parametrize("seed", [0])
 def test_query_gradient_svd_reconst(
     input_dim: int,
@@ -150,3 +150,39 @@ def test_query_gradient_svd_reconst(
         assert intermediate2.numel() <= reconst_numel
     else:
         assert intermediate.numel() <= reconst_numel
+
+
+def test_query_gradient_svd_vs_low_rank_svd(
+    seed: int = 0,
+) -> None:
+    input_dim = 2048
+    output_dim = 1024
+    batch_dim = 16
+    set_seed(seed)
+
+    # gradient = torch.rand(size=(batch_dim, output_dim, input_dim), dtype=torch.float32)
+
+    rank = 32
+    lr_gradient1 = torch.rand(size=(batch_dim, output_dim, rank), dtype=torch.float32)
+    lr_gradient2 = torch.rand(size=(batch_dim, rank, input_dim), dtype=torch.float32)
+    gradient = torch.bmm(lr_gradient1, lr_gradient2)
+
+    U, S, V = torch.linalg.svd(
+        gradient.contiguous(),
+        full_matrices=False,
+    )
+
+    U_k = U[:, :, :rank]
+    S_k = S[:, :rank]
+    V_k = V[:, :rank, :].clone()
+    left, right = torch.matmul(U_k, torch.diag_embed(S_k)).contiguous(), V_k.contiguous()
+    assert torch.bmm(left, right).shape == gradient.shape
+    print(f"Error: {(torch.bmm(left, right) - gradient).norm()}")
+
+    new_U, new_S, new_V = torch.svd_lowrank(
+        gradient.contiguous(),
+        q=rank,
+    )
+    new_left, new_right = torch.matmul(new_U, torch.diag_embed(new_S)).contiguous(), new_V.transpose(1, 2).contiguous()
+    assert torch.bmm(new_left, new_right).shape == gradient.shape
+    print(f"Error: {(torch.bmm(new_left, new_right) - gradient).norm()}")
