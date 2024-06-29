@@ -2,7 +2,7 @@ import argparse
 import logging
 import os
 import time
-from typing import Tuple, Any, Dict
+from typing import Any, Dict
 import numpy as np
 import evaluate
 import torch
