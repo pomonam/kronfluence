@@ -32,6 +32,7 @@ except (LookupError, OSError):
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(DEVICE)
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Train seq2seq models on DailyMail dataset.")
 
@@ -115,9 +116,7 @@ def train(
     model.train()
     for epoch in range(num_train_epochs):
         total_loss = 0.0
-        print("epoch start")
         for batch in train_dataloader:
-            print("done")
             optimizer.zero_grad(set_to_none=True)
             batch = send_to_device(batch, device=DEVICE)
             loss = model(**batch).loss
