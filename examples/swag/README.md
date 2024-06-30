@@ -1,6 +1,6 @@
 # SWAG & RoBERTa Example
 
-This directory contains scripts for fine-tuning RoBERTa and computing influence scores on the SWAG dataset. The pipeline is motivated from [this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/multiple-choice) demonstrates how to define `post_process_per_sample_gradient`.
+This directory contains scripts for fine-tuning RoBERTa and computing influence scores on the SWAG dataset. The pipeline is motivated from [this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/multiple-choice) and demonstrates how to define `post_process_per_sample_gradient`.
 To begin, install the necessary packages:
 
 ```bash
@@ -28,7 +28,8 @@ This will fine-tune the model using the specified hyperparameters and save the f
 To calculate pairwise influence scores on 2000 query data points using `ekfac`, run:
 
 ```bash
-python analyze.py --query_batch_size 100 \
+python analyze.py --factor_batch_size 128 \ 
+    --query_batch_size 100 \
     --train_batch_size 128 \
     --use_half_precision \
     --checkpoint_dir ./checkpoints \
@@ -69,7 +70,7 @@ torchrun --standalone --nnodes=1 --nproc-per-node=2 analyze.py --factor_batch_si
     --use_ddp
 ```
 
-The overall computation time reduces to xx hours using 2 A100 GPUs:
+The overall computation time reduces to 2 hours using 2 A100 GPUs:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------

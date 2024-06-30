@@ -31,7 +31,7 @@ except KeyError:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on SWAG dataset.")
+    parser = argparse.ArgumentParser(description="Influence analysis on DailyMail dataset.")
 
     parser.add_argument(
         "--checkpoint_dir",
@@ -119,6 +119,8 @@ class SummarizationTask(Task):
                 probs,
                 num_samples=1,
             ).flatten()
+            masks = batch["labels"].view(-1) == -100
+            sampled_labels[masks] = -100
         return F.cross_entropy(logits, sampled_labels, reduction="sum")
 
     def compute_measurement(
@@ -142,7 +144,8 @@ class SummarizationTask(Task):
         cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
 
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
-        return -margins.sum()
+        masks = batch["labels"].view(-1) != -100
+        return -margins[masks].sum()
 
     def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
         return batch["attention_mask"]
@@ -206,7 +209,8 @@ def main():
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        per_device_batch_size=args.factor_batch_size,
+        # per_device_batch_size=args.factor_batch_size,
+        per_device_batch_size=None,
         factor_args=factor_args,
         overwrite_output_dir=False,
     )
@@ -229,7 +233,7 @@ def main():
         scores_name=scores_name,
         factors_name=factors_name,
         query_dataset=eval_dataset,
-        query_indices=list(range(32)),
+        query_indices=list(range(10)),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
