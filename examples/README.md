@@ -18,7 +18,7 @@ Our examples cover the following tasks:
 
 <div align="center">
 
-| Task                 |    Example datasets	     |
+| Task                 |    Example Datasets	     |
 |----------------------|:------------------------:|
 | Regression           |           UCI            |
 | Image Classification |   CIFAR-10 / ImageNet    |

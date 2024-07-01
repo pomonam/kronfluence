@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn.functional as F

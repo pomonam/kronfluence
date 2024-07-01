@@ -9,7 +9,7 @@ import nltk
 import numpy as np
 import torch
 import torch.nn.functional as F
-from accelerate.utils import set_seed, send_to_device
+from accelerate.utils import send_to_device, set_seed
 from filelock import FileLock
 from torch import nn
 from torch.nn import CrossEntropyLoss
