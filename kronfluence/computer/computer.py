@@ -249,13 +249,13 @@ class Computer(ABC):
     def _get_data_partition(
         self,
         total_data_examples: int,
-        data_partition_size: int,
+        data_partitions: int,
         target_data_partitions: Optional[Union[int, List[int]]],
     ) -> Tuple[List[Tuple[int, int]], List[int]]:
         """Partitions the dataset into several chunks."""
-        if total_data_examples < data_partition_size:
+        if total_data_examples < data_partitions:
             error_msg = (
-                f"Data partition size ({data_partition_size}) cannot be greater than the "
+                f"Data partition size ({data_partitions}) cannot be greater than the "
                 f"total data points ({total_data_examples}). Please reduce the data partition "
                 f"size in the argument."
             )
@@ -263,20 +263,20 @@ class Computer(ABC):
             raise ValueError(error_msg)
 
         indices_partitions = make_indices_partition(
-            total_data_examples=total_data_examples, partition_size=data_partition_size
+            total_data_examples=total_data_examples, partition_size=data_partitions
         )
 
         if target_data_partitions is None:
-            target_data_partitions = list(range(data_partition_size))
+            target_data_partitions = list(range(data_partitions))
 
         if isinstance(target_data_partitions, int):
             target_data_partitions = [target_data_partitions]
 
         for data_partition in target_data_partitions:
-            if data_partition < 0 or data_partition > data_partition_size:
+            if data_partition < 0 or data_partition > data_partitions:
                 error_msg = (
                     f"Invalid data partition {data_partition} encountered. "
-                    f"The module partition needs to be in between [0, {data_partition_size})."
+                    f"The module partition needs to be in between [0, {data_partitions})."
                 )
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
@@ -285,15 +285,15 @@ class Computer(ABC):
 
     def _get_module_partition(
         self,
-        module_partition_size: int,
+        module_partitions: int,
         target_module_partitions: Optional[Union[int, List[int]]],
     ) -> Tuple[List[List[str]], List[int]]:
         """Partitions the modules into several chunks."""
         tracked_module_names = get_tracked_module_names(self.model)
 
-        if len(tracked_module_names) < module_partition_size:
+        if len(tracked_module_names) < module_partitions:
             error_msg = (
-                f"Module partition size ({module_partition_size}) cannot be greater than the "
+                f"Module partition size ({module_partitions}) cannot be greater than the "
                 f"total tracked modules ({len(tracked_module_names)}). Please reduce the module partition "
                 f"size in the argument."
             )
@@ -302,20 +302,20 @@ class Computer(ABC):
 
         modules_partition_list = make_modules_partition(
             total_module_names=tracked_module_names,
-            partition_size=module_partition_size,
+            partition_size=module_partitions,
         )
 
         if target_module_partitions is None:
-            target_module_partitions = list(range(module_partition_size))
+            target_module_partitions = list(range(module_partitions))
 
         if isinstance(target_module_partitions, int):
             target_module_partitions = [target_module_partitions]
 
         for module_partition in target_module_partitions:
-            if module_partition < 0 or module_partition > module_partition_size:
+            if module_partition < 0 or module_partition > module_partitions:
                 error_msg = (
                     f"Invalid module partition {module_partition} encountered. "
-                    f"The module partition needs to be in between [0, {module_partition_size})."
+                    f"The module partition needs to be in between [0, {module_partitions})."
                 )
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)

@@ -8,10 +8,11 @@ import torch.nn.functional as F
 from datasets import load_dataset
 from torch import nn
 from torch.utils import data
-from transformers import AutoConfig, AutoModelForMultipleChoice, AutoTokenizer
+from transformers import AutoConfig, AutoModelForMultipleChoice, AutoTokenizer, logging
 
 from kronfluence.task import Task
 
+logging.set_verbosity_error()
 BATCH_TYPE = Dict[str, torch.Tensor]
 
 
@@ -53,11 +54,9 @@ def make_roberta_dataset(num_data: int, seed: int = 0) -> data.Dataset:
         ]
         labels = examples[label_column_name]
 
-        # Flatten out.
         first_sentences = list(chain(*first_sentences))
         second_sentences = list(chain(*second_sentences))
 
-        # Tokenize.
         tokenized_examples = tokenizer(
             first_sentences,
             second_sentences,
@@ -65,7 +64,6 @@ def make_roberta_dataset(num_data: int, seed: int = 0) -> data.Dataset:
             padding=padding,
             truncation=True,
         )
-        # Un-flatten.
         tokenized_inputs = {k: [v[i : i + 4] for i in range(0, len(v), 4)] for k, v in tokenized_examples.items()}
         tokenized_inputs["labels"] = labels
         return tokenized_inputs
@@ -98,12 +96,12 @@ class MultipleChoiceTask(Task):
         if not sample:
             return F.cross_entropy(logits, batch["labels"], reduction="sum")
         with torch.no_grad():
-            probs = torch.nn.functional.softmax(logits, dim=-1)
+            probs = torch.nn.functional.softmax(logits.detach(), dim=-1)
             sampled_labels = torch.multinomial(
                 probs,
                 num_samples=1,
             ).flatten()
-        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
+        return F.cross_entropy(logits, sampled_labels, reduction="sum")
 
     def compute_measurement(
         self,

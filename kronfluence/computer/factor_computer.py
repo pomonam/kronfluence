@@ -60,9 +60,9 @@ class FactorComputer(Computer):
     def _aggregate_factors(
         self,
         factors_name: str,
-        data_partition_size: int,
-        module_partition_size: int,
-        exists_fnc: Callable,
+        data_partitions: int,
+        module_partitions: int,
+        exist_fnc: Callable,
         load_fnc: Callable,
         save_fnc: Callable,
     ) -> Optional[FACTOR_TYPE]:
@@ -73,9 +73,9 @@ class FactorComputer(Computer):
             self.logger.error(error_msg)
             raise FileNotFoundError(error_msg)
 
-        all_required_partitions = [(i, j) for i in range(data_partition_size) for j in range(module_partition_size)]
+        all_required_partitions = [(i, j) for i in range(data_partitions) for j in range(module_partitions)]
         all_partition_exists = all(
-            exists_fnc(output_dir=factors_output_dir, partition=partition) for partition in all_required_partitions
+            exist_fnc(output_dir=factors_output_dir, partition=partition) for partition in all_required_partitions
         )
         if not all_partition_exists:
             self.logger.warning("Factors are not aggregated as factors for some partitions are not yet computed.")
@@ -83,8 +83,8 @@ class FactorComputer(Computer):
 
         start_time = time.time()
         aggregated_factors: FACTOR_TYPE = {}
-        for data_partition in range(data_partition_size):
-            for module_partition in range(module_partition_size):
+        for data_partition in range(data_partitions):
+            for module_partition in range(module_partitions):
                 loaded_factors = load_fnc(
                     output_dir=factors_output_dir,
                     partition=(data_partition, module_partition),
@@ -95,9 +95,10 @@ class FactorComputer(Computer):
 
                     for module_name in factors:
                         if module_name not in aggregated_factors[factor_name]:
-                            aggregated_factors[factor_name][module_name] = factors[module_name]
-                        else:
-                            aggregated_factors[factor_name][module_name].add_(factors[module_name])
+                            aggregated_factors[factor_name][module_name] = torch.zeros(
+                                size=factors[module_name].shape, dtype=factors[module_name].dtype, requires_grad=False
+                            )
+                        aggregated_factors[factor_name][module_name].add_(factors[module_name])
                 del loaded_factors
         save_fnc(
             output_dir=factors_output_dir,
@@ -227,9 +228,7 @@ class FactorComputer(Computer):
             total_data_examples = min([factor_args.covariance_max_examples, len(dataset)])
         self.logger.info(f"Total data examples to fit covariance matrices: {total_data_examples}.")
 
-        no_partition = (
-            factor_args.covariance_data_partition_size == 1 and factor_args.covariance_module_partition_size == 1
-        )
+        no_partition = factor_args.covariance_data_partitions == 1 and factor_args.covariance_module_partitions == 1
         partition_provided = target_data_partitions is not None or target_module_partitions is not None
         if no_partition and partition_provided:
             error_msg = (
@@ -241,17 +240,20 @@ class FactorComputer(Computer):
 
         data_partition_indices, target_data_partitions = self._get_data_partition(
             total_data_examples=total_data_examples,
-            data_partition_size=factor_args.covariance_data_partition_size,
+            data_partitions=factor_args.covariance_data_partitions,
             target_data_partitions=target_data_partitions,
         )
-        max_partition_examples = total_data_examples // factor_args.covariance_data_partition_size
+        max_partition_examples = total_data_examples // factor_args.covariance_data_partitions
         module_partition_names, target_module_partitions = self._get_module_partition(
-            module_partition_size=factor_args.covariance_module_partition_size,
+            module_partitions=factor_args.covariance_module_partitions,
             target_module_partitions=target_module_partitions,
         )
 
         if max_partition_examples < self.state.num_processes:
-            error_msg = "The number of processes are more than the data examples. Try reducing the number of processes."
+            error_msg = (
+                "The number of processes are larger than the total data examples. "
+                "Try reducing the number of processes."
+            )
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -372,9 +374,9 @@ class FactorComputer(Computer):
         with self.profiler.profile("Aggregate Covariance"):
             self._aggregate_factors(
                 factors_name=factors_name,
-                data_partition_size=factor_args.covariance_data_partition_size,
-                module_partition_size=factor_args.covariance_module_partition_size,
-                exists_fnc=covariance_matrices_exist,
+                data_partitions=factor_args.covariance_data_partitions,
+                module_partitions=factor_args.covariance_module_partitions,
+                exist_fnc=covariance_matrices_exist,
                 load_fnc=load_covariance_matrices,
                 save_fnc=save_covariance_matrices,
             )
@@ -580,7 +582,7 @@ class FactorComputer(Computer):
             total_data_examples = min([factor_args.lambda_max_examples, len(dataset)])
         self.logger.info(f"Total data examples to fit Lambda matrices: {total_data_examples}.")
 
-        no_partition = factor_args.lambda_data_partition_size == 1 and factor_args.lambda_module_partition_size == 1
+        no_partition = factor_args.lambda_data_partitions == 1 and factor_args.lambda_module_partitions == 1
         partition_provided = target_data_partitions is not None or target_module_partitions is not None
         if no_partition and partition_provided:
             error_msg = (
@@ -592,17 +594,20 @@ class FactorComputer(Computer):
 
         data_partition_indices, target_data_partitions = self._get_data_partition(
             total_data_examples=total_data_examples,
-            data_partition_size=factor_args.lambda_data_partition_size,
+            data_partitions=factor_args.lambda_data_partitions,
             target_data_partitions=target_data_partitions,
         )
-        max_partition_examples = total_data_examples // factor_args.lambda_data_partition_size
+        max_partition_examples = total_data_examples // factor_args.lambda_data_partitions
         module_partition_names, target_module_partitions = self._get_module_partition(
-            module_partition_size=factor_args.lambda_module_partition_size,
+            module_partitions=factor_args.lambda_module_partitions,
             target_module_partitions=target_module_partitions,
         )
 
         if max_partition_examples < self.state.num_processes:
-            error_msg = "The number of processes are more than the data examples. Try reducing the number of processes."
+            error_msg = (
+                "The number of processes are larger than the total data examples. "
+                "Try reducing the number of processes."
+            )
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -725,9 +730,9 @@ class FactorComputer(Computer):
         with self.profiler.profile("Aggregate Lambda"):
             self._aggregate_factors(
                 factors_name=factors_name,
-                data_partition_size=factor_args.lambda_data_partition_size,
-                module_partition_size=factor_args.lambda_module_partition_size,
-                exists_fnc=lambda_matrices_exist,
+                data_partitions=factor_args.lambda_data_partitions,
+                module_partitions=factor_args.lambda_module_partitions,
+                exist_fnc=lambda_matrices_exist,
                 load_fnc=load_lambda_matrices,
                 save_fnc=save_lambda_matrices,
             )

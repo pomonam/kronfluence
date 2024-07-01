@@ -32,110 +32,106 @@ class FactorArguments(Arguments):
     # General configuration. #
     strategy: str = field(
         default="ekfac",
-        metadata={"help": "Strategy for computing preconditioning factors."},
+        metadata={
+            "help": "Specifies the algorithm for computing influence factors. Default is 'ekfac' "
+            "(Eigenvalue-corrected Kronecker-factored Approximate Curvature)."
+        },
     )
     use_empirical_fisher: bool = field(
         default=False,
         metadata={
-            "help": "Whether to use empirical Fisher (using labels from batch) instead of "
+            "help": "Determines whether to approximate empirical Fisher (using true labels) or "
             "true Fisher (using sampled labels)."
         },
     )
-    distributed_sync_steps: int = field(
+    distributed_sync_interval: int = field(
         default=1_000,
-        metadata={
-            "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
-        },
+        metadata={"help": "Number of iterations between synchronization steps in distributed computing settings."},
     )
     amp_dtype: Optional[torch.dtype] = field(
         default=None,
-        metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
+        metadata={"help": "Data type for automatic mixed precision (AMP). If `None`, AMP is disabled."},
     )
-    shared_parameters_exist: bool = field(
+    has_shared_parameters: bool = field(
         default=False,
-        metadata={"help": "Specifies whether the shared parameters exist in the forward pass."},
+        metadata={"help": "Indicates whether shared parameters are present in the model's forward pass."},
     )
 
     # Configuration for fitting covariance matrices. #
     covariance_max_examples: Optional[int] = field(
         default=100_000,
         metadata={
-            "help": "Maximum number of examples for fitting covariance matrices. "
-            "Uses all data examples for the given dataset if None."
+            "help": "Maximum number of examples to use when fitting covariance matrices. "
+            "Uses entire dataset if `None`."
         },
     )
-    covariance_data_partition_size: int = field(
+    covariance_data_partitions: int = field(
         default=1,
-        metadata={
-            "help": "Number of data partitions for computing covariance matrices. "
-            "For example, when `covariance_data_partition_size = 2`, the dataset is split "
-            "into 2 chunks and covariance matrices are separately computed for each chunk."
-        },
+        metadata={"help": "Number of partitions to divide the dataset into for covariance matrix computation."},
     )
-    covariance_module_partition_size: int = field(
+    covariance_module_partitions: int = field(
         default=1,
         metadata={
-            "help": "Number of module partitions for computing covariance matrices. "
-            "For example, when `covariance_module_partition_size = 2`, the modules (layers) are split "
-            "into 2 chunks and covariance matrices are separately computed for each chunk."
+            "help": "Number of partitions to divide the model's modules (layers) into for "
+            "covariance matrix computation."
         },
     )
     activation_covariance_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing activation covariance matrices."},
+        metadata={"help": "Data type for activation covariance computations."},
     )
     gradient_covariance_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing pseudo-gradient covariance matrices."},
+        metadata={"help": "Data type for pseudo-gradient covariance computations."},
     )
 
     # Configuration for performing eigendecomposition. #
     eigendecomposition_dtype: torch.dtype = field(
         default=torch.float64,
-        metadata={"help": "Dtype for performing Eigendecomposition. Recommended to use `torch.float64`."},
+        metadata={
+            "help": "Data type for eigendecomposition computations. Double precision (`torch.float64`) is "
+            "recommended for numerical stability."
+        },
     )
 
     # Configuration for fitting Lambda matrices. #
     lambda_max_examples: Optional[int] = field(
         default=100_000,
         metadata={
-            "help": "Maximum number of examples for fitting Lambda matrices. "
-            "Uses all data examples for the given dataset if None."
+            "help": "Maximum number of examples to use when fitting Lambda matrices. Uses entire dataset if `None`."
         },
     )
-    lambda_data_partition_size: int = field(
+    lambda_data_partitions: int = field(
+        default=1,
+        metadata={"help": "Number of partitions to divide the dataset into for Lambda matrix computation."},
+    )
+    lambda_module_partitions: int = field(
         default=1,
         metadata={
-            "help": "Number of data partitions for computing Lambda matrices. "
-            "For example, when `lambda_data_partition_size = 2`, the dataset is split "
-            "into 2 chunks and Lambda matrices are separately computed for each chunk."
+            "help": "Number of partitions to divide the model's modules (layers) into for Lambda matrix computation."
         },
     )
-    lambda_module_partition_size: int = field(
-        default=1,
-        metadata={
-            "help": "Number of module partitions for computing Lambda matrices. "
-            "For example, when `lambda_module_partition_size = 2`, the modules (layers) are split "
-            "into 2 chunks and Lambda matrices are separately computed for each chunk."
-        },
-    )
-    lambda_iterative_aggregate: bool = field(
+    use_iterative_lambda_aggregation: bool = field(
         default=False,
         metadata={
-            "help": "Whether to aggregate squared sum of projected per-sample-gradient with for-loop iterations."
+            "help": "If True, aggregates the squared sum of projected per-sample gradients "
+            "iteratively to reduce GPU memory usage."
         },
     )
-    cached_activation_cpu_offload: bool = field(
+    offload_activations_to_cpu: bool = field(
         default=False,
-        metadata={"help": "Whether to offload cached activation to CPU for computing the per-sample-gradient."},
+        metadata={
+            "help": "If True, offloads cached activations to CPU memory when computing "
+            "per-sample gradients, reducing GPU memory usage."
+        },
     )
     per_sample_gradient_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing per-sample-gradients."},
+        metadata={"help": "Data type for per-sample-gradient computations."},
     )
     lambda_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing Lambda (corrected eigenvalues) matrices."},
+        metadata={"help": "Data type for Lambda matrix computations."},
     )
 
 

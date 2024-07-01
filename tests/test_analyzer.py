@@ -13,10 +13,11 @@ from tests.utils import prepare_test
     "test_name",
     [
         "mlp",
+        "mlp_checkpoint",
         "repeated_mlp",
-        "conv",
         "conv_bn",
         "bert",
+        "roberta",
         "gpt",
     ],
 )
@@ -48,8 +49,8 @@ def test_analyzer(
         analysis_name=f"pytest_{test_name}",
         model=model,
         task=task,
-        disable_model_save=True,
         disable_tqdm=True,
+        disable_model_save=True,
         cpu=True,
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
@@ -89,7 +90,7 @@ def test_analyzer(
         scores_name="self",
         factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
         train_dataset=train_dataset,
-        per_device_train_batch_size=8,
+        per_device_train_batch_size=6,
         dataloader_kwargs=kwargs,
         score_args=score_args,
         overwrite_output_dir=True,
@@ -101,23 +102,23 @@ def test_default_factor_arguments() -> None:
 
     assert factor_args.strategy == "ekfac"
     assert factor_args.use_empirical_fisher is False
-    assert factor_args.distributed_sync_steps == 1000
+    assert factor_args.distributed_sync_interval == 1000
     assert factor_args.amp_dtype is None
-    assert factor_args.shared_parameters_exist is False
+    assert factor_args.has_shared_parameters is False
 
     assert factor_args.covariance_max_examples == 100_000
-    assert factor_args.covariance_data_partition_size == 1
-    assert factor_args.covariance_module_partition_size == 1
+    assert factor_args.covariance_data_partitions == 1
+    assert factor_args.covariance_module_partitions == 1
     assert factor_args.activation_covariance_dtype == torch.float32
     assert factor_args.gradient_covariance_dtype == torch.float32
 
     assert factor_args.eigendecomposition_dtype == torch.float64
 
     assert factor_args.lambda_max_examples == 100_000
-    assert factor_args.lambda_data_partition_size == 1
-    assert factor_args.lambda_module_partition_size == 1
-    assert factor_args.lambda_iterative_aggregate is False
-    assert factor_args.cached_activation_cpu_offload is False
+    assert factor_args.lambda_data_partitions == 1
+    assert factor_args.lambda_module_partitions == 1
+    assert factor_args.use_iterative_lambda_aggregation is False
+    assert factor_args.offload_activations_to_cpu is False
     assert factor_args.per_sample_gradient_dtype == torch.float32
     assert factor_args.lambda_dtype == torch.float32
 

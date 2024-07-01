@@ -5,7 +5,7 @@ import torch
 
 from kronfluence.utils.common.factor_arguments import (
     default_factor_arguments,
-    test_factor_arguments,
+    pytest_factor_arguments,
 )
 from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
@@ -76,6 +76,7 @@ def test_fit_covariance_matrices(
     )
     assert set(covariance_factors.keys()) == set(COVARIANCE_FACTOR_NAMES)
     assert len(covariance_factors[ACTIVATION_COVARIANCE_MATRIX_NAME]) > 0
+    assert len(covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME]) > 0
     for module_name in covariance_factors[ACTIVATION_COVARIANCE_MATRIX_NAME]:
         assert covariance_factors[ACTIVATION_COVARIANCE_MATRIX_NAME][module_name].dtype == activation_covariance_dtype
         assert covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME][module_name].dtype == gradient_covariance_dtype
@@ -109,7 +110,7 @@ def test_covariance_matrices_batch_size_equivalence(
         task=task,
     )
 
-    factor_args = test_factor_arguments()
+    factor_args = pytest_factor_arguments()
     analyzer.fit_covariance_matrices(
         factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
@@ -146,14 +147,14 @@ def test_covariance_matrices_batch_size_equivalence(
         "conv_bn",
     ],
 )
-@pytest.mark.parametrize("data_partition_size", [2, 4])
-@pytest.mark.parametrize("module_partition_size", [2, 3])
+@pytest.mark.parametrize("data_partitions", [2, 4])
+@pytest.mark.parametrize("module_partitions", [2, 3])
 @pytest.mark.parametrize("train_size", [62])
 @pytest.mark.parametrize("seed", [2])
 def test_covariance_matrices_partition_equivalence(
     test_name: str,
-    data_partition_size: int,
-    module_partition_size: int,
+    data_partitions: int,
+    module_partitions: int,
     train_size: int,
     seed: int,
 ) -> None:
@@ -170,7 +171,7 @@ def test_covariance_matrices_partition_equivalence(
         task=task,
     )
 
-    factor_args = test_factor_arguments()
+    factor_args = pytest_factor_arguments()
     analyzer.fit_covariance_matrices(
         factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
@@ -181,10 +182,10 @@ def test_covariance_matrices_partition_equivalence(
     )
     covariance_factors = analyzer.load_covariance_matrices(factors_name=DEFAULT_FACTORS_NAME)
 
-    factor_args.covariance_data_partition_size = data_partition_size
-    factor_args.covariance_module_partition_size = module_partition_size
+    factor_args.covariance_data_partitions = data_partitions
+    factor_args.covariance_module_partitions = module_partitions
     analyzer.fit_covariance_matrices(
-        factors_name=custom_factors_name(f"{data_partition_size}_{module_partition_size}"),
+        factors_name=custom_factors_name(f"{data_partitions}_{module_partitions}"),
         dataset=train_dataset,
         factor_args=factor_args,
         per_device_batch_size=7,
@@ -192,7 +193,7 @@ def test_covariance_matrices_partition_equivalence(
         dataloader_kwargs=kwargs,
     )
     partitioned_covariance_factors = analyzer.load_covariance_matrices(
-        factors_name=custom_factors_name(f"{data_partition_size}_{module_partition_size}"),
+        factors_name=custom_factors_name(f"{data_partitions}_{module_partitions}"),
     )
 
     for name in COVARIANCE_FACTOR_NAMES:
@@ -238,7 +239,7 @@ def test_covariance_matrices_attention_mask(
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
 
-    factor_args = test_factor_arguments()
+    factor_args = pytest_factor_arguments()
     analyzer.fit_covariance_matrices(
         factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
@@ -305,7 +306,7 @@ def test_covariance_matrices_automatic_batch_size(
         task=task,
     )
 
-    factor_args = test_factor_arguments()
+    factor_args = pytest_factor_arguments()
     analyzer.fit_covariance_matrices(
         factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
@@ -338,12 +339,16 @@ def test_covariance_matrices_automatic_batch_size(
 
 
 @pytest.mark.parametrize("test_name", ["mlp"])
-@pytest.mark.parametrize("data_partition_size", [1, 4])
+@pytest.mark.parametrize("max_examples", [4, 26])
+@pytest.mark.parametrize("data_partitions", [1, 4])
+@pytest.mark.parametrize("module_partitions", [1, 2])
 @pytest.mark.parametrize("train_size", [80])
 @pytest.mark.parametrize("seed", [5])
 def test_covariance_matrices_max_examples(
     test_name: str,
-    data_partition_size: int,
+    max_examples: int,
+    data_partitions: int,
+    module_partitions: int,
     train_size: int,
     seed: int,
 ) -> None:
@@ -359,10 +364,10 @@ def test_covariance_matrices_max_examples(
         task=task,
     )
 
-    MAX_EXAMPLES = 26
-    factor_args = test_factor_arguments()
-    factor_args.covariance_max_examples = MAX_EXAMPLES
-    factor_args.covariance_data_partition_size = data_partition_size
+    factor_args = pytest_factor_arguments()
+    factor_args.covariance_max_examples = max_examples
+    factor_args.covariance_data_partitions = data_partitions
+    factor_args.covariance_module_partitions = module_partitions
 
     analyzer.fit_covariance_matrices(
         factors_name=DEFAULT_FACTORS_NAME,
@@ -375,10 +380,10 @@ def test_covariance_matrices_max_examples(
     covariance_factors = analyzer.load_covariance_matrices(factors_name=DEFAULT_FACTORS_NAME)
 
     for num_examples in covariance_factors[NUM_ACTIVATION_COVARIANCE_PROCESSED].values():
-        assert num_examples == MAX_EXAMPLES
+        assert num_examples == max_examples
 
     for num_examples in covariance_factors[NUM_GRADIENT_COVARIANCE_PROCESSED].values():
-        assert num_examples == MAX_EXAMPLES
+        assert num_examples == max_examples
 
 
 @pytest.mark.parametrize(
@@ -407,7 +412,7 @@ def test_covariance_matrices_amp(
         task=task,
     )
 
-    factor_args = test_factor_arguments()
+    factor_args = pytest_factor_arguments()
     analyzer.fit_covariance_matrices(
         factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
@@ -460,7 +465,7 @@ def test_covariance_matrices_gradient_checkpoint(
         task=task,
     )
 
-    factor_args = test_factor_arguments()
+    factor_args = pytest_factor_arguments()
     analyzer.fit_covariance_matrices(
         factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,

@@ -162,8 +162,8 @@ def fit_covariance_matrices_with_loader(
                 if attention_mask is not None:
                     set_attention_mask(model=model, attention_mask=attention_mask)
 
-            model.zero_grad(set_to_none=True)
             with no_sync(model=model, state=state):
+                model.zero_grad(set_to_none=True)
                 with autocast(device_type=state.device.type, enabled=enable_amp, dtype=factor_args.amp_dtype):
                     loss = task.compute_train_loss(
                         batch=batch,
@@ -174,7 +174,7 @@ def fit_covariance_matrices_with_loader(
 
             if (
                 state.use_distributed
-                and total_steps % factor_args.distributed_sync_steps == 0
+                and total_steps % factor_args.distributed_sync_interval == 0
                 and index not in [len(loader) - 1, len(loader) - 2]
             ):
                 # Periodically synchronizes all processes to avoid timeout at the final synchronization.
@@ -193,13 +193,13 @@ def fit_covariance_matrices_with_loader(
 
         saved_factors: FACTOR_TYPE = {}
         for factor_name in COVARIANCE_FACTOR_NAMES:
-            saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=True)
-        state.wait_for_everyone()
+            saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=False)
 
         # Clean up the memory.
         model.zero_grad(set_to_none=True)
         if enable_amp:
             set_gradient_scale(model=model, gradient_scale=1.0)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
+        state.wait_for_everyone()
 
     return num_data_processed, saved_factors

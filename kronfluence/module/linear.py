@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import torch
 from einops import rearrange
@@ -12,13 +12,19 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
     """A tracking wrapper for `nn.Linear` modules."""
 
     @property
-    def weight(self) -> torch.Tensor:
-        """Returns the weight matrix."""
+    def in_features(self) -> int:  # pylint: disable=missing-function-docstring
+        return self.original_module.in_features
+
+    @property
+    def out_features(self) -> int:  # pylint: disable=missing-function-docstring
+        return self.original_module.out_features
+
+    @property
+    def weight(self) -> torch.Tensor:  # pylint: disable=missing-function-docstring
         return self.original_module.weight
 
     @property
-    def bias(self) -> torch.Tensor:
-        """Returns the bias."""
+    def bias(self) -> Optional[torch.Tensor]:  # pylint: disable=missing-function-docstring
         return self.original_module.bias
 
     def _get_flattened_activation(

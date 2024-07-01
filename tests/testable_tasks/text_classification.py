@@ -7,10 +7,16 @@ import torch.nn.functional as F
 from datasets import load_dataset
 from torch import nn
 from torch.utils import data
-from transformers import AutoConfig, AutoModelForSequenceClassification, AutoTokenizer
+from transformers import (
+    AutoConfig,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    logging,
+)
 
 from kronfluence.task import Task
 
+logging.set_verbosity_error()
 BATCH_TYPE = Dict[str, torch.Tensor]
 
 

@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import torch
 import torch.nn.functional as F
@@ -68,13 +68,39 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
     """A tracking wrapper for `nn.Conv2D` modules."""
 
     @property
-    def weight(self) -> torch.Tensor:
-        """Returns the weight matrix."""
+    def in_channels(self) -> int:  # pylint: disable=missing-function-docstring
+        return self.original_module.in_channels
+
+    @property
+    def out_channels(self) -> int:  # pylint: disable=missing-function-docstring
+        return self.original_module.out_channels
+
+    @property
+    def kernel_size(self) -> Tuple[int, int]:  # pylint: disable=missing-function-docstring
+        return self.original_module.kernel_size
+
+    @property
+    def padding(self) -> Tuple[int, int]:  # pylint: disable=missing-function-docstring
+        return self.original_module.padding
+
+    @property
+    def dilation(self) -> Tuple[int, int]:  # pylint: disable=missing-function-docstring
+        return self.original_module.dilation
+
+    @property
+    def groups(self) -> int:  # pylint: disable=missing-function-docstring
+        return self.original_module.groups
+
+    @property
+    def padding_mode(self) -> str:  # pylint: disable=missing-function-docstring
+        return self.original_module.padding_mode
+
+    @property
+    def weight(self) -> torch.Tensor:  # pylint: disable=missing-function-docstring
         return self.original_module.weight
 
     @property
-    def bias(self) -> torch.Tensor:
-        """Returns the bias."""
+    def bias(self) -> Optional[torch.Tensor]:  # pylint: disable=missing-function-docstring
         return self.original_module.bias
 
     def _get_flattened_activation(

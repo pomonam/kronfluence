@@ -8,11 +8,17 @@ import torch.nn.functional as F
 from datasets import load_dataset
 from torch import nn
 from torch.utils import data
-from torch.utils.checkpoint import checkpoint_sequential
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, Conv1D
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    Conv1D,
+    logging,
+)
 
 from kronfluence.task import Task
 
+logging.set_verbosity_error()
 BATCH_TYPE = Dict[str, torch.Tensor]
 
 

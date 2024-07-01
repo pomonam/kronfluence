@@ -268,6 +268,7 @@ class TrackedModule(nn.Module):
         output_gradient = output_gradient.to(dtype=self.factor_args.gradient_covariance_dtype)
         flattened_gradient, count = self._get_flattened_gradient(output_gradient=output_gradient)
         if self._gradient_scale != 1.0:
+            # Avoids in-place operation here.
             flattened_gradient = flattened_gradient * self._gradient_scale
 
         if self._storage[GRADIENT_COVARIANCE_MATRIX_NAME] is None:
@@ -280,9 +281,9 @@ class TrackedModule(nn.Module):
             )
         self._storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(flattened_gradient.t(), flattened_gradient)
 
-        # This is not necessary as `NUM_GRADIENT_COVARIANCE_PROCESSED` should be identical to
-        # `NUM_ACTIVATION_COVARIANCE_PROCESSED` in most cases. However, they can be different when using
-        # gradient checkpointing or torch compile.
+        # This is not necessary in most cases as `NUM_GRADIENT_COVARIANCE_PROCESSED` should be typically identical to
+        # `NUM_ACTIVATION_COVARIANCE_PROCESSED`. However, they can be different when using gradient checkpointing
+        # or torch compile (`torch.compile`).
         if self._storage[NUM_GRADIENT_COVARIANCE_PROCESSED] is None:
             self._storage[NUM_GRADIENT_COVARIANCE_PROCESSED] = torch.zeros(
                 size=(1,),
@@ -298,14 +299,14 @@ class TrackedModule(nn.Module):
         @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
-            # Computes and updates activation covariance matrix in the forward pass.
+            # Computes and updates activation covariance in the forward pass.
             self._update_activation_covariance_matrix(inputs[0].detach().clone())
             # Registers backward hook to obtain gradient with respect to the output.
             outputs.register_hook(backward_hook)
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
-            # Computes and updates pseudo-gradient covariance matrix in the backward pass.
+            # Computes and updates pseudo-gradient covariance in the backward pass.
             self._update_gradient_covariance_matrix(output_gradient.detach())
 
         self._registered_hooks.append(self.original_module.register_forward_hook(forward_hook))
@@ -357,7 +358,7 @@ class TrackedModule(nn.Module):
         self, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
         """Returns the flattened per-sample-gradient tensor. For a brief introduction to
-        per-sample-gradients, see https://pytorch.org/functorch/stable/notebooks/per_sample_grads.html.
+        per-sample-gradient, see https://pytorch.org/functorch/stable/notebooks/per_sample_grads.html.
 
         Args:
             input_activation (torch.Tensor):
@@ -412,7 +413,7 @@ class TrackedModule(nn.Module):
                 )
 
         if FactorConfig.CONFIGS[self.factor_args.strategy].requires_eigendecomposition_for_lambda:
-            if self.factor_args.lambda_iterative_aggregate:
+            if self.factor_args.use_iterative_lambda_aggregation:
                 # This batch-wise iterative update can be useful when the GPU memory is limited.
                 per_sample_gradient = torch.matmul(
                     per_sample_gradient,
@@ -443,16 +444,16 @@ class TrackedModule(nn.Module):
         self._storage[NUM_LAMBDA_PROCESSED].add_(batch_size)
 
     def _register_lambda_hooks(self) -> None:
-        """Installs forward and backward hooks for computation of the Lambda matrices."""
+        """Installs forward and backward hooks for computation of Lambda matrices."""
 
         @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
             cached_activation = inputs[0].detach().clone().to(dtype=self.factor_args.per_sample_gradient_dtype)
-            if self.factor_args.cached_activation_cpu_offload:
+            if self.factor_args.offload_activations_to_cpu:
                 cached_activation = cached_activation.cpu()
 
-            if self.factor_args.shared_parameters_exist:
+            if self.factor_args.has_shared_parameters:
                 if self._cached_activations is None:
                     self._cached_activations = []
                 self._cached_activations.append(cached_activation)
@@ -460,14 +461,14 @@ class TrackedModule(nn.Module):
                 self._cached_activations = cached_activation
 
             # Registers backward hook to obtain gradient with respect to the output.
-            outputs.register_hook(shared_backward_hook if self.factor_args.shared_parameters_exist else backward_hook)
+            outputs.register_hook(shared_backward_hook if self.factor_args.has_shared_parameters else backward_hook)
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             if self._cached_activations is None:
                 raise RuntimeError(
                     f"The module {self.name} is used several times during a forward pass. "
-                    "Set `shared_parameters_exist=True` to avoid this error."
+                    "Set `has_shared_parameters=True` to avoid this error."
                 )
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=self._cached_activations.to(device=output_gradient.device),
@@ -620,21 +621,21 @@ class TrackedModule(nn.Module):
             if self.score_args.cached_activation_cpu_offload:
                 cached_activation = cached_activation.cpu()
 
-            if self.factor_args.shared_parameters_exist:
+            if self.factor_args.has_shared_parameters:
                 if self._cached_activations is None:
                     self._cached_activations = []
                 self._cached_activations.append(cached_activation)
             else:
                 self._cached_activations = cached_activation
 
-            outputs.register_hook(shared_backward_hook if self.factor_args.shared_parameters_exist else backward_hook)
+            outputs.register_hook(shared_backward_hook if self.factor_args.has_shared_parameters else backward_hook)
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             if self._cached_activations is None:
                 raise RuntimeError(
                     f"The module {self.name} is used several times during a forward pass. "
-                    "Set `shared_parameters_exist=True` to avoid this error."
+                    "Set `has_shared_parameters=True` to avoid this error."
                 )
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=self._cached_activations.to(device=output_gradient.device),
@@ -824,21 +825,21 @@ class TrackedModule(nn.Module):
             if self.score_args.cached_activation_cpu_offload:
                 cached_activation = cached_activation.cpu()
 
-            if self.factor_args.shared_parameters_exist:
+            if self.factor_args.has_shared_parameters:
                 if self._cached_activations is None:
                     self._cached_activations = []
                 self._cached_activations.append(cached_activation)
             else:
                 self._cached_activations = cached_activation
 
-            outputs.register_hook(shared_backward_hook if self.factor_args.shared_parameters_exist else backward_hook)
+            outputs.register_hook(shared_backward_hook if self.factor_args.has_shared_parameters else backward_hook)
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             if self._cached_activations is None:
                 raise RuntimeError(
                     f"The module {self.name} is used several times during a forward pass. "
-                    "Set `shared_parameters_exist=True` to avoid the error."
+                    "Set `has_shared_parameters=True` to avoid the error."
                 )
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=self._cached_activations.to(device=output_gradient.device),
@@ -915,21 +916,21 @@ class TrackedModule(nn.Module):
             if self.score_args.cached_activation_cpu_offload:
                 cached_activation = cached_activation.cpu()
 
-            if self.factor_args.shared_parameters_exist:
+            if self.factor_args.has_shared_parameters:
                 if self._cached_activations is None:
                     self._cached_activations = []
                 self._cached_activations.append(cached_activation)
             else:
                 self._cached_activations = cached_activation
 
-            outputs.register_hook(shared_backward_hook if self.factor_args.shared_parameters_exist else backward_hook)
+            outputs.register_hook(shared_backward_hook if self.factor_args.has_shared_parameters else backward_hook)
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             if self._cached_activations is None:
                 raise RuntimeError(
                     f"The module {self.name} is used several times during a forward pass. "
-                    "Set `shared_parameters_exist=True` to avoid this error."
+                    "Set `has_shared_parameters=True` to avoid this error."
                 )
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=self._cached_activations.to(device=output_gradient.device),
@@ -997,21 +998,21 @@ class TrackedModule(nn.Module):
             if self.score_args.cached_activation_cpu_offload:
                 cached_activation = cached_activation.cpu()
 
-            if self.factor_args.shared_parameters_exist:
+            if self.factor_args.has_shared_parameters:
                 if self._cached_activations is None:
                     self._cached_activations = []
                 self._cached_activations.append(cached_activation)
             else:
                 self._cached_activations = cached_activation
 
-            outputs.register_hook(shared_backward_hook if self.factor_args.shared_parameters_exist else backward_hook)
+            outputs.register_hook(shared_backward_hook if self.factor_args.has_shared_parameters else backward_hook)
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             if self._cached_activations is None:
                 raise RuntimeError(
                     f"The module {self.name} is used several times during a forward pass. "
-                    "Set `shared_parameters_exist=True` to avoid this error."
+                    "Set `has_shared_parameters=True` to avoid this error."
                 )
             per_sample_gradient = self._compute_per_sample_gradient(
                 input_activation=self._cached_activations.to(device=output_gradient.device),

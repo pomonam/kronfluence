@@ -115,9 +115,7 @@ def perform_eigendecomposition(
     Returns:
         FACTOR_TYPE:
             The Eigendecomposition results. These results are organized in nested dictionaries, where the first key
-            is the name of the factor (e.g.,activation eigenvector), and the second key is the module name.
-        disable_tqdm (bool, optional):
-            Disables TQDM progress bars. Defaults to False.
+            is the name of the factor (e.g., activation eigenvector), and the second key is the module name.
     """
     eigen_factors: FACTOR_TYPE = {}
     for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
@@ -306,8 +304,8 @@ def fit_lambda_matrices_with_loader(
         for index, batch in enumerate(loader):
             batch = send_to_device(tensor=batch, device=state.device)
 
-            model.zero_grad(set_to_none=True)
             with no_sync(model=model, state=state):
+                model.zero_grad(set_to_none=True)
                 with autocast(device_type=state.device.type, enabled=enable_amp, dtype=factor_args.amp_dtype):
                     loss = task.compute_train_loss(
                         batch=batch,
@@ -316,14 +314,14 @@ def fit_lambda_matrices_with_loader(
                     )
                 scaler.scale(loss).backward()
 
-            if factor_args.shared_parameters_exist:
+            if factor_args.has_shared_parameters:
                 # If shared parameter exists, Lambda matrices are computed and updated only after all
                 # per-sample-gradients are aggregated.
                 finalize_lambda_matrices(model=model)
 
             if (
                 state.use_distributed
-                and total_steps % factor_args.distributed_sync_steps == 0
+                and total_steps % factor_args.distributed_sync_interval == 0
                 and index not in [len(loader) - 1, len(loader) - 2]
             ):
                 # Periodically synchronizes all processes to avoid timeout at the final synchronization.
@@ -343,13 +341,13 @@ def fit_lambda_matrices_with_loader(
         saved_factors: FACTOR_TYPE = {}
         if state.is_main_process:
             for factor_name in LAMBDA_FACTOR_NAMES:
-                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=True)
-        state.wait_for_everyone()
+                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=False)
 
         # Clean up the memory.
         model.zero_grad(set_to_none=True)
         if enable_amp:
             set_gradient_scale(model=model, gradient_scale=1.0)
         set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
+        state.wait_for_everyone()
 
     return num_data_processed, saved_factors
