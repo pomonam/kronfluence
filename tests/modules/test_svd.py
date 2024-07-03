@@ -4,6 +4,7 @@ import opt_einsum
 import pytest
 import torch
 from accelerate.utils import set_seed
+from opt_einsum import DynamicProgramming
 
 
 def test_query_gradient_svd(
@@ -91,7 +92,7 @@ def test_query_gradient_svd(
 @pytest.mark.parametrize("output_dim", [512, 1024])
 @pytest.mark.parametrize("batch_dim", [8, 16])
 @pytest.mark.parametrize("qbatch_dim", [8, 16])
-@pytest.mark.parametrize("rank", [8])
+@pytest.mark.parametrize("rank", [8, 32])
 @pytest.mark.parametrize("seed", [0])
 def test_query_gradient_svd_reconst(
     input_dim: int,
@@ -114,7 +115,10 @@ def test_query_gradient_svd_reconst(
     S_k = S[:, :rank]
     V_k = V[:, :rank, :].clone()
     left_mat, right_mat = torch.matmul(U_k, torch.diag_embed(S_k)).contiguous(), V_k.contiguous()
-    new_gradient = torch.rand(size=(qbatch_dim, output_dim, input_dim), dtype=torch.float64)
+
+    output_gradient = torch.rand(size=(qbatch_dim, output_dim), dtype=torch.float64)
+    input_activation = torch.rand(size=(qbatch_dim, input_dim), dtype=torch.float64)
+    new_gradient = opt_einsum.contract("b...i,b...o->bio", output_gradient, input_activation)
 
     lr_score = opt_einsum.contract("qki,toi,qok->qt", right_mat, new_gradient, left_mat)
     lr_score_reconst_matmul = torch.matmul(
@@ -139,8 +143,47 @@ def test_query_gradient_svd_reconst(
     print("Reconstruction")
     reconst_numel = (torch.matmul(left_mat, right_mat).view(left_mat.size(0), -1)).numel()
     print(reconst_numel)
-    path = opt_einsum.contract_path("qki,toi,qok->qt", right_mat, new_gradient, left_mat)
+
+    # path = opt_einsum.contract_path("qki,toi,qok->qt", right_mat, new_gradient, left_mat, optimize="greedy")
+    # print(path)
+
+    path = opt_einsum.contract_path(
+        "qki,toi,qok->qt",
+        right_mat,
+        new_gradient,
+        left_mat,
+        optimize=DynamicProgramming(search_outer=True, minimize="size"),
+    )
     print(path)
+
+    path = opt_einsum.contract_path("qki,toi,qok->qt", right_mat, new_gradient, left_mat, optimize="optimal")
+    print(path)
+
+    print("Direct")
+    path = opt_einsum.contract_path(
+        "qik,qko,bi,bo->qb",
+        left_mat,
+        right_mat,
+        output_gradient,
+        input_activation,
+        optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+    )
+    direct_result = opt_einsum.contract(
+        "qik,qko,b...i,b...o->qb",
+        left_mat,
+        right_mat,
+        output_gradient,
+        input_activation,
+        optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+    )
+    assert torch.allclose(lr_score, direct_result)
+    print(path)
+
+    # print("Direct")
+    # reconst_numel = (torch.matmul(left_mat, right_mat).view(left_mat.size(0), -1)).numel()
+    # print(reconst_numel)
+    # path = opt_einsum.contract_path("qki,toi,qok->qt", right_mat, new_gradient, left_mat, optimize="optimal")
+    # print(path)
 
     if new_gradient.size(0) * right_mat.size(0) * rank * min((right_mat.size(2), left_mat.size(1))) > right_mat.size(
         0
@@ -159,8 +202,6 @@ def test_query_gradient_svd_vs_low_rank_svd(
     output_dim = 1024
     batch_dim = 16
     set_seed(seed)
-
-    # gradient = torch.rand(size=(batch_dim, output_dim, input_dim), dtype=torch.float32)
 
     rank = 32
     lr_gradient1 = torch.rand(size=(batch_dim, output_dim, rank), dtype=torch.float32)

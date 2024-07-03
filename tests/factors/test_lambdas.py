@@ -36,7 +36,7 @@ from tests.utils import (
 @pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("lambda_dtype", [torch.float32, torch.bfloat16])
 @pytest.mark.parametrize("train_size", [16])
-@pytest.mark.parametrize("seed", [1])
+@pytest.mark.parametrize("seed", [0])
 def test_fit_lambda_matrices(
     test_name: str,
     per_sample_gradient_dtype: torch.dtype,
@@ -137,8 +137,23 @@ def test_lambda_matrices_batch_size_equivalence(
     for name in LAMBDA_FACTOR_NAMES:
         assert check_tensor_dict_equivalence(bs1_lambda_factors[name], bs8_lambda_factors[name], atol=ATOL, rtol=RTOL)
 
+    analyzer.fit_all_factors(
+        factors_name=custom_factors_name("auto"),
+        dataset=train_dataset,
+        per_device_batch_size=None,
+        factor_args=factor_args,
+        dataloader_kwargs=kwargs,
+        overwrite_output_dir=True,
+    )
+    auto_lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=custom_factors_name("auto"),
+    )
 
-@pytest.mark.parametrize("test_name", ["mlp"])
+    for name in LAMBDA_FACTOR_NAMES:
+        assert check_tensor_dict_equivalence(bs1_lambda_factors[name], auto_lambda_factors[name], atol=ATOL, rtol=RTOL)
+
+
+@pytest.mark.parametrize("test_name", ["mlp", "conv_bn"])
 @pytest.mark.parametrize("strategy", ["diagonal", "ekfac"])
 @pytest.mark.parametrize("data_partitions", [2, 4])
 @pytest.mark.parametrize("module_partitions", [2, 3])
@@ -202,10 +217,11 @@ def test_lambda_matrices_partition_equivalence(
         "mlp",
         "conv_bn",
         "bert",
+        "gpt",
     ],
 )
 @pytest.mark.parametrize("train_size", [63, 121])
-@pytest.mark.parametrize("seed", [4])
+@pytest.mark.parametrize("seed", [3])
 def test_lambda_matrices_iterative_lambda_aggregation(
     test_name: str,
     train_size: int,
@@ -243,7 +259,7 @@ def test_lambda_matrices_iterative_lambda_aggregation(
         factors_name=custom_factors_name("iterative"),
         dataset=train_dataset,
         factor_args=factor_args,
-        per_device_batch_size=8,
+        per_device_batch_size=16,
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
     )
@@ -263,7 +279,7 @@ def test_lambda_matrices_iterative_lambda_aggregation(
 @pytest.mark.parametrize("data_partitions", [1, 3])
 @pytest.mark.parametrize("module_partitions", [1, 2])
 @pytest.mark.parametrize("train_size", [82])
-@pytest.mark.parametrize("seed", [3])
+@pytest.mark.parametrize("seed", [4])
 def test_lambda_matrices_max_examples(
     test_name: str,
     max_examples: int,
@@ -313,14 +329,14 @@ def test_lambda_matrices_max_examples(
 )
 @pytest.mark.parametrize("module_partitions", [1, 2])
 @pytest.mark.parametrize("train_size", [100])
-@pytest.mark.parametrize("seed", [8])
+@pytest.mark.parametrize("seed", [5])
 def test_lambda_matrices_amp(
     test_name: str,
     module_partitions: int,
     train_size: int,
     seed: int,
 ) -> None:
-    # Lambda matrices should be similar when AMP is enabled.
+    # Lambda matrices should be similar even when AMP is enabled.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -371,7 +387,7 @@ def test_lambda_matrices_amp(
     ],
 )
 @pytest.mark.parametrize("train_size", [105])
-@pytest.mark.parametrize("seed", [12])
+@pytest.mark.parametrize("seed", [6])
 def test_lambda_matrices_gradient_checkpoint(
     test_name: str,
     train_size: int,
@@ -436,7 +452,7 @@ def test_lambda_matrices_gradient_checkpoint(
     ["mlp", "conv", "gpt"],
 )
 @pytest.mark.parametrize("train_size", [105])
-@pytest.mark.parametrize("seed", [12])
+@pytest.mark.parametrize("seed", [7])
 def test_lambda_matrices_shared_parameters(
     test_name: str,
     train_size: int,
@@ -478,11 +494,9 @@ def test_lambda_matrices_shared_parameters(
         factor_args=factor_args,
         dataloader_kwargs=kwargs,
     )
-    checkpoint_lambda_factors = analyzer.load_lambda_matrices(
+    shared_lambda_factors = analyzer.load_lambda_matrices(
         factors_name=custom_factors_name("shared"),
     )
 
     for name in LAMBDA_FACTOR_NAMES:
-        assert check_tensor_dict_equivalence(
-            lambda_factors[name], checkpoint_lambda_factors[name], atol=ATOL, rtol=RTOL
-        )
+        assert check_tensor_dict_equivalence(lambda_factors[name], shared_lambda_factors[name], atol=ATOL, rtol=RTOL)

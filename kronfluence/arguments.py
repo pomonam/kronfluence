@@ -114,20 +114,20 @@ class FactorArguments(Arguments):
     use_iterative_lambda_aggregation: bool = field(
         default=False,
         metadata={
-            "help": "If True, aggregates the squared sum of projected per-sample gradients "
-            "iteratively to reduce GPU memory usage."
+            "help": "If `True`, aggregates the squared sum of projected per-sample gradients "
+            "iteratively (with for-loop) to reduce GPU memory usage."
         },
     )
     offload_activations_to_cpu: bool = field(
         default=False,
         metadata={
-            "help": "If True, offloads cached activations to CPU memory when computing "
+            "help": "If `True`, offloads cached activations to CPU memory when computing "
             "per-sample gradients, reducing GPU memory usage."
         },
     )
     per_sample_gradient_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Data type for per-sample-gradient computations."},
+        metadata={"help": "Data type for per-sample gradient computations."},
     )
     lambda_dtype: torch.dtype = field(
         default=torch.float32,
@@ -140,88 +140,115 @@ class ScoreArguments(Arguments):
     """Arguments for computing influence scores."""
 
     # General configuration. #
-    damping: Optional[float] = field(
+    damping_factor: Optional[float] = field(
         default=1e-08,
         metadata={
-            "help": "A damping factor for the damped inverse Hessian-vector product (iHVP). "
-            "Uses a heuristic based on mean eigenvalues (0.1 x mean eigenvalues) if set to None."
+            "help": "Damping factor for the inverse Hessian-vector product (iHVP). "
+            "If `None`, uses a heuristic of 0.1 times the mean eigenvalue."
         },
     )
-    cached_activation_cpu_offload: bool = field(
-        default=False,
-        metadata={"help": "Whether to offload cached activation to CPU for computing the per-sample-gradient."},
-    )
-    distributed_sync_steps: int = field(
+    distributed_sync_interval: int = field(
         default=1_000,
-        metadata={
-            "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
-        },
+        metadata={"help": "Number of iterations between synchronization steps in distributed computing settings."},
     )
     amp_dtype: Optional[torch.dtype] = field(
         default=None,
-        metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
+        metadata={"help": "Data type for automatic mixed precision (AMP). If `None`, AMP is disabled."},
+    )
+    offload_activations_to_cpu: bool = field(
+        default=False,
+        metadata={
+            "help": "If `True`, offloads cached activations to CPU memory when computing "
+            "per-sample gradients, reducing GPU memory usage."
+        },
+    )
+    einsum_minimize_size: bool = field(
+        default=False,
+        metadata={
+            "help": "If `True`, einsum operations find the contraction that minimizes the size of the "
+            "largest intermediate tensor."
+        },
     )
 
     # Partition configuration. #
-    data_partition_size: int = field(
+    data_partitions: int = field(
         default=1,
-        metadata={
-            "help": "Number of data partitions for computing influence scores. For example, when "
-            "`data_partition_size = 2`, the dataset is split into 2 chunks and scores are separately "
-            "computed for each chunk."
-        },
+        metadata={"help": "Number of partitions to divide the dataset into for influence score computation."},
     )
-    module_partition_size: int = field(
+    module_partitions: int = field(
         default=1,
         metadata={
-            "help": "Number of module partitions for computing influence scores. For example, when "
-            "`module_partition_size = 2`, the module (layers) are split into 2 modules and scores are separately "
-            "computed for each chunk."
+            "help": "Number of partitions to divide the model's modules (layers) into for influence score computation."
         },
     )
 
-    # Score configuration. #
-    per_module_score: bool = field(
+    # General score configuration. #
+    compute_per_module_scores: bool = field(
+        default=False,
+        metadata={"help": "If `True`, computes separate scores for each module instead of summing across all modules."},
+    )
+    compute_per_token_scores: bool = field(
         default=False,
         metadata={
-            "help": "Whether to obtain per-module scores instead of the summed scores across all modules. "
-            "This is useful when performing layer-wise influence analysis."
+            "help": "If `True`, computes separate scores for each token instead of summing across all tokens. "
+            "Only applicable to transformer-based models."
         },
     )
-    num_query_gradient_accumulations: int = field(
+
+    # Pairwise influence score configuration. #
+    query_gradient_accumulation_steps: int = field(
         default=1,
-        metadata={"help": "Number of query batches to accumulate over before iterating over training examples."},
+        metadata={"help": "Number of query batches to accumulate before processing training examples."},
     )
-    query_gradient_rank: Optional[int] = field(
+    query_gradient_low_rank: Optional[int] = field(
         default=None,
-        metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
+        metadata={
+            "help": "Rank for the low-rank approximation of the query gradient. "
+            "If `None`, no low-rank approximation is applied."
+        },
     )
     use_full_svd: bool = field(
-        default=True,
+        default=False,
         metadata={
-            "help": "Whether to perform to use `torch.linalg.svd` instead of `torch.svd_lowrank` for "
-            "query batching. `torch.svd_lowrank` can result in a more inaccurate low-rank approximations."
+            "help": "If `True`, uses `torch.linalg.svd` instead of `torch.svd_lowrank` for query batching. "
+            "Full SVD is more accurate but slower and more memory-intensive."
         },
     )
-    use_measurement_for_self_influence: bool = field(
+    aggregate_query_gradients: bool = field(
         default=False,
-        metadata={"help": "Whether to use the measurement (instead of the loss) for computing self-influence scores."},
+        metadata={
+            "help": "If `True`, uses the summed query gradient instead of per-sample query gradients "
+            "for pairwise influence computation."
+        },
+    )
+    aggregate_train_gradients: bool = field(
+        default=False,
+        metadata={
+            "help": "If `True`, uses the summed train gradient instead of per-sample train gradients "
+            "for pairwise influence computation."
+        },
     )
 
-    # Dtype configuration. #
+    # Self-influence score configuration. #
+    use_measurement_for_self_influence: bool = field(
+        default=False,
+        metadata={"help": "If `True`, uses the measurement (instead of the loss) for computing self-influence scores."},
+    )
+
+    # Precision configuration. #
     query_gradient_svd_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for performing singular value decomposition (SVD) on the query gradient."},
+        metadata={"help": "Data type for singular value decomposition (SVD) of query gradient."},
     )
     score_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing and storing influence scores."},
+        metadata={"help": "Data type for computing and storing influence scores."},
     )
     per_sample_gradient_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing per-sample-gradients."},
+        metadata={"help": "Data type for computing per-sample gradients."},
     )
     precondition_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing the preconditioned gradient. Recommended to use `torch.float32`."},
+        metadata={"help": "Data type for computing the preconditioned gradient."},
     )

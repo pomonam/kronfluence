@@ -4,11 +4,17 @@ import torch
 import torch.nn.functional as F
 from einconv.utils import get_conv_paddings
 from einops import rearrange, reduce
-from opt_einsum import contract
+from opt_einsum import DynamicProgramming, contract, contract_expression
 from torch import nn
 from torch.nn.modules.utils import _pair
 
+from kronfluence.factor.config import FactorConfig
 from kronfluence.module.tracked_module import TrackedModule
+from kronfluence.utils.constants import (
+    ACCUMULATED_PRECONDITIONED_GRADIENT_NAME,
+    PAIRWISE_SCORE_MATRIX_NAME,
+    SELF_SCORE_VECTOR_NAME,
+)
 from kronfluence.utils.exceptions import UnsupportableModuleError
 
 
@@ -163,4 +169,63 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
             )
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
-        return contract("abm,abn->amn", output_gradient, input_activation)
+        return torch.einsum("abm,abn->amn", output_gradient, input_activation)
+
+    @torch.no_grad()
+    def _compute_pairwise_score(self, input_activation: torch.Tensor, output_gradient: torch.Tensor) -> None:
+        input_activation = extract_patches(
+            inputs=input_activation,
+            kernel_size=self.original_module.kernel_size,
+            stride=self.original_module.stride,
+            padding=self.original_module.padding,
+            dilation=self.original_module.dilation,
+            groups=self.original_module.groups,
+        )
+        input_activation = rearrange(
+            tensor=input_activation,
+            pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
+        )
+
+        if self.original_module.bias is not None:
+            input_activation = torch.cat(
+                [
+                    input_activation,
+                    input_activation.new_ones((input_activation.size(0), 1), requires_grad=False),
+                ],
+                dim=-1,
+            )
+        input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
+        output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
+
+        if isinstance(self._storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME], list):
+            left_mat, right_mat = self._storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME]
+
+            if self._opt_einsum_expression is None:
+                self._opt_einsum_expression = contract_expression(
+                    "qik,qko,b...i,b...o->qb",
+                    left_mat.shape,
+                    right_mat.shape,
+                    output_gradient.shape,
+                    input_activation.shape,
+                    optimize=DynamicProgramming(
+                        search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
+                    ),
+                )
+            self._storage[PAIRWISE_SCORE_MATRIX_NAME] = self._opt_einsum_expression(
+                left_mat, right_mat, output_gradient, input_activation
+            )
+
+        else:
+            if self._opt_einsum_expression is None:
+                self._opt_einsum_expression = contract_expression(
+                    "qio,bti,bto->qb",
+                    self._storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME].shape,
+                    output_gradient.shape,
+                    input_activation.shape,
+                    optimize=DynamicProgramming(
+                        search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
+                    ),
+                )
+            self._storage[PAIRWISE_SCORE_MATRIX_NAME] = self._opt_einsum_expression(
+                self._storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME], output_gradient, input_activation
+            )

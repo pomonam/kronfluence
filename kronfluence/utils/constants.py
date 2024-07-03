@@ -1,12 +1,13 @@
 """A collection of constants."""
 
-from typing import Dict, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import torch
 
 FACTOR_TYPE = Dict[str, Dict[str, torch.Tensor]]
 PARTITION_TYPE = Tuple[int, int]
 SCORE_TYPE = Dict[str, torch.Tensor]
+PRECONDITIONED_GRADIENT_TYPE = Optional[Union[torch.Tensor, List[torch.Tensor]]]
 
 # Activation covariance matrix.
 ACTIVATION_COVARIANCE_MATRIX_NAME = "activation_covariance"

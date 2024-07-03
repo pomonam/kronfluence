@@ -7,8 +7,8 @@ import torch
 from scipy.stats import spearmanr
 
 from kronfluence.arguments import ScoreArguments
-from kronfluence.utils.common.factor_arguments import test_factor_arguments
-from kronfluence.utils.common.score_arguments import test_score_arguments
+from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
+from kronfluence.utils.common.score_arguments import pytest_score_arguments
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import (
@@ -35,20 +35,20 @@ from tests.utils import (
         "gpt_checkpoint",
     ],
 )
-@pytest.mark.parametrize("score_dtype", [torch.float32, torch.bfloat16])
-@pytest.mark.parametrize("query_gradient_rank", [None, 16])
+@pytest.mark.parametrize("score_dtype", [torch.float32])
+@pytest.mark.parametrize("query_gradient_low_rank", [None, 16])
 @pytest.mark.parametrize("query_size", [16])
 @pytest.mark.parametrize("train_size", [32])
 @pytest.mark.parametrize("seed", [0])
 def test_compute_pairwise_scores(
     test_name: str,
     score_dtype: torch.dtype,
-    query_gradient_rank: Optional[int],
+    query_gradient_low_rank: Optional[int],
     query_size: int,
     train_size: int,
     seed: int,
 ) -> None:
-    # Makes sure that the pairwise influence computations are working properly.
+    # Makes sure that pairwise influence computations are working properly.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
@@ -60,9 +60,9 @@ def test_compute_pairwise_scores(
         model=model,
         task=task,
     )
-    factor_args = test_factor_arguments()
+    factor_args = pytest_factor_arguments()
     if test_name == "repeated_mlp":
-        factor_args.shared_parameters_exist = True
+        factor_args.has_shared_parameters = True
 
     analyzer.fit_all_factors(
         factors_name=DEFAULT_FACTORS_NAME,
@@ -75,7 +75,7 @@ def test_compute_pairwise_scores(
 
     score_args = ScoreArguments(
         score_dtype=score_dtype,
-        query_gradient_rank=query_gradient_rank,
+        query_gradient_low_rank=query_gradient_low_rank,
     )
     analyzer.compute_pairwise_scores(
         scores_name=DEFAULT_SCORES_NAME,
@@ -96,26 +96,30 @@ def test_compute_pairwise_scores(
 
 
 @pytest.mark.parametrize("test_name", ["mlp"])
-@pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.bfloat16])
-@pytest.mark.parametrize("precondition_dtype", [torch.float32, torch.bfloat16])
-@pytest.mark.parametrize("score_dtype", [torch.float32, torch.bfloat16])
-@pytest.mark.parametrize("query_gradient_rank", [None, 16])
-@pytest.mark.parametrize("damping", [None, 1e-08])
+@pytest.mark.parametrize("einsum_minimize_size", [True, False])
+@pytest.mark.parametrize("has_shared_parameters", [True, False])
+@pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.float16])
+@pytest.mark.parametrize("precondition_dtype", [torch.float32, torch.float16])
+@pytest.mark.parametrize("score_dtype", [torch.float32, torch.float16])
+@pytest.mark.parametrize("query_gradient_low_rank", [None, 16])
+@pytest.mark.parametrize("damping_factor", [None, 1e-08])
 @pytest.mark.parametrize("query_size", [16])
 @pytest.mark.parametrize("train_size", [32])
-@pytest.mark.parametrize("seed", [6])
+@pytest.mark.parametrize("seed", [1])
 def test_compute_pairwise_scores_dtype(
     test_name: str,
+    has_shared_parameters: bool,
+    einsum_minimize_size: bool,
     per_sample_gradient_dtype: torch.dtype,
     precondition_dtype: torch.dtype,
     score_dtype: torch.dtype,
-    query_gradient_rank: Optional[int],
-    damping: Optional[float],
+    query_gradient_low_rank: Optional[int],
+    damping_factor: Optional[float],
     query_size: int,
     train_size: int,
     seed: int,
 ) -> None:
-    # Makes sure that the pairwise influence computations are working properly with different dtypes.
+    # Makes sure that pairwise influence computations are working properly with different data types.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
@@ -127,18 +131,23 @@ def test_compute_pairwise_scores_dtype(
         model=model,
         task=task,
     )
+
+    factor_args = pytest_factor_arguments()
+    factor_args.has_shared_parameters = has_shared_parameters
     analyzer.fit_all_factors(
         factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
+        factor_args=factor_args,
         dataloader_kwargs=kwargs,
         per_device_batch_size=32,
         overwrite_output_dir=True,
     )
 
     score_args = ScoreArguments(
-        damping=damping,
+        damping_factor=damping_factor,
+        einsum_minimize_size=einsum_minimize_size,
         score_dtype=score_dtype,
-        query_gradient_rank=query_gradient_rank,
+        query_gradient_low_rank=query_gradient_low_rank,
         per_sample_gradient_dtype=per_sample_gradient_dtype,
         precondition_dtype=precondition_dtype,
     )
@@ -170,7 +179,7 @@ def test_compute_pairwise_scores_dtype(
 @pytest.mark.parametrize("strategy", ["identity", "diagonal", "kfac", "ekfac"])
 @pytest.mark.parametrize("query_size", [20])
 @pytest.mark.parametrize("train_size", [50])
-@pytest.mark.parametrize("seed", [1])
+@pytest.mark.parametrize("seed", [2])
 def test_pairwise_scores_batch_size_equivalence(
     test_name: str,
     strategy: str,
@@ -192,7 +201,7 @@ def test_pairwise_scores_batch_size_equivalence(
         task=task,
     )
 
-    factor_args = test_factor_arguments(strategy=strategy)
+    factor_args = pytest_factor_arguments(strategy=strategy)
     analyzer.fit_all_factors(
         factors_name=DEFAULT_FACTORS_NAME,
         dataset=train_dataset,
@@ -202,7 +211,7 @@ def test_pairwise_scores_batch_size_equivalence(
         overwrite_output_dir=True,
     )
 
-    score_args = test_score_arguments()
+    score_args = pytest_score_arguments()
     analyzer.compute_pairwise_scores(
         scores_name=DEFAULT_SCORES_NAME,
         factors_name=DEFAULT_FACTORS_NAME,
@@ -268,19 +277,22 @@ def test_pairwise_scores_batch_size_equivalence(
     [
         "mlp",
         "conv",
+        "gpt",
     ],
 )
-@pytest.mark.parametrize("data_partition_size", [1, 4])
-@pytest.mark.parametrize("module_partition_size", [1, 3])
-@pytest.mark.parametrize("per_module_score", [True, False])
+@pytest.mark.parametrize("data_partitions", [2, 4])
+@pytest.mark.parametrize("module_partitions", [2, 3])
+@pytest.mark.parametrize("compute_per_module_scores", [True, False])
+@pytest.mark.parametrize("compute_per_token_scores", [True, False])
 @pytest.mark.parametrize("query_size", [32])
 @pytest.mark.parametrize("train_size", [64])
-@pytest.mark.parametrize("seed", [2])
+@pytest.mark.parametrize("seed", [3])
 def test_pairwise_scores_partition_equivalence(
     test_name: str,
-    data_partition_size: int,
-    module_partition_size: int,
-    per_module_score: bool,
+    data_partitions: int,
+    module_partitions: int,
+    compute_per_module_scores: bool,
+    compute_per_token_scores: bool,
     query_size: int,
     train_size: int,
     seed: int,
@@ -307,8 +319,9 @@ def test_pairwise_scores_partition_equivalence(
         overwrite_output_dir=True,
     )
 
-    score_args = test_score_arguments()
-    score_args.per_module_score = per_module_score
+    score_args = pytest_score_arguments()
+    score_args.compute_per_module_scores = compute_per_module_scores
+    score_args.compute_per_token_scores = compute_per_token_scores
     analyzer.compute_pairwise_scores(
         scores_name=DEFAULT_SCORES_NAME,
         factors_name=DEFAULT_FACTORS_NAME,
@@ -322,10 +335,10 @@ def test_pairwise_scores_partition_equivalence(
     )
     scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
-    score_args.data_partition_size = data_partition_size
-    score_args.module_partition_size = module_partition_size
+    score_args.data_partitions = data_partitions
+    score_args.module_partitions = module_partitions
     analyzer.compute_pairwise_scores(
-        scores_name=custom_scores_name(f"{data_partition_size}_{module_partition_size}"),
+        scores_name=custom_scores_name(f"{data_partitions}_{module_partitions}"),
         factors_name=DEFAULT_FACTORS_NAME,
         query_dataset=test_dataset,
         per_device_query_batch_size=10,
@@ -336,7 +349,7 @@ def test_pairwise_scores_partition_equivalence(
         overwrite_output_dir=True,
     )
     partitioned_scores = analyzer.load_pairwise_scores(
-        scores_name=custom_scores_name(f"{data_partition_size}_{module_partition_size}"),
+        scores_name=custom_scores_name(f"{data_partitions}_{module_partitions}"),
     )
 
     assert check_tensor_dict_equivalence(
@@ -357,7 +370,7 @@ def test_pairwise_scores_partition_equivalence(
 )
 @pytest.mark.parametrize("query_size", [32])
 @pytest.mark.parametrize("train_size", [64])
-@pytest.mark.parametrize("seed", [0])
+@pytest.mark.parametrize("seed", [4])
 def test_per_module_scores_equivalence(
     test_name: str,
     query_size: int,
@@ -386,7 +399,7 @@ def test_per_module_scores_equivalence(
         overwrite_output_dir=True,
     )
 
-    score_args = test_score_arguments()
+    score_args = pytest_score_arguments()
     analyzer.compute_pairwise_scores(
         scores_name=DEFAULT_SCORES_NAME,
         factors_name=DEFAULT_FACTORS_NAME,
@@ -400,7 +413,7 @@ def test_per_module_scores_equivalence(
     )
     scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
-    score_args.per_module_score = True
+    score_args.compute_per_module_scores = True
     analyzer.compute_pairwise_scores(
         scores_name=custom_scores_name("per_module"),
         factors_name=DEFAULT_FACTORS_NAME,
@@ -424,6 +437,76 @@ def test_per_module_scores_equivalence(
     assert torch.allclose(total_scores, scores[ALL_MODULE_NAME], atol=ATOL, rtol=RTOL)
 
 
+@pytest.mark.parametrize("test_name", ["mlp", "conv", "gpt"])
+@pytest.mark.parametrize("compute_per_module_scores", [True, False])
+@pytest.mark.parametrize("query_size", [12])
+@pytest.mark.parametrize("train_size", [64])
+@pytest.mark.parametrize("seed", [5])
+def test_per_token_scores_equivalence(
+    test_name: str,
+    compute_per_module_scores: bool,
+    query_size: int,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Influence scores should be identical with and without per token score computations.
+    model, train_dataset, test_dataset, data_collator, task = prepare_test(
+        test_name=test_name,
+        query_size=query_size,
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    analyzer.fit_all_factors(
+        factors_name=DEFAULT_FACTORS_NAME,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+
+    score_args = pytest_score_arguments()
+    score_args.compute_per_module_scores = compute_per_module_scores
+    analyzer.compute_pairwise_scores(
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=4,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
+
+    score_args.compute_per_token_scores = True
+    analyzer.compute_pairwise_scores(
+        scores_name=custom_scores_name("per_token"),
+        factors_name=DEFAULT_FACTORS_NAME,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=4,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    per_token_scores = analyzer.load_pairwise_scores(scores_name=custom_scores_name("per_token"))
+
+    for module_name in per_token_scores:
+        if test_name == "gpt":
+            assert torch.allclose(per_token_scores[module_name].sum(dim=-1), scores[module_name], atol=ATOL, rtol=RTOL)
+        else:
+            assert torch.allclose(per_token_scores[module_name], scores[module_name], atol=ATOL, rtol=RTOL)
+
+
 @pytest.mark.parametrize(
     "test_name",
     [
@@ -431,11 +514,17 @@ def test_per_module_scores_equivalence(
         "conv_bn",
     ],
 )
+@pytest.mark.parametrize("data_partitions", [1, 2])
+@pytest.mark.parametrize("query_gradient_low_rank", [None, 4])
+@pytest.mark.parametrize("query_gradient_accumulation_steps", [1, 4])
 @pytest.mark.parametrize("query_size", [60])
 @pytest.mark.parametrize("train_size", [60])
-@pytest.mark.parametrize("seed", [2])
+@pytest.mark.parametrize("seed", [6])
 def test_compute_pairwise_scores_with_indices(
     test_name: str,
+    data_partitions: int,
+    query_gradient_low_rank: Optional[int],
+    query_gradient_accumulation_steps: int,
     query_size: int,
     train_size: int,
     seed: int,
@@ -460,8 +549,10 @@ def test_compute_pairwise_scores_with_indices(
         overwrite_output_dir=True,
     )
 
-    score_args = test_score_arguments()
-    score_args.data_partition_size = 2
+    score_args = pytest_score_arguments()
+    score_args.data_partitions = data_partitions
+    score_args.query_gradient_low_rank = query_gradient_low_rank
+    score_args.query_gradient_accumulation_steps = query_gradient_accumulation_steps
     analyzer.compute_pairwise_scores(
         scores_name=DEFAULT_SCORES_NAME,
         factors_name=DEFAULT_FACTORS_NAME,
@@ -490,13 +581,15 @@ def test_compute_pairwise_scores_with_indices(
 )
 @pytest.mark.parametrize("query_size", [64])
 @pytest.mark.parametrize("train_size", [32])
-@pytest.mark.parametrize("num_query_gradient_accumulations", [2, 5])
-@pytest.mark.parametrize("seed", [5])
-def test_query_accumulation(
+@pytest.mark.parametrize("query_gradient_low_rank", [None])
+@pytest.mark.parametrize("query_gradient_accumulation_steps", [2, 5])
+@pytest.mark.parametrize("seed", [7])
+def test_query_accumulation_steps(
     test_name: str,
     query_size: int,
     train_size: int,
-    num_query_gradient_accumulations: int,
+    query_gradient_low_rank: Optional[int],
+    query_gradient_accumulation_steps: int,
     seed: int,
 ) -> None:
     # Makes sure the query accumulation is correctly implemented.
@@ -521,7 +614,7 @@ def test_query_accumulation(
         overwrite_output_dir=True,
     )
 
-    score_args = test_score_arguments(query_gradient_rank=8)
+    score_args = pytest_score_arguments(query_gradient_low_rank=query_gradient_low_rank)
     analyzer.compute_pairwise_scores(
         scores_name=DEFAULT_SCORES_NAME,
         factors_name=DEFAULT_FACTORS_NAME,
@@ -535,7 +628,7 @@ def test_query_accumulation(
     )
     scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
-    score_args.num_query_gradient_accumulations = num_query_gradient_accumulations
+    score_args.query_gradient_accumulation_steps = query_gradient_accumulation_steps
     analyzer.compute_pairwise_scores(
         scores_name=custom_scores_name("accumulation"),
         factors_name=DEFAULT_FACTORS_NAME,
@@ -547,13 +640,13 @@ def test_query_accumulation(
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    partitioned_scores = analyzer.load_pairwise_scores(
+    accumulated_scores = analyzer.load_pairwise_scores(
         scores_name=custom_scores_name("accumulation"),
     )
 
     assert check_tensor_dict_equivalence(
         scores,
-        partitioned_scores,
+        accumulated_scores,
         atol=ATOL,
         rtol=RTOL,
     )
@@ -563,19 +656,22 @@ def test_query_accumulation(
     "test_name",
     [
         "mlp",
-        "conv",
+        "repeated_mlp",
+        "roberta",
     ],
 )
 @pytest.mark.parametrize("query_size", [50])
 @pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("query_gradient_low_rank", [None])
 @pytest.mark.parametrize("seed", [8])
-def test_pairwise_shared_parameters(
+def test_query_gradient_aggregation(
     test_name: str,
     query_size: int,
     train_size: int,
+    query_gradient_low_rank: Optional[int],
     seed: int,
 ) -> None:
-    # Makes sure the scores are identical with and without `shared_parameters_exist` flag.
+    # Makes sure the query gradient aggregation is correctly implemented.
     model, train_dataset, test_dataset, data_collator, task = prepare_test(
         test_name=test_name,
         query_size=query_size,
@@ -588,8 +684,171 @@ def test_pairwise_shared_parameters(
         model=model,
         task=task,
     )
-    factor_args = test_factor_arguments()
-    factor_args.shared_parameters_exist = False
+
+    factor_args = pytest_factor_arguments()
+    if test_name == "repeated_mlp":
+        factor_args.has_shared_parameters = True
+    analyzer.fit_all_factors(
+        factors_name=DEFAULT_FACTORS_NAME,
+        dataset=train_dataset,
+        factor_args=factor_args,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+
+    score_args = pytest_score_arguments(query_gradient_low_rank=query_gradient_low_rank)
+    analyzer.compute_pairwise_scores(
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=4,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
+
+    score_args.aggregate_query_gradients = True
+    analyzer.compute_pairwise_scores(
+        scores_name=custom_scores_name("aggregation"),
+        factors_name=DEFAULT_FACTORS_NAME,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=10,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=5,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    partitioned_scores = analyzer.load_pairwise_scores(
+        scores_name=custom_scores_name("aggregation"),
+    )
+
+    assert torch.allclose(
+        scores[ALL_MODULE_NAME].sum(dim=0, keepdim=True),
+        partitioned_scores[ALL_MODULE_NAME],
+        atol=ATOL,
+        rtol=RTOL,
+    )
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "conv_bn",
+        "gpt",
+    ],
+)
+@pytest.mark.parametrize("query_size", [64])
+@pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("aggregate_query_gradients", [True, False])
+@pytest.mark.parametrize("query_gradient_low_rank", [None])
+@pytest.mark.parametrize("seed", [9])
+def test_train_gradient_aggregation(
+    test_name: str,
+    query_size: int,
+    train_size: int,
+    aggregate_query_gradients: bool,
+    query_gradient_low_rank: Optional[int],
+    seed: int,
+) -> None:
+    # Makes sure the train gradient aggregation is correctly implemented.
+    model, train_dataset, test_dataset, data_collator, task = prepare_test(
+        test_name=test_name,
+        query_size=query_size,
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    analyzer.fit_all_factors(
+        factors_name=DEFAULT_FACTORS_NAME,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+
+    score_args = pytest_score_arguments(query_gradient_low_rank=query_gradient_low_rank)
+    score_args.aggregate_query_gradients = aggregate_query_gradients
+    analyzer.compute_pairwise_scores(
+        scores_name=DEFAULT_SCORES_NAME,
+        factors_name=DEFAULT_FACTORS_NAME,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=4,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=8,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
+
+    score_args.aggregate_train_gradients = True
+    analyzer.compute_pairwise_scores(
+        scores_name=custom_scores_name("aggregation"),
+        factors_name=DEFAULT_FACTORS_NAME,
+        query_dataset=test_dataset,
+        per_device_query_batch_size=10,
+        train_dataset=train_dataset,
+        per_device_train_batch_size=5,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    aggregated_scores = analyzer.load_pairwise_scores(
+        scores_name=custom_scores_name("aggregation"),
+    )
+
+    assert torch.allclose(
+        scores[ALL_MODULE_NAME].sum(dim=1, keepdim=True),
+        aggregated_scores[ALL_MODULE_NAME],
+        atol=ATOL,
+        rtol=RTOL,
+    )
+
+
+@pytest.mark.parametrize(
+    "test_name",
+    [
+        "mlp",
+        "conv",
+        "roberta",
+    ],
+)
+@pytest.mark.parametrize("query_size", [50])
+@pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("seed", [10])
+def test_pairwise_shared_parameters(
+    test_name: str,
+    query_size: int,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Makes sure the scores are identical with and without `has_shared_parameters` flag.
+    model, train_dataset, test_dataset, data_collator, task = prepare_test(
+        test_name=test_name,
+        query_size=query_size,
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    factor_args = pytest_factor_arguments()
+    score_args = pytest_score_arguments()
     analyzer.fit_all_factors(
         factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
@@ -604,13 +863,14 @@ def test_pairwise_shared_parameters(
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
+        score_args=score_args,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
-    factor_args.shared_parameters_exist = True
+    factor_args.has_shared_parameters = True
     analyzer.fit_all_factors(
         factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
@@ -625,6 +885,7 @@ def test_pairwise_shared_parameters(
         query_dataset=test_dataset,
         per_device_query_batch_size=4,
         train_dataset=train_dataset,
+        score_args=score_args,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
@@ -643,17 +904,17 @@ def test_pairwise_shared_parameters(
     "test_name",
     ["mlp", "conv_bn", "gpt"],
 )
-@pytest.mark.parametrize("query_gradient_rank", [16, 32])
+@pytest.mark.parametrize("query_gradient_low_rank", [16, 32])
 @pytest.mark.parametrize("use_full_svd", [False, True])
-@pytest.mark.parametrize("num_query_gradient_accumulations", [1, 3])
+@pytest.mark.parametrize("query_gradient_accumulation_steps", [1, 3])
 @pytest.mark.parametrize("query_size", [64])
 @pytest.mark.parametrize("train_size", [160])
-@pytest.mark.parametrize("seed", [9])
+@pytest.mark.parametrize("seed", [11])
 def test_pairwise_query_batching(
     test_name: str,
-    query_gradient_rank: int,
+    query_gradient_low_rank: int,
     use_full_svd: bool,
-    num_query_gradient_accumulations: int,
+    query_gradient_accumulation_steps: int,
     query_size: int,
     train_size: int,
     seed: int,
@@ -671,7 +932,7 @@ def test_pairwise_query_batching(
         model=model,
         task=task,
     )
-    factor_args = test_factor_arguments()
+    factor_args = pytest_factor_arguments()
     analyzer.fit_all_factors(
         factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
@@ -680,7 +941,7 @@ def test_pairwise_query_batching(
         per_device_batch_size=8,
         overwrite_output_dir=True,
     )
-    score_args = test_score_arguments()
+    score_args = pytest_score_arguments()
     analyzer.compute_pairwise_scores(
         scores_name=DEFAULT_SCORES_NAME,
         score_args=score_args,
@@ -694,9 +955,9 @@ def test_pairwise_query_batching(
     )
     scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
-    score_args.query_gradient_rank = query_gradient_rank
+    score_args.query_gradient_low_rank = query_gradient_low_rank
     score_args.use_full_svd = use_full_svd
-    score_args.num_query_gradient_accumulations = num_query_gradient_accumulations
+    score_args.query_gradient_accumulation_steps = query_gradient_accumulation_steps
     analyzer.compute_pairwise_scores(
         scores_name=custom_scores_name("qb"),
         score_args=score_args,

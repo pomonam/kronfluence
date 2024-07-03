@@ -145,6 +145,7 @@ def test_covariance_matrices_batch_size_equivalence(
     [
         "mlp",
         "conv_bn",
+        "bert",
     ],
 )
 @pytest.mark.parametrize("data_partitions", [2, 4])
@@ -447,18 +448,22 @@ def test_covariance_matrices_amp(
         )
 
 
+@pytest.mark.parametrize("test_name", ["mlp", "gpt"])
 @pytest.mark.parametrize("train_size", [100])
-@pytest.mark.parametrize("seed", [12])
+@pytest.mark.parametrize("seed", [7])
 def test_covariance_matrices_gradient_checkpoint(
+    test_name: str,
     train_size: int,
     seed: int,
 ) -> None:
     # Covariance matrices should be the same even when gradient checkpointing is used.
     model, train_dataset, _, data_collator, task = prepare_test(
-        test_name="mlp",
+        test_name=test_name,
         train_size=train_size,
         seed=seed,
     )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+
     model = model.to(dtype=torch.float64)
     model, analyzer = prepare_model_and_analyzer(
         model=model,
@@ -471,6 +476,7 @@ def test_covariance_matrices_gradient_checkpoint(
         dataset=train_dataset,
         per_device_batch_size=8,
         overwrite_output_dir=True,
+        dataloader_kwargs=kwargs,
         factor_args=factor_args,
     )
     covariance_factors = analyzer.load_covariance_matrices(
@@ -478,7 +484,7 @@ def test_covariance_matrices_gradient_checkpoint(
     )
 
     model, _, _, _, task = prepare_test(
-        test_name="mlp_checkpoint",
+        test_name=test_name + "_checkpoint",
         train_size=train_size,
         seed=seed,
     )
@@ -491,6 +497,7 @@ def test_covariance_matrices_gradient_checkpoint(
         factors_name=custom_factors_name("cp"),
         dataset=train_dataset,
         per_device_batch_size=4,
+        dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
         factor_args=factor_args,
     )

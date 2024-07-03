@@ -317,7 +317,7 @@ def fit_lambda_matrices_with_loader(
             if factor_args.has_shared_parameters:
                 # If shared parameter exists, Lambda matrices are computed and updated only after all
                 # per-sample-gradients are aggregated.
-                finalize_lambda_matrices(model=model)
+                finalize_lambda_matrices(model=model, tracked_module_names=tracked_module_names)
 
             if (
                 state.use_distributed
@@ -334,14 +334,16 @@ def fit_lambda_matrices_with_loader(
     with torch.no_grad():
         if state.use_distributed:
             # Aggregates Lambda matrices across multiple devices or nodes.
-            synchronize_lambda_matrices(model=model)
+            synchronize_lambda_matrices(model=model, tracked_module_names=tracked_module_names)
             num_data_processed = num_data_processed.to(device=state.device)
             dist.all_reduce(tensor=num_data_processed, op=torch.distributed.ReduceOp.SUM)
 
         saved_factors: FACTOR_TYPE = {}
         if state.is_main_process:
             for factor_name in LAMBDA_FACTOR_NAMES:
-                saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=False)
+                saved_factors[factor_name] = load_factors(
+                    model=model, factor_name=factor_name, tracked_module_names=tracked_module_names, clone=False
+                )
 
         # Clean up the memory.
         model.zero_grad(set_to_none=True)

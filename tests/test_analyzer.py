@@ -126,20 +126,27 @@ def test_default_factor_arguments() -> None:
 def test_default_score_arguments() -> None:
     score_args = ScoreArguments()
 
-    assert score_args.damping == 1e-08
-    assert score_args.cached_activation_cpu_offload is False
-    assert score_args.distributed_sync_steps == 1000
+    assert score_args.damping_factor == 1e-08
+    assert score_args.distributed_sync_interval == 1000
     assert score_args.amp_dtype is None
+    assert score_args.offload_activations_to_cpu is False
+    assert score_args.einsum_minimize_size is False
 
-    assert score_args.data_partition_size == 1
-    assert score_args.module_partition_size == 1
-    assert score_args.per_module_score is False
+    assert score_args.data_partitions == 1
+    assert score_args.module_partitions == 1
+
+    assert score_args.compute_per_module_scores is False
+    assert score_args.compute_per_token_scores is False
+
+    assert score_args.query_gradient_accumulation_steps == 1
+    assert score_args.query_gradient_low_rank is None
+    assert score_args.use_full_svd is False
+    assert score_args.aggregate_query_gradients is False
+    assert score_args.aggregate_train_gradients is False
+
     assert score_args.use_measurement_for_self_influence is False
 
-    assert score_args.query_gradient_rank is None
-    assert score_args.num_query_gradient_accumulations == 1
     assert score_args.query_gradient_svd_dtype == torch.float32
-
     assert score_args.score_dtype == torch.float32
     assert score_args.per_sample_gradient_dtype == torch.float32
     assert score_args.precondition_dtype == torch.float32

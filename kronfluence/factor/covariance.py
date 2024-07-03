@@ -187,13 +187,15 @@ def fit_covariance_matrices_with_loader(
     with torch.no_grad():
         if state.use_distributed:
             # Aggregates covariance matrices across multiple devices or nodes.
-            synchronize_covariance_matrices(model=model)
+            synchronize_covariance_matrices(model=model, tracked_module_names=tracked_module_names)
             num_data_processed = num_data_processed.to(device=state.device)
             dist.all_reduce(tensor=num_data_processed, op=torch.distributed.ReduceOp.SUM)
 
         saved_factors: FACTOR_TYPE = {}
         for factor_name in COVARIANCE_FACTOR_NAMES:
-            saved_factors[factor_name] = load_factors(model=model, factor_name=factor_name, clone=False)
+            saved_factors[factor_name] = load_factors(
+                model=model, factor_name=factor_name, tracked_module_names=tracked_module_names, clone=False
+            )
 
         # Clean up the memory.
         model.zero_grad(set_to_none=True)

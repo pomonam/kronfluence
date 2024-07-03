@@ -4,7 +4,6 @@ import copy
 import time
 from typing import Any, Dict, List
 
-import opt_einsum
 import pytest
 import torch
 from accelerate.utils import find_batch_size, set_seed
@@ -16,6 +15,7 @@ from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode, TrackedModule
 from kronfluence.module.utils import (
     finalize_preconditioned_gradient,
+    get_tracked_module_names,
     set_mode,
     update_factor_args,
 )
@@ -139,8 +139,9 @@ def test_for_loop_per_sample_gradient_equivalence(
         strategy="identity",
     )
     if test_name == "repeated_mlp":
-        factor_args.shared_parameters_exist = True
+        factor_args.has_shared_parameters = True
     update_factor_args(model=model, factor_args=factor_args)
+    tracked_modules_names = get_tracked_module_names(model=model)
 
     per_sample_gradients = []
     set_mode(model, ModuleMode.PRECONDITION_GRADIENT)
@@ -156,7 +157,7 @@ def test_for_loop_per_sample_gradient_equivalence(
         loss.backward()
 
         if test_name == "repeated_mlp":
-            finalize_preconditioned_gradient(model=model)
+            finalize_preconditioned_gradient(model=model, tracked_module_names=tracked_modules_names)
 
         module_gradients = {}
         for module in model.modules():
@@ -232,8 +233,9 @@ def test_mean_gradient_equivalence(
         strategy="identity",
     )
     if test_name == "repeated_mlp":
-        factor_args.shared_parameters_exist = True
+        factor_args.has_shared_parameters = True
     update_factor_args(model=model, factor_args=factor_args)
+    tracked_modules_names = get_tracked_module_names(model=model)
 
     per_sample_gradients = []
     set_mode(model, ModuleMode.PRECONDITION_GRADIENT)
@@ -249,7 +251,7 @@ def test_mean_gradient_equivalence(
         loss.backward()
 
         if test_name == "repeated_mlp":
-            finalize_preconditioned_gradient(model=model)
+            finalize_preconditioned_gradient(model=model, tracked_module_names=tracked_modules_names)
 
         module_gradients = {}
         for module in model.modules():
@@ -306,6 +308,7 @@ def test_mean_gradient_equivalence(
     "test_name",
     [
         "mlp",
+        "repeated_mlp",
         "conv",
         "roberta",
     ],
@@ -353,6 +356,8 @@ def test_lambda_equivalence(
         strategy="diagonal",
         use_empirical_fisher=True,
     )
+    if test_name == "repeated_mlp":
+        factor_args.has_shared_parameters = True
     analyzer.fit_lambda_matrices(
         factors_name=f"pytest_{test_name}_lambda_diag",
         dataset=train_dataset,
@@ -441,25 +446,3 @@ def test_precondition_gradient(
     print(f"Took {time.time() - start_time} seconds.")
 
     assert torch.allclose(raw_results, results, atol=1e-5, rtol=1e-3)
-
-
-def test_compute_score_matmul(
-    seed: int = 0,
-) -> None:
-    input_dim = 1024
-    output_dim = 2048
-    batch_dim = 16
-    query_batch_dim = 64
-    set_seed(seed)
-
-    gradient = torch.rand(size=(batch_dim, output_dim, input_dim), dtype=torch.float64)
-    new_gradient = torch.rand(size=(query_batch_dim, output_dim, input_dim), dtype=torch.float64)
-
-    score = opt_einsum.contract("toi,qoi->tq", gradient, new_gradient)
-    path = opt_einsum.contract_path("toi,qoi->tq", gradient, new_gradient)
-    print(path)
-
-    unsqueeze_score = opt_einsum.contract("t...,q...->tq", gradient, new_gradient)
-    assert torch.allclose(score, unsqueeze_score)
-    path = opt_einsum.contract_path("t...,q...->tq", gradient, new_gradient)
-    print(path)

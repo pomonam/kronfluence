@@ -94,7 +94,7 @@ class Task(ABC):
 
     def post_process_per_sample_gradient(self, module_name: str, gradient: torch.Tensor) -> torch.Tensor:
         """Post-processes the per-sample-gradient of the module with the given name. The attribute
-        `do_post_process_per_sample_gradient` needs to be set to `True` to enable post-processing.
+        `do_post_process_per_sample_gradient` needs to be set to `True` to enable this post-processing.
 
         Args:
             module_name (str):
