@@ -116,7 +116,7 @@ class LanguageModelingTask(Task):
         # We could also compute the log-likelihood or averaged margin.
         return self.compute_train_loss(batch, model)
 
-    def tracked_modules(self) -> List[str]:
+    def get_influence_tracked_modules(self) -> List[str]:
         total_modules = []
 
         for i in range(12):
