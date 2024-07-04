@@ -14,7 +14,7 @@ from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode, TrackedModule
 from kronfluence.module.utils import (
-    finalize_preconditioned_gradient,
+    finalize_iteration,
     get_tracked_module_names,
     set_mode,
     update_factor_args,
@@ -157,7 +157,7 @@ def test_for_loop_per_sample_gradient_equivalence(
         loss.backward()
 
         if test_name == "repeated_mlp":
-            finalize_preconditioned_gradient(model=model, tracked_module_names=tracked_modules_names)
+            finalize_iteration(model=model, tracked_module_names=tracked_modules_names)
 
         module_gradients = {}
         for module in model.modules():
@@ -251,7 +251,7 @@ def test_mean_gradient_equivalence(
         loss.backward()
 
         if test_name == "repeated_mlp":
-            finalize_preconditioned_gradient(model=model, tracked_module_names=tracked_modules_names)
+            finalize_iteration(model=model, tracked_module_names=tracked_modules_names)
 
         module_gradients = {}
         for module in model.modules():

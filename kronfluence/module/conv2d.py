@@ -4,17 +4,11 @@ import torch
 import torch.nn.functional as F
 from einconv.utils import get_conv_paddings
 from einops import rearrange, reduce
-from opt_einsum import DynamicProgramming, contract, contract_expression
+from opt_einsum import DynamicProgramming, contract_expression
 from torch import nn
 from torch.nn.modules.utils import _pair
 
-from kronfluence.factor.config import FactorConfig
 from kronfluence.module.tracked_module import TrackedModule
-from kronfluence.utils.constants import (
-    ACCUMULATED_PRECONDITIONED_GRADIENT_NAME,
-    PAIRWISE_SCORE_MATRIX_NAME,
-    SELF_SCORE_VECTOR_NAME,
-)
 from kronfluence.utils.exceptions import UnsupportableModuleError
 
 
@@ -71,7 +65,7 @@ def extract_patches(
 
 
 class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
-    """A tracking wrapper for `nn.Conv2D` modules."""
+    """A wrapper for `nn.Conv2d` modules."""
 
     @property
     def in_channels(self) -> int:  # pylint: disable=missing-function-docstring
@@ -109,9 +103,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
     def bias(self) -> Optional[torch.Tensor]:  # pylint: disable=missing-function-docstring
         return self.original_module.bias
 
-    def _get_flattened_activation(
-        self, input_activation: torch.Tensor
-    ) -> Tuple[torch.Tensor, Union[torch.Tensor, int]]:
+    def get_flattened_activation(self, input_activation: torch.Tensor) -> Tuple[torch.Tensor, Union[torch.Tensor, int]]:
         input_activation = extract_patches(
             inputs=input_activation,
             kernel_size=self.original_module.kernel_size,
@@ -136,73 +128,69 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
         count = input_activation.size(0)
         return input_activation, count
 
-    def _get_flattened_gradient(self, output_gradient: torch.Tensor) -> Tuple[torch.Tensor, Union[torch.Tensor, int]]:
+    def get_flattened_gradient(self, output_gradient: torch.Tensor) -> Tuple[torch.Tensor, Union[torch.Tensor, int]]:
         output_gradient = rearrange(output_gradient, "b c o1 o2 -> (b o1 o2) c")
         return output_gradient, output_gradient.size(0)
 
-    @torch.no_grad()
-    def _compute_per_sample_gradient(
+    def _flatten_input_activation(self, input_activation: torch.Tensor) -> torch.Tensor:
+        input_activation = extract_patches(
+            inputs=input_activation,
+            kernel_size=self.original_module.kernel_size,
+            stride=self.original_module.stride,
+            padding=self.original_module.padding,
+            dilation=self.original_module.dilation,
+            groups=self.original_module.groups,
+        )
+        input_activation = rearrange(
+            tensor=input_activation,
+            pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
+        )
+
+        if self.original_module.bias is not None:
+            input_activation = torch.cat(
+                [
+                    input_activation,
+                    input_activation.new_ones((input_activation.size(0), 1), requires_grad=False),
+                ],
+                dim=-1,
+            )
+        return input_activation
+
+    def compute_summed_gradient(self, input_activation: torch.Tensor, output_gradient: torch.Tensor) -> torch.Tensor:
+        input_activation = self._flatten_input_activation(input_activation=input_activation)
+        input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
+        output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
+        summed_gradient = torch.einsum("bci,bco->io", output_gradient, input_activation)
+        return summed_gradient.view((1, *summed_gradient.size()))
+
+    def compute_per_sample_gradient(
         self,
         input_activation: torch.Tensor,
         output_gradient: torch.Tensor,
     ) -> torch.Tensor:
-        input_activation = extract_patches(
-            inputs=input_activation,
-            kernel_size=self.original_module.kernel_size,
-            stride=self.original_module.stride,
-            padding=self.original_module.padding,
-            dilation=self.original_module.dilation,
-            groups=self.original_module.groups,
-        )
-        input_activation = rearrange(
-            tensor=input_activation,
-            pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
-        )
-
-        if self.original_module.bias is not None:
-            input_activation = torch.cat(
-                [
-                    input_activation,
-                    input_activation.new_ones((input_activation.size(0), 1), requires_grad=False),
-                ],
-                dim=-1,
-            )
+        input_activation = self._flatten_input_activation(input_activation=input_activation)
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
-        return torch.einsum("abm,abn->amn", output_gradient, input_activation)
+        per_sample_gradient = torch.einsum("bci,bco->bio", output_gradient, input_activation)
+        if self.per_sample_gradient_process_fnc is not None:
+            per_sample_gradient = self.per_sample_gradient_process_fnc(
+                module_name=self.name, gradient=per_sample_gradient
+            )
+        return per_sample_gradient
 
     @torch.no_grad()
-    def _compute_pairwise_score(self, input_activation: torch.Tensor, output_gradient: torch.Tensor) -> None:
-        input_activation = extract_patches(
-            inputs=input_activation,
-            kernel_size=self.original_module.kernel_size,
-            stride=self.original_module.stride,
-            padding=self.original_module.padding,
-            dilation=self.original_module.dilation,
-            groups=self.original_module.groups,
-        )
-        input_activation = rearrange(
-            tensor=input_activation,
-            pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
-        )
-
-        if self.original_module.bias is not None:
-            input_activation = torch.cat(
-                [
-                    input_activation,
-                    input_activation.new_ones((input_activation.size(0), 1), requires_grad=False),
-                ],
-                dim=-1,
-            )
+    def compute_pairwise_score(
+        self, preconditioned_gradient, input_activation: torch.Tensor, output_gradient: torch.Tensor
+    ) -> torch.Tensor:
+        input_activation = self._flatten_input_activation(input_activation=input_activation)
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
 
-        if isinstance(self._storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME], list):
-            left_mat, right_mat = self._storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME]
-
-            if self._opt_einsum_expression is None:
-                self._opt_einsum_expression = contract_expression(
-                    "qik,qko,b...i,b...o->qb",
+        if isinstance(preconditioned_gradient, list):
+            left_mat, right_mat = preconditioned_gradient
+            if self.einsum_expression is None:
+                self.einsum_expression = contract_expression(
+                    "qik,qko,bci,bco->qb",
                     left_mat.shape,
                     right_mat.shape,
                     output_gradient.shape,
@@ -211,21 +199,34 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
                         search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
                     ),
                 )
-            self._storage[PAIRWISE_SCORE_MATRIX_NAME] = self._opt_einsum_expression(
-                left_mat, right_mat, output_gradient, input_activation
-            )
-
+            return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation)
         else:
-            if self._opt_einsum_expression is None:
-                self._opt_einsum_expression = contract_expression(
+            if self.einsum_expression is None:
+                self.einsum_expression = contract_expression(
                     "qio,bti,bto->qb",
-                    self._storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME].shape,
+                    preconditioned_gradient.shape,
                     output_gradient.shape,
                     input_activation.shape,
                     optimize=DynamicProgramming(
                         search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
                     ),
                 )
-            self._storage[PAIRWISE_SCORE_MATRIX_NAME] = self._opt_einsum_expression(
-                self._storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME], output_gradient, input_activation
+            return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
+
+    def compute_self_measurement_score(
+        self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
+    ) -> torch.Tensor:
+        input_activation = self._flatten_input_activation(input_activation=input_activation)
+        input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
+        output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
+        if self.einsum_expression is None:
+            self.einsum_expression = contract_expression(
+                "bio,bci,bco->b",
+                preconditioned_gradient.shape,
+                output_gradient.shape,
+                input_activation.shape,
+                optimize=DynamicProgramming(
+                    search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
+                ),
             )
+        return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)

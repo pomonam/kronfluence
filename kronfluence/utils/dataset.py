@@ -16,8 +16,11 @@ T_co = TypeVar("T_co", covariant=True)
 
 @dataclass
 class DataLoaderKwargs(KwargsHandler):
-    """The object used to customize `DataLoader`. Please refer to https://pytorch.org/docs/stable/data.html for
-    detailed information of each argument. The default arguments are copied from PyTorch version 2.3.
+    """Customization options for `DataLoader`.
+
+    This class encapsulates the arguments used to customize PyTorch's `DataLoader`. Default values are based on
+    PyTorch version 2.3. For detailed information on each argument, refer to:
+    https://pytorch.org/docs/stable/data.html.
     """
 
     num_workers: int = 0
@@ -33,7 +36,21 @@ class DataLoaderKwargs(KwargsHandler):
 
 
 def make_indices_partition(total_data_examples: int, partition_size: int) -> List[Tuple[int, int]]:
-    """Returns partitioned indices from the total data examples."""
+    """Partitions data indices into approximately equal-sized bins.
+
+    Args:
+        total_data_examples (int):
+            Total number of data examples.
+        partition_size (int):
+            Number of partitions to create.
+
+    Returns:
+        List[Tuple[int, int]]:
+            List of tuples, each containing start and end indices for a partition.
+
+    Raises:
+        ValueError: If `total_data_examples` is less than `partition_size`.
+    """
     if total_data_examples < partition_size:
         raise ValueError("The total data examples must be equal or greater than the partition size.")
     # See https://stackoverflow.com/questions/2130016/splitting-a-list-into-n-parts-of-approximately-equal-length.
@@ -47,8 +64,26 @@ def make_indices_partition(total_data_examples: int, partition_size: int) -> Lis
 
 
 def find_executable_batch_size(func: Callable, start_batch_size: int) -> int:
-    """Finds executable batch size for calling the function that does not encounter OOM error. The code is motivated
-    from https://github.com/huggingface/accelerate/blob/v0.27.2/src/accelerate/utils/memory.py#L83."""
+    """Finds the largest batch size that can be executed without OOM errors.
+
+    This function progressively reduces the batch size until it finds a size that can be executed
+    without running out of memory. The code is motivated from:
+    https://github.com/huggingface/accelerate/blob/v0.27.2/src/accelerate/utils/memory.py#L83
+
+    Args:
+        func (Callable):
+            Function to test with different batch sizes.
+        start_batch_size (int):
+            Initial batch size to try.
+
+    Returns:
+        int:
+            The largest executable batch size.
+
+    Raises:
+        RuntimeError:
+            If no executable batch size is found (reaches zero).
+    """
     batch_size = start_batch_size
 
     while True:
@@ -67,10 +102,9 @@ def find_executable_batch_size(func: Callable, start_batch_size: int) -> int:
 
 
 class DistributedEvalSampler(Sampler[T_co]):
-    """DistributedEvalSampler is different from `DistributedSampler`: it does not add extra samples to make
-    the dataset evenly divisible. DistributedEvalSampler should not be used for training; the distributed processes
-    could hang forever. See this issue for details: https://github.com/pytorch/pytorch/issues/22584.
+    """Sampler for distributed setting without adding extra samples.
 
+    Unlike `DistributedSampler`, it does not add extra samples to make the dataset evenly divisible across processes.
     The code is adapted from https://github.com/SeungjunNah/DeepDeblur-PyTorch/blob/master/src/data/sampler.py.
     """
 
@@ -112,10 +146,10 @@ class DistributedEvalSampler(Sampler[T_co]):
 
 
 class DistributedSamplerWithStack(Sampler[T_co]):
-    """DistributedSampleWithStack is different from `DistributedSampler`. Instead of subsampling,
-    it stacks the dataset. For example, when `num_replicas` is 3, and the dataset of [0, ..., 9] is given,
-    the first, second, and third rank should have [0, 1, 2], [3, 4, 5], and [6, 7, 8], respectively. However,
-    it still adds extra samples to make the dataset evenly divisible (different from DistributedEvalSampler).
+    """Sampler that stacks the dataset for distributed setting.
+
+    Instead of subsampling, this sampler stacks the dataset across processes. It ensures even distribution by
+    adding padding samples if necessary.
     """
 
     def __init__(  # pylint: disable=super-init-not-called

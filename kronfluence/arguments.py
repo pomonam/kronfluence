@@ -10,7 +10,12 @@ class Arguments:
     """Base class for specifying arguments for computing factors and influence scores."""
 
     def to_dict(self) -> Dict[str, Any]:
-        """Converts the arguments to a dictionary."""
+        """Converts the arguments to a dictionary.
+
+        Returns:
+            Dict[str, Any]:
+                A dictionary representation of the arguments, with `torch.dtype` values converted to strings.
+        """
         config = copy.deepcopy(self.__dict__)
         for key, value in config.items():
             if isinstance(value, torch.dtype):
@@ -18,7 +23,12 @@ class Arguments:
         return config
 
     def to_str_dict(self) -> Dict[str, str]:
-        """Converts the arguments to a dictionary, where all values are converted to strings."""
+        """Converts the arguments to a dictionary with all values as strings.
+
+        Returns:
+            Dict[str, str]:
+                A dictionary representation of the arguments, with all values converted to strings.
+        """
         config = copy.deepcopy(self.__dict__)
         for key, value in config.items():
             config[key] = str(value)
@@ -29,24 +39,17 @@ class Arguments:
 class FactorArguments(Arguments):
     """Arguments for computing influence factors."""
 
-    # General configuration. #
+    # General configuration #
     strategy: str = field(
         default="ekfac",
-        metadata={
-            "help": "Specifies the algorithm for computing influence factors. Default is 'ekfac' "
-            "(Eigenvalue-corrected Kronecker-factored Approximate Curvature)."
-        },
+        metadata={"help": "Specifies the algorithm for computing influence factors. Default is 'ekfac'."},
     )
     use_empirical_fisher: bool = field(
         default=False,
         metadata={
-            "help": "Determines whether to approximate empirical Fisher (using true labels) or "
-            "true Fisher (using sampled labels)."
+            "help": "If `True`, approximates empirical Fisher (using true labels) instead of "
+            "true Fisher (using sampled labels from model's outputs)."
         },
-    )
-    distributed_sync_interval: int = field(
-        default=1_000,
-        metadata={"help": "Number of iterations between synchronization steps in distributed computing settings."},
     )
     amp_dtype: Optional[torch.dtype] = field(
         default=None,
@@ -60,10 +63,7 @@ class FactorArguments(Arguments):
     # Configuration for fitting covariance matrices. #
     covariance_max_examples: Optional[int] = field(
         default=100_000,
-        metadata={
-            "help": "Maximum number of examples to use when fitting covariance matrices. "
-            "Uses entire dataset if `None`."
-        },
+        metadata={"help": "Maximum number of examples for fitting covariance matrices. Uses entire dataset if `None`."},
     )
     covariance_data_partitions: int = field(
         default=1,
@@ -78,28 +78,26 @@ class FactorArguments(Arguments):
     )
     activation_covariance_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Data type for activation covariance computations."},
+        metadata={"help": "Data type for activation covariance computation."},
     )
     gradient_covariance_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Data type for pseudo-gradient covariance computations."},
+        metadata={"help": "Data type for pseudo-gradient covariance computation."},
     )
 
-    # Configuration for performing eigendecomposition. #
+    # Configuration for performing eigendecomposition #
     eigendecomposition_dtype: torch.dtype = field(
         default=torch.float64,
         metadata={
-            "help": "Data type for eigendecomposition computations. Double precision (`torch.float64`) is "
-            "recommended for numerical stability."
+            "help": "Data type for eigendecomposition. Double precision (`torch.float64`) is recommended "
+            "for numerical stability."
         },
     )
 
-    # Configuration for fitting Lambda matrices. #
+    # Configuration for fitting Lambda matrices #
     lambda_max_examples: Optional[int] = field(
         default=100_000,
-        metadata={
-            "help": "Maximum number of examples to use when fitting Lambda matrices. Uses entire dataset if `None`."
-        },
+        metadata={"help": "Maximum number of examples for fitting Lambda matrices. Uses entire dataset if `None`."},
     )
     lambda_data_partitions: int = field(
         default=1,
@@ -120,36 +118,47 @@ class FactorArguments(Arguments):
     )
     offload_activations_to_cpu: bool = field(
         default=False,
-        metadata={
-            "help": "If `True`, offloads cached activations to CPU memory when computing "
-            "per-sample gradients, reducing GPU memory usage."
-        },
+        metadata={"help": "If `True`, offloads cached activations to CPU memory when computing per-sample gradients."},
     )
     per_sample_gradient_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Data type for per-sample gradient computations."},
+        metadata={"help": "Data type for per-sample gradient computation."},
     )
     lambda_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Data type for Lambda matrix computations."},
+        metadata={"help": "Data type for Lambda matrix computation."},
     )
+
+    def __post_init__(self) -> None:
+        if self.covariance_max_examples is not None and self.covariance_max_examples <= 0:
+            raise ValueError("`covariance_max_examples` must be `None` or positive.")
+
+        if self.lambda_max_examples is not None and self.lambda_max_examples <= 0:
+            raise ValueError("`lambda_max_examples` must be `None` or positive.")
+
+        if any(
+            partition <= 0
+            for partition in [
+                self.covariance_data_partitions,
+                self.covariance_module_partitions,
+                self.lambda_data_partitions,
+                self.lambda_module_partitions,
+            ]
+        ):
+            raise ValueError("All data and module partitions must be positive.")
 
 
 @dataclass
 class ScoreArguments(Arguments):
     """Arguments for computing influence scores."""
 
-    # General configuration. #
+    # General configuration #
     damping_factor: Optional[float] = field(
         default=1e-08,
         metadata={
-            "help": "Damping factor for the inverse Hessian-vector product (iHVP). "
+            "help": "Damping factor for inverse Hessian-vector product (iHVP). "
             "If `None`, uses a heuristic of 0.1 times the mean eigenvalue."
         },
-    )
-    distributed_sync_interval: int = field(
-        default=1_000,
-        metadata={"help": "Number of iterations between synchronization steps in distributed computing settings."},
     )
     amp_dtype: Optional[torch.dtype] = field(
         default=None,
@@ -157,23 +166,20 @@ class ScoreArguments(Arguments):
     )
     offload_activations_to_cpu: bool = field(
         default=False,
-        metadata={
-            "help": "If `True`, offloads cached activations to CPU memory when computing "
-            "per-sample gradients, reducing GPU memory usage."
-        },
+        metadata={"help": "If `True`, offloads cached activations to CPU memory when computing per-sample gradients."},
     )
     einsum_minimize_size: bool = field(
-        default=False,
+        default=True,
         metadata={
             "help": "If `True`, einsum operations find the contraction that minimizes the size of the "
             "largest intermediate tensor."
         },
     )
 
-    # Partition configuration. #
+    # Partition configuration #
     data_partitions: int = field(
         default=1,
-        metadata={"help": "Number of partitions to divide the dataset into for influence score computation."},
+        metadata={"help": "Number of partitions to divide the dataset for influence score computation."},
     )
     module_partitions: int = field(
         default=1,
@@ -182,20 +188,20 @@ class ScoreArguments(Arguments):
         },
     )
 
-    # General score configuration. #
+    # General score configuration #
     compute_per_module_scores: bool = field(
         default=False,
-        metadata={"help": "If `True`, computes separate scores for each module instead of summing across all modules."},
+        metadata={"help": "If `True`, computes separate scores for each module instead of summing across all."},
     )
     compute_per_token_scores: bool = field(
         default=False,
         metadata={
-            "help": "If `True`, computes separate scores for each token instead of summing across all tokens. "
+            "help": "If `True`, computes separate scores for each token instead of summing across all. "
             "Only applicable to transformer-based models."
         },
     )
 
-    # Pairwise influence score configuration. #
+    # Pairwise influence score configuration #
     query_gradient_accumulation_steps: int = field(
         default=1,
         metadata={"help": "Number of query batches to accumulate before processing training examples."},
@@ -224,31 +230,44 @@ class ScoreArguments(Arguments):
     aggregate_train_gradients: bool = field(
         default=False,
         metadata={
-            "help": "If `True`, uses the summed train gradient instead of per-sample train gradients "
+            "help": "If `True`, uses the summed training gradient instead of per-sample training gradients "
             "for pairwise influence computation."
         },
     )
 
-    # Self-influence score configuration. #
+    # Self-influence score configuration #
     use_measurement_for_self_influence: bool = field(
         default=False,
         metadata={"help": "If `True`, uses the measurement (instead of the loss) for computing self-influence scores."},
     )
 
-    # Precision configuration. #
+    # Precision configuration #
     query_gradient_svd_dtype: torch.dtype = field(
         default=torch.float32,
         metadata={"help": "Data type for singular value decomposition (SVD) of query gradient."},
     )
-    score_dtype: torch.dtype = field(
-        default=torch.float32,
-        metadata={"help": "Data type for computing and storing influence scores."},
-    )
     per_sample_gradient_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Data type for computing per-sample gradients."},
+        metadata={"help": "Data type for per-sample gradient computation."},
     )
     precondition_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Data type for computing the preconditioned gradient."},
+        metadata={"help": "Data type for preconditioned gradient computation."},
     )
+    score_dtype: torch.dtype = field(
+        default=torch.float32,
+        metadata={"help": "Data type for influence score computation."},
+    )
+
+    def __post_init__(self) -> None:
+        if self.damping_factor is not None and self.damping_factor <= 0:
+            raise ValueError("`damping_factor` must be None or positive.")
+
+        if any(partition <= 0 for partition in [self.data_partitions, self.module_partitions]):
+            raise ValueError("Both data and module partitions must be positive.")
+
+        if self.query_gradient_accumulation_steps <= 0:
+            raise ValueError("`query_gradient_accumulation_steps` must be positive.")
+
+        if self.query_gradient_low_rank is not None and self.query_gradient_low_rank <= 0:
+            raise ValueError("`query_gradient_low_rank` must be None or positive.")

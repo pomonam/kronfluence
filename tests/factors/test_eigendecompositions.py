@@ -48,7 +48,7 @@ def test_perform_eigendecomposition(
         factors_name=DEFAULT_FACTORS_NAME,
         factor_args=factor_args,
         dataset=train_dataset,
-        per_device_batch_size=4,
+        per_device_batch_size=None,
         overwrite_output_dir=True,
         dataloader_kwargs=kwargs,
     )

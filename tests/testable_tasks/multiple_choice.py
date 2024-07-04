@@ -80,7 +80,7 @@ def make_roberta_dataset(num_data: int, seed: int = 0) -> data.Dataset:
 
 
 class MultipleChoiceTask(Task):
-    do_post_process_per_sample_gradient = True
+    enable_post_process_per_sample_gradient = True
 
     def compute_train_loss(
         self,

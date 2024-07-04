@@ -49,12 +49,12 @@ def wrap_tracked_modules(
         )
 
     tracked_module_count = 0
-    tracked_module_names = task.tracked_modules() if task is not None else None
+    tracked_module_names = task.get_influence_tracked_modules() if task is not None else None
     tracked_module_exists_dict = None
     if tracked_module_names is not None:
         tracked_module_exists_dict = {name: False for name in tracked_module_names}
     per_sample_gradient_process_fnc = None
-    if task is not None and task.do_post_process_per_sample_gradient:
+    if task is not None and task.enable_post_process_per_sample_gradient:
         per_sample_gradient_process_fnc = task.post_process_per_sample_gradient
 
     named_modules = model.named_modules()
@@ -62,7 +62,7 @@ def wrap_tracked_modules(
         if len(list(module.children())) > 0:
             continue
 
-        # Filters modules based on the task's `tracked_modules` if specified.
+        # Filters modules based on the task's `get_influence_tracked_modules` if specified.
         if tracked_module_names is not None and module_name not in tracked_module_names:
             continue
 
@@ -115,7 +115,7 @@ def set_mode(
     model: nn.Module,
     mode: ModuleMode,
     tracked_module_names: List[str] = None,
-    keep_factors: bool = False,
+    release_memory: bool = False,
 ) -> None:
     """Sets the module mode of all `TrackedModule` instances within a model. For example, to compute
     and update covariance matrices, the module mode needs to be set to `ModuleMode.COVARIANCE`. If
@@ -129,14 +129,14 @@ def set_mode(
         tracked_module_names (List[str], optional):
             The list of names for `TrackedModule` to set the new mode. If not provided, the new mode is
             set for all available `TrackedModule` within the model.
-        keep_factors (bool, optional):
-            If True, existing factors are kept in memory. Defaults to False.
+        release_memory (bool, optional):
+            If `False`, existing factors are kept in memory.
     """
     for module in model.modules():
         if isinstance(module, TrackedModule):
             if tracked_module_names is not None and module.name not in tracked_module_names:
                 continue
-            module.set_mode(mode=mode, keep_factors=keep_factors)
+            module.set_mode(mode=mode, release_memory=release_memory)
 
 
 def update_factor_args(model: nn.Module, factor_args: FactorArguments) -> None:
@@ -177,15 +177,21 @@ def load_factors(
                 continue
             factor = module.get_factor(factor_name=factor_name)
             if factor is not None:
-                loaded_factors[module.name] = factor.contiguous().clone() if clone else factor
+                if clone:
+                    loaded_factors[module.name] = factor.clone(memory_format=torch.contiguous_format)
+                    module.release_factor(factor_name=factor_name)
+                else:
+                    loaded_factors[module.name] = factor
     return loaded_factors
 
 
-def set_factors(model: nn.Module, factor_name: str, factors: Dict[str, torch.Tensor]) -> None:
+def set_factors(model: nn.Module, factor_name: str, factors: Dict[str, torch.Tensor], clone: bool = False) -> None:
     """Sets new factor for all `TrackedModule` instances within a model."""
     for module in model.modules():
         if isinstance(module, TrackedModule):
-            module.set_factor(factor_name=factor_name, factor=factors[module.name])
+            module.set_factor(
+                factor_name=factor_name, factor=factors[module.name].clone() if clone else factors[module.name]
+            )
 
 
 def set_attention_mask(
@@ -202,6 +208,8 @@ def set_attention_mask(
                     module.set_attention_mask(attention_mask=None)
             elif isinstance(attention_mask, torch.Tensor):
                 module.set_attention_mask(attention_mask=attention_mask)
+            elif attention_mask is None:
+                module.set_attention_mask(attention_mask=None)
             else:
                 raise RuntimeError(f"Invalid attention mask `{attention_mask}` provided.")
 
@@ -216,25 +224,50 @@ def set_gradient_scale(
             module.set_gradient_scale(scale=gradient_scale)
 
 
-def synchronize_covariance_matrices(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Synchronizes covariance matrices for all modules listed in `tracked_module_names`."""
+def prepare_modules(model: nn.Module, tracked_module_names: List[str], device: torch.device) -> None:
     for module in model.modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.synchronize_covariance_matrices()
+            module.prepare_storage(device=device)
 
 
-def finalize_lambda_matrices(model: nn.Module, tracked_module_names: List[str]) -> None:
+def synchronize_modules(model: nn.Module, tracked_module_names: List[str], num_processes: int = 1) -> None:
+    for module in model.modules():
+        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+            module.synchronize(num_processes=num_processes)
+
+
+def truncate(model: nn.Module, tracked_module_names: List[str], keep_size: int) -> None:
+    for module in model.modules():
+        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+            module.truncate(keep_size=keep_size)
+
+
+def exist_for_all_modules(model: nn.Module, tracked_module_names: List[str]) -> bool:
+    for module in model.modules():
+        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+            if not module.exist():
+                return False
+    return True
+
+
+def accumulate_iterations(model: nn.Module, tracked_module_names: List[str]) -> None:
+    for module in model.modules():
+        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+            module.accumulate_iterations()
+
+
+def finalize_iteration(model: nn.Module, tracked_module_names: List[str]) -> None:
     """Updates Lambda matrices for all modules listed in `tracked_module_names`."""
     for name, module in model.named_modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.finalize_lambda_matrix()
+            module.finalize_iteration()
 
 
-def synchronize_lambda_matrices(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Synchronizes Lambda matrices for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
+def finalize_all_iterations(model: nn.Module, tracked_module_names: List[str]) -> None:
+    """Updates Lambda matrices for all modules listed in `tracked_module_names`."""
+    for name, module in model.named_modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.synchronize_lambda_matrices()
+            module.finalize_all_iterations()
 
 
 def finalize_preconditioned_gradient(model: nn.Module, tracked_module_names: List[str]) -> None:

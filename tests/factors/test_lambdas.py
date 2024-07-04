@@ -29,6 +29,7 @@ from tests.utils import (
         "repeated_mlp",
         "conv",
         "bert",
+        "roberta",
         "gpt",
         "gpt_checkpoint",
     ],
@@ -500,3 +501,61 @@ def test_lambda_matrices_shared_parameters(
 
     for name in LAMBDA_FACTOR_NAMES:
         assert check_tensor_dict_equivalence(lambda_factors[name], shared_lambda_factors[name], atol=ATOL, rtol=RTOL)
+
+
+@pytest.mark.parametrize("train_size", [121])
+@pytest.mark.parametrize("seed", [8])
+def test_lambda_matrices_inplace(
+    train_size: int,
+    seed: int,
+) -> None:
+    # Lambda matrices should be the identical for with and without in-place ReLU.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name="conv",
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+
+    factor_args = pytest_factor_arguments()
+    analyzer.fit_all_factors(
+        factors_name=DEFAULT_FACTORS_NAME,
+        dataset=train_dataset,
+        per_device_batch_size=5,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+        dataloader_kwargs=kwargs,
+    )
+    lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=DEFAULT_FACTORS_NAME,
+    )
+
+    model, _, _, _, task = prepare_test(
+        test_name="conv_inplace",
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    analyzer.fit_all_factors(
+        factors_name=custom_factors_name("inplace"),
+        dataset=train_dataset,
+        per_device_batch_size=6,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+        dataloader_kwargs=kwargs,
+    )
+    inplace_lambda_factors = analyzer.load_lambda_matrices(
+        factors_name=custom_factors_name("inplace"),
+    )
+
+    for name in LAMBDA_FACTOR_NAMES:
+        assert check_tensor_dict_equivalence(lambda_factors[name], inplace_lambda_factors[name], atol=ATOL, rtol=RTOL)

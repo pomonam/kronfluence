@@ -20,21 +20,33 @@ _TABLE_DATA = List[_TABLE_ROW]
 
 
 class MultiProcessAdapter(logging.LoggerAdapter):
-    """An adapter to assist with logging in multiprocess.
+    """An adapter for logging in multiprocess environments.
 
-    The code is copied from https://github.com/huggingface/accelerate/blob/main/src/accelerate/logging.py with
-    minor modifications.
+    The code is adapted from: https://github.com/huggingface/accelerate/blob/main/src/accelerate/logging.py.
     """
 
     def log(self, level: int, msg: str, *args, **kwargs) -> None:
-        """Delegates logger call after checking if it should log."""
+        """Log a message if logging is enabled for this process."""
         if self.isEnabledFor(level) and not self.extra["disable_log"]:
             msg, kwargs = self.process(msg, kwargs)
             self.logger.log(level, msg, *args, **kwargs)
 
 
 def get_logger(name: str, disable_log: bool = False, log_level: int = None) -> MultiProcessAdapter:
-    """Returns the logger with an option to disable logging."""
+    """Creates and returns a logger with optional disabling and log level setting.
+
+    Args:
+        name (str):
+            Name of the logger.
+        disable_log (bool):
+            Whether to disable logging. Defaults to `False`.
+        log_level (int):
+            Logging level to set. Defaults to `None`.
+
+    Returns:
+        MultiProcessAdapter:
+            Configured logger adapter.
+    """
     logger = logging.getLogger(name)
     if log_level is not None:
         logger.setLevel(log_level)
@@ -43,16 +55,15 @@ def get_logger(name: str, disable_log: bool = False, log_level: int = None) -> M
 
 
 class Profiler:
-    """Profiling object to measure the time taken to run a certain operation. The profiler is helpful
-    for checking any bottlenecks in the code.
+    """A profiling utility to measure execution time of operations.
 
-    The code is modified from:
+    The code is adapted from:
     - https://github.com/Lightning-AI/lightning/tree/master/src/pytorch_lightning/profilers.
     - https://github.com/mlcommons/algorithmic-efficiency/blob/main/algorithmic_efficiency/profiler.py.
     """
 
     def __init__(self, state: State) -> None:
-        """Initializes an instance of the Profiler class.
+        """Initializes an instance of the `Profiler` class.
 
         Args:
             state (State):
@@ -63,7 +74,7 @@ class Profiler:
         self.recorded_durations = defaultdict(list)
 
     def start(self, action_name: str) -> None:
-        """Defines how to start recording an action."""
+        """Start recording an action."""
         if not self.state.is_main_process:
             return
         if action_name in self.current_actions:
@@ -71,7 +82,7 @@ class Profiler:
         self.current_actions[action_name] = _get_monotonic_time()
 
     def stop(self, action_name: str) -> None:
-        """Defines how to record the duration once an action is complete."""
+        """Stop recording an action and log its duration."""
         if not self.state.is_main_process:
             return
         end_time = _get_monotonic_time()
@@ -83,7 +94,7 @@ class Profiler:
 
     @contextmanager
     def profile(self, action_name: str) -> Generator:
-        """Yields a context manager to encapsulate the scope of a profiled action."""
+        """Context manager for profiling an action."""
         try:
             self.start(action_name)
             yield action_name
@@ -92,6 +103,7 @@ class Profiler:
 
     @torch.no_grad()
     def _make_report(self) -> Tuple[_TABLE_DATA, float, float]:
+        """Generate a report of profiled actions."""
         total_duration = 0.0
         for a, d in self.recorded_durations.items():
             d_tensor = torch.tensor(d, dtype=torch.float64, requires_grad=False)
@@ -110,7 +122,7 @@ class Profiler:
         return report, total_calls, total_duration
 
     def summary(self) -> str:
-        """Returns a formatted summary for the Profiler."""
+        """Generate a formatted summary of the profiling results."""
         sep = os.linesep
         output_string = "Profiler Report:"
 
@@ -143,37 +155,34 @@ class Profiler:
 
 
 class PassThroughProfiler(Profiler):
-    """A pass through Profiler objective that does not record timing."""
+    """A no-op profiler that doesn't record any timing information."""
 
     def start(self, action_name: str) -> None:
-        """Defines how to start recording an action."""
         return
 
     def stop(self, action_name: str) -> None:
-        """Defines how to record the duration once an action is complete."""
         return
 
     def summary(self) -> str:
-        """Returns a formatted summary for the Profiler."""
         return ""
 
 
 class TorchProfiler(Profiler):
-    """A PyTorch Profiler objective that provides detailed profiling information:
-    https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html.
+    """A profiler that utilizes PyTorch's built-in profiling capabilities.
 
-    This is useful for low-level profiling in PyTorch, and is not used by default.
+    This profiler provides detailed information about PyTorch operations, including CPU and CUDA events.
+    It's useful for low-level profiling in PyTorch.
+
+    Note: This is not used by default and is intended for detailed performance analysis.
     """
 
     def __init__(self, state: State) -> None:
-        """Initializes an instance of the PyTorch Profiler class."""
         super().__init__(state=state)
         self.actions: list = []
         self.trace_outputs: list = []
         self._set_up_torch_profiler()
 
     def start(self, action_name: str) -> None:
-        """Defines how to start recording an action."""
         if action_name in self.current_actions:
             raise ValueError(f"Attempted to start {action_name} which has already started.")
         # Set dummy value, since only used to track duplicate actions.
@@ -182,14 +191,12 @@ class TorchProfiler(Profiler):
         self._torch_prof.start()
 
     def stop(self, action_name: str) -> None:
-        """Defines how to stop recording an action."""
         if action_name not in self.current_actions:
             raise ValueError(f"Attempting to stop recording an action " f"({action_name}) which was never started.")
         _ = self.current_actions.pop(action_name)
         self._torch_prof.stop()
 
     def _set_up_torch_profiler(self) -> None:
-        """Creates the PyTorch profiler object with the necessary arguments."""
         self._torch_prof = t_prof.profile(
             activities=[t_prof.ProfilerActivity.CPU, t_prof.ProfilerActivity.CUDA],
             record_shapes=True,
@@ -200,7 +207,6 @@ class TorchProfiler(Profiler):
         )
 
     def _trace_handler(self, p) -> None:
-        """Adds the PyTorch Profiler trace output to a list once it is ready."""
         # Set metric to sort based on device.
         is_cpu = self.state.device == torch.device("cpu")
         sort_by_metric = "self_cpu_time_total" if is_cpu else "self_cuda_time_total"
@@ -218,12 +224,10 @@ class TorchProfiler(Profiler):
         self.recorded_durations[self.actions[-1]].append(total_time)
 
     def _reset_output(self) -> None:
-        """Resets actions and outputs list."""
         self.actions = []
         self.trace_outputs = []
 
     def _high_level_summary(self) -> str:
-        """Returns a formatted high level summary for the PyTorch Profiler."""
         sep = os.linesep
         output_string = "Overall PyTorch Profiler Report:"
 
@@ -255,7 +259,6 @@ class TorchProfiler(Profiler):
         return output_string
 
     def summary(self) -> str:
-        """Returns a formatted summary for the PyTorch Profiler."""
         assert len(self.actions) == len(self.trace_outputs), (
             "Mismatch in the number of actions and outputs collected: "
             + f"# Actions: {len(self.actions)}, # Ouptuts: {len(self.trace_outputs)}"
@@ -272,7 +275,7 @@ class TorchProfiler(Profiler):
         return summary
 
 
-# Timing utilities copied from
+# Timing utilities copied from:
 # https://github.com/mlcommons/algorithmic-efficiency/blob/main/algorithmic_efficiency/pytorch_utils.py.
 def _get_monotonic_time() -> float:
     """Gets the monotonic time after the CUDA synchronization if necessary."""

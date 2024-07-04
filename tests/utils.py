@@ -15,6 +15,7 @@ from tests.testable_tasks.classification import (
     WrongClassificationTask,
     make_classification_dataset,
     make_conv_bn_model,
+    make_conv_inplace_model,
     make_conv_model,
 )
 from tests.testable_tasks.language_modeling import (
@@ -96,6 +97,12 @@ def prepare_test(
         data_collator = None
     elif test_name == "conv":
         model = make_conv_model(seed=seed)
+        train_dataset = make_classification_dataset(num_data=train_size, seed=seed)
+        query_dataset = make_classification_dataset(num_data=query_size, seed=seed + 1)
+        task = ClassificationTask()
+        data_collator = None
+    elif test_name == "conv_inplace":
+        model = make_conv_inplace_model(seed=seed)
         train_dataset = make_classification_dataset(num_data=train_size, seed=seed)
         query_dataset = make_classification_dataset(num_data=query_size, seed=seed + 1)
         task = ClassificationTask()

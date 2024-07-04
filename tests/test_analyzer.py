@@ -57,7 +57,7 @@ def test_analyzer(
 
     factor_args = FactorArguments(strategy=strategy)
     if test_name == "repeated_mlp":
-        factor_args.shared_parameters_exist = True
+        factor_args.has_shared_parameters = True
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
         dataset=train_dataset,
@@ -86,6 +86,7 @@ def test_analyzer(
         score_args=score_args,
         overwrite_output_dir=True,
     )
+    score_args.use_measurement_for_self_influence = True
     analyzer.compute_self_scores(
         scores_name="self",
         factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
@@ -102,7 +103,6 @@ def test_default_factor_arguments() -> None:
 
     assert factor_args.strategy == "ekfac"
     assert factor_args.use_empirical_fisher is False
-    assert factor_args.distributed_sync_interval == 1000
     assert factor_args.amp_dtype is None
     assert factor_args.has_shared_parameters is False
 
@@ -127,7 +127,6 @@ def test_default_score_arguments() -> None:
     score_args = ScoreArguments()
 
     assert score_args.damping_factor == 1e-08
-    assert score_args.distributed_sync_interval == 1000
     assert score_args.amp_dtype is None
     assert score_args.offload_activations_to_cpu is False
     assert score_args.einsum_minimize_size is False

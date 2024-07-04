@@ -14,13 +14,13 @@ from tqdm import tqdm
 from kronfluence.arguments import FactorArguments
 from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
-    finalize_lambda_matrices,
+    finalize_iteration,
     get_tracked_module_names,
     load_factors,
     set_factors,
     set_gradient_scale,
     set_mode,
-    synchronize_lambda_matrices,
+    synchronize_modules,
     update_factor_args,
 )
 from kronfluence.task import Task
@@ -28,6 +28,7 @@ from kronfluence.utils.constants import (
     ACTIVATION_COVARIANCE_MATRIX_NAME,
     ACTIVATION_EIGENVALUES_NAME,
     ACTIVATION_EIGENVECTORS_NAME,
+    DISTRIBUTED_SYNC_INTERVAL,
     EIGENDECOMPOSITION_FACTOR_NAMES,
     FACTOR_TYPE,
     GRADIENT_COVARIANCE_MATRIX_NAME,
@@ -46,13 +47,41 @@ def eigendecomposition_save_path(
     output_dir: Path,
     factor_name: str,
 ) -> Path:
-    """Generates the path for saving/loading Eigendecomposition results."""
+    """Generates the path for saving or loading eigendecomposition results.
+
+    Args:
+        output_dir (Path):
+            Directory to save eigenvectors and eigenvalues.
+        factor_name (str):
+            Name of the factor (must be in `EIGENDECOMPOSITION_FACTOR_NAMES`).
+
+    Returns:
+        Path:
+            The full path for the eigendecomposition file.
+
+    Raises:
+        AssertionError:
+            If `factor_name` is not in `EIGENDECOMPOSITION_FACTOR_NAMES`.
+    """
     assert factor_name in EIGENDECOMPOSITION_FACTOR_NAMES
     return output_dir / f"{factor_name}.safetensors"
 
 
 def save_eigendecomposition(output_dir: Path, factors: FACTOR_TYPE, metadata: Optional[Dict[str, str]] = None) -> None:
-    """Saves Eigendecomposition results to disk."""
+    """Saves eigendecomposition results to disk.
+
+    Args:
+        output_dir (Path):
+            Directory to save the eigenvectors and eigenvalues.
+        factors (FACTOR_TYPE):
+            Dictionary of factors to save.
+        metadata (Dict[str, str], optional):
+            Additional metadata to save with the factors.
+
+    Raises:
+        AssertionError:
+            If factors keys don't match `EIGENDECOMPOSITION_FACTOR_NAMES`.
+    """
     assert set(factors.keys()) == set(EIGENDECOMPOSITION_FACTOR_NAMES)
     for factor_name in factors:
         save_path = eigendecomposition_save_path(
@@ -65,7 +94,16 @@ def save_eigendecomposition(output_dir: Path, factors: FACTOR_TYPE, metadata: Op
 def load_eigendecomposition(
     output_dir: Path,
 ) -> FACTOR_TYPE:
-    """Loads Eigendecomposition results from disk."""
+    """Loads eigendecomposition results from disk.
+
+    Args:
+        output_dir (Path):
+            Directory to load the results from.
+
+    Returns:
+        FACTOR_TYPE:
+            Dictionary of loaded eigendecomposition results.
+    """
     eigen_factors = {}
     for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
         save_path = eigendecomposition_save_path(
@@ -79,7 +117,16 @@ def load_eigendecomposition(
 def eigendecomposition_exist(
     output_dir: Path,
 ) -> bool:
-    """Checks if Eigendecomposition results exist at the specified path."""
+    """Checks if eigendecomposition results exist at the specified directory.
+
+    Args:
+        output_dir (Path):
+            Directory to check for results.
+
+    Returns:
+        bool:
+            `True` if all eigendecomposition results exist, `False` otherwise.
+    """
     for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
         save_path = eigendecomposition_save_path(
             output_dir=output_dir,
@@ -98,24 +145,24 @@ def perform_eigendecomposition(
     factor_args: FactorArguments,
     disable_tqdm: bool = False,
 ) -> FACTOR_TYPE:
-    """Performs Eigendecomposition on activation and pseudo-gradient covariance matrices.
+    """Performs eigendecomposition on activation and pseudo-gradient covariance matrices.
 
     Args:
         covariance_factors (FACTOR_TYPE):
-            The model used to compute covariance matrices.
+            Computed covariance factors.
         model (nn.Module):
-            The model which contains modules which Eigendecomposition will be performed.
+            The model used to compute covariance matrices.
         state (State):
             The current process's information (e.g., device being used).
         factor_args (FactorArguments):
-            Arguments for computing Eigendecomposition.
+            Arguments for performing eigendecomposition.
         disable_tqdm (bool, optional):
-            Disables TQDM progress bars. Defaults to False.
+            Whether to disable the progress bar. Defaults to `False`.
 
     Returns:
         FACTOR_TYPE:
-            The Eigendecomposition results. These results are organized in nested dictionaries, where the first key
-            is the name of the factor (e.g., activation eigenvector), and the second key is the module name.
+            The results are organized in nested dictionaries, where the first key is the name of the factor
+            (e.g., activation eigenvector), and the second key is the module name.
     """
     eigen_factors: FACTOR_TYPE = {}
     for factor_name in EIGENDECOMPOSITION_FACTOR_NAMES:
@@ -148,7 +195,7 @@ def perform_eigendecomposition(
                     device=state.device,
                     dtype=factor_args.eigendecomposition_dtype,
                 )
-                # Normalizes covariance matrices.
+                # Normalize covariance matrices.
                 covariance_matrix.div_(covariance_factors[num_processed_name][module_name].to(device=state.device))
                 # In cases where covariance matrices are not exactly symmetric due to numerical issues.
                 covariance_matrix = covariance_matrix + covariance_matrix.t()
@@ -163,9 +210,14 @@ def perform_eigendecomposition(
                         eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
                     else:
                         raise
-                eigen_factors[eigenvalues_name][module_name] = eigenvalues.to(dtype=original_dtype).contiguous().cpu()
-                eigen_factors[eigenvectors_name][module_name] = eigenvectors.to(dtype=original_dtype).contiguous().cpu()
-                del covariance_matrix, eigenvalues, eigenvectors
+                del covariance_matrix
+                eigen_factors[eigenvalues_name][module_name] = eigenvalues.contiguous().to(
+                    dtype=original_dtype, device="cpu"
+                )
+                eigen_factors[eigenvectors_name][module_name] = eigenvectors.contiguous().to(
+                    dtype=original_dtype, device="cpu"
+                )
+                del eigenvalues, eigenvectors
 
             pbar.update(1)
 
@@ -177,7 +229,24 @@ def lambda_matrices_save_path(
     factor_name: str,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> Path:
-    """Generates the path for saving/loading Lambda matrices."""
+    """Generates the path for saving or loading Lambda matrices.
+
+    Args:
+        output_dir (Path):
+            Directory to save the matrices.
+        factor_name (str):
+            Name of the factor (must be in `LAMBDA_FACTOR_NAMES`).
+        partition (PARTITION_TYPE, optional):
+            Partition information, if any.
+
+    Returns:
+        Path:
+            The full path for the Lambda matrix file.
+
+    Raises:
+        AssertionError:
+            If `factor_name` is not in `LAMBDA_FACTOR_NAMES`.
+    """
     assert factor_name in LAMBDA_FACTOR_NAMES
     if partition is not None:
         data_partition, module_partition = partition
@@ -193,7 +262,22 @@ def save_lambda_matrices(
     partition: Optional[PARTITION_TYPE] = None,
     metadata: Optional[Dict[str, str]] = None,
 ) -> None:
-    """Saves Lambda matrices to disk."""
+    """Saves Lambda matrices to disk.
+
+    Args:
+        output_dir (Path):
+            Directory to save the matrices.
+        factors (FACTOR_TYPE):
+            Dictionary of factors to save.
+        partition (PARTITION_TYPE, optional):
+            Partition information, if any.
+        metadata (Dict[str, str], optional):
+            Additional metadata to save with the factors.
+
+    Raises:
+        AssertionError:
+            If factors keys don't match `LAMBDA_FACTOR_NAMES`.
+    """
     assert set(factors.keys()) == set(LAMBDA_FACTOR_NAMES)
     for factor_name in factors:
         save_path = lambda_matrices_save_path(
@@ -208,7 +292,18 @@ def load_lambda_matrices(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> FACTOR_TYPE:
-    """Loads Lambda matrices from disk."""
+    """Loads Lambda matrices from disk.
+
+    Args:
+        output_dir (Path):
+            Directory to load the matrices from.
+        partition (PARTITION_TYPE, optional):
+            Partition information, if any.
+
+    Returns:
+        FACTOR_TYPE:
+            Dictionary of loaded Lambda factors.
+    """
     lambda_factors = {}
     for factor_name in LAMBDA_FACTOR_NAMES:
         save_path = lambda_matrices_save_path(
@@ -224,7 +319,18 @@ def lambda_matrices_exist(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> bool:
-    """Checks if Lambda matrices exist at the specified path."""
+    """Checks if Lambda matrices exist at the specified directory.
+
+    Args:
+        output_dir (Path):
+            Directory to check for matrices.
+        partition (PARTITION_TYPE, optional):
+            Partition information, if any.
+
+    Returns:
+        bool:
+            `True` if all Lambda matrices exist, `False` otherwise.
+    """
     for factor_name in LAMBDA_FACTOR_NAMES:
         save_path = lambda_matrices_save_path(
             output_dir=output_dir,
@@ -246,7 +352,7 @@ def fit_lambda_matrices_with_loader(
     tracked_module_names: Optional[List[str]] = None,
     disable_tqdm: bool = False,
 ) -> Tuple[torch.Tensor, FACTOR_TYPE]:
-    """Computes Lambda (corrected eigenvalues) matrices for a given model and task.
+    """Computes Lambda matrices for a given model and task.
 
     Args:
         model (nn.Module):
@@ -260,32 +366,31 @@ def fit_lambda_matrices_with_loader(
         factor_args (FactorArguments):
             Arguments for computing Lambda matrices.
         eigen_factors (FACTOR_TYPE, optional):
-            The eigendecomposition results to use for computing Lambda matrices.
+            Computed eigendecomposition results.
         tracked_module_names (List[str], optional):
             A list of module names for which Lambda matrices will be computed. If not specified,
             Lambda matrices will be computed for all tracked modules.
         disable_tqdm (bool, optional):
-            Disables TQDM progress bars. Defaults to False.
+            Whether to disable the progress bar. Defaults to `False`.
 
     Returns:
         Tuple[torch.Tensor, FACTOR_TYPE]:
-            A tuple containing the number of data points processed and computed Lambda matrices.
-            The Lambda matrices are organized in nested dictionaries, where the first key is the name of
-            the computed variable and the second key is the module name.
+            - Number of data points processed.
+            - Computed Lambda matrices (nested dict: factor_name -> module_name -> tensor).
     """
-    with torch.no_grad():
-        update_factor_args(model=model, factor_args=factor_args)
-        if tracked_module_names is None:
-            tracked_module_names = get_tracked_module_names(model=model)
-        set_mode(
-            model=model,
-            tracked_module_names=tracked_module_names,
-            mode=ModuleMode.LAMBDA,
-            keep_factors=False,
-        )
-        if eigen_factors is not None:
-            for name in eigen_factors:
-                set_factors(model=model, factor_name=name, factors=eigen_factors[name])
+    update_factor_args(model=model, factor_args=factor_args)
+    if tracked_module_names is None:
+        tracked_module_names = get_tracked_module_names(model=model)
+    set_mode(
+        model=model,
+        tracked_module_names=tracked_module_names,
+        mode=ModuleMode.LAMBDA,
+        release_memory=True,
+    )
+    if eigen_factors is not None:
+        for name in eigen_factors:
+            set_factors(model=model, factor_name=name, factors=eigen_factors[name], clone=True)
+    del eigen_factors
 
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
@@ -315,41 +420,41 @@ def fit_lambda_matrices_with_loader(
                 scaler.scale(loss).backward()
 
             if factor_args.has_shared_parameters:
-                # If shared parameter exists, Lambda matrices are computed and updated only after all
-                # per-sample-gradients are aggregated.
-                finalize_lambda_matrices(model=model, tracked_module_names=tracked_module_names)
+                finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
             if (
                 state.use_distributed
-                and total_steps % factor_args.distributed_sync_interval == 0
+                and total_steps % DISTRIBUTED_SYNC_INTERVAL == 0
                 and index not in [len(loader) - 1, len(loader) - 2]
             ):
-                # Periodically synchronizes all processes to avoid timeout at the final synchronization.
                 state.wait_for_everyone()
 
             num_data_processed.add_(find_batch_size(data=batch))
             total_steps += 1
             pbar.update(1)
 
-    with torch.no_grad():
-        if state.use_distributed:
-            # Aggregates Lambda matrices across multiple devices or nodes.
-            synchronize_lambda_matrices(model=model, tracked_module_names=tracked_module_names)
-            num_data_processed = num_data_processed.to(device=state.device)
-            dist.all_reduce(tensor=num_data_processed, op=torch.distributed.ReduceOp.SUM)
+    if state.use_distributed:
+        synchronize_modules(model=model, tracked_module_names=tracked_module_names)
+        num_data_processed = num_data_processed.to(device=state.device)
+        dist.all_reduce(tensor=num_data_processed, op=torch.distributed.ReduceOp.SUM)
+        num_data_processed = num_data_processed.cpu()
 
-        saved_factors: FACTOR_TYPE = {}
-        if state.is_main_process:
-            for factor_name in LAMBDA_FACTOR_NAMES:
-                saved_factors[factor_name] = load_factors(
-                    model=model, factor_name=factor_name, tracked_module_names=tracked_module_names, clone=False
-                )
+    saved_factors: FACTOR_TYPE = {}
+    for factor_name in LAMBDA_FACTOR_NAMES:
+        factor = load_factors(
+            model=model,
+            factor_name=factor_name,
+            tracked_module_names=tracked_module_names,
+            clone=True,
+        )
+        if factor is None:
+            raise ValueError(f"Factor `{factor_name}` has not been computed.")
+        saved_factors[factor_name] = factor
 
-        # Clean up the memory.
-        model.zero_grad(set_to_none=True)
-        if enable_amp:
-            set_gradient_scale(model=model, gradient_scale=1.0)
-        set_mode(model=model, mode=ModuleMode.DEFAULT, keep_factors=False)
-        state.wait_for_everyone()
+    model.zero_grad(set_to_none=True)
+    if enable_amp:
+        set_gradient_scale(model=model, gradient_scale=1.0)
+    set_mode(model=model, mode=ModuleMode.DEFAULT, release_memory=True)
+    state.wait_for_everyone()
 
     return num_data_processed, saved_factors

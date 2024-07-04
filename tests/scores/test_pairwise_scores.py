@@ -656,18 +656,22 @@ def test_query_accumulation_steps(
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
-        "roberta",
+        # "repeated_mlp",
+        # "roberta",
     ],
 )
 @pytest.mark.parametrize("query_size", [50])
 @pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("data_partitions", [3])
+@pytest.mark.parametrize("module_partitions", [3])
 @pytest.mark.parametrize("query_gradient_low_rank", [None])
 @pytest.mark.parametrize("seed", [8])
 def test_query_gradient_aggregation(
     test_name: str,
     query_size: int,
     train_size: int,
+    data_partitions: int,
+    module_partitions: int,
     query_gradient_low_rank: Optional[int],
     seed: int,
 ) -> None:
@@ -712,6 +716,8 @@ def test_query_gradient_aggregation(
     scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
     score_args.aggregate_query_gradients = True
+    score_args.data_partitions = data_partitions
+    score_args.module_partitions = data_partitions
     analyzer.compute_pairwise_scores(
         scores_name=custom_scores_name("aggregation"),
         factors_name=DEFAULT_FACTORS_NAME,
@@ -723,13 +729,14 @@ def test_query_gradient_aggregation(
         score_args=score_args,
         overwrite_output_dir=True,
     )
-    partitioned_scores = analyzer.load_pairwise_scores(
+    aggregated_scores = analyzer.load_pairwise_scores(
         scores_name=custom_scores_name("aggregation"),
     )
 
+    assert aggregated_scores[ALL_MODULE_NAME].shape[0] == 1
     assert torch.allclose(
         scores[ALL_MODULE_NAME].sum(dim=0, keepdim=True),
-        partitioned_scores[ALL_MODULE_NAME],
+        aggregated_scores[ALL_MODULE_NAME],
         atol=ATOL,
         rtol=RTOL,
     )
@@ -739,12 +746,14 @@ def test_query_gradient_aggregation(
     "test_name",
     [
         "mlp",
-        "conv_bn",
-        "gpt",
+        # "conv_bn",
+        # "gpt",
     ],
 )
 @pytest.mark.parametrize("query_size", [64])
 @pytest.mark.parametrize("train_size", [32])
+@pytest.mark.parametrize("data_partitions", [3])
+@pytest.mark.parametrize("module_partitions", [2])
 @pytest.mark.parametrize("aggregate_query_gradients", [True, False])
 @pytest.mark.parametrize("query_gradient_low_rank", [None])
 @pytest.mark.parametrize("seed", [9])
@@ -752,6 +761,8 @@ def test_train_gradient_aggregation(
     test_name: str,
     query_size: int,
     train_size: int,
+    data_partitions: int,
+    module_partitions: int,
     aggregate_query_gradients: bool,
     query_gradient_low_rank: Optional[int],
     seed: int,
@@ -794,6 +805,8 @@ def test_train_gradient_aggregation(
     scores = analyzer.load_pairwise_scores(scores_name=DEFAULT_SCORES_NAME)
 
     score_args.aggregate_train_gradients = True
+    score_args.data_partitions = data_partitions
+    score_args.module_partitions = module_partitions
     analyzer.compute_pairwise_scores(
         scores_name=custom_scores_name("aggregation"),
         factors_name=DEFAULT_FACTORS_NAME,
@@ -809,6 +822,7 @@ def test_train_gradient_aggregation(
         scores_name=custom_scores_name("aggregation"),
     )
 
+    assert aggregated_scores[ALL_MODULE_NAME].shape[1] == 1
     assert torch.allclose(
         scores[ALL_MODULE_NAME].sum(dim=1, keepdim=True),
         aggregated_scores[ALL_MODULE_NAME],

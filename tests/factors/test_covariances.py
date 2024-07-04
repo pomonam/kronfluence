@@ -401,7 +401,7 @@ def test_covariance_matrices_amp(
     train_size: int,
     seed: int,
 ) -> None:
-    # Covariance matrices should be similar when AMP is enabled.
+    # Covariance matrices should be similar even when AMP is enabled.
     model, train_dataset, _, data_collator, task = prepare_test(
         test_name=test_name,
         train_size=train_size,
@@ -508,6 +508,65 @@ def test_covariance_matrices_gradient_checkpoint(
     assert check_tensor_dict_equivalence(
         covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME],
         checkpoint_covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME],
+        atol=ATOL,
+        rtol=RTOL,
+    )
+
+
+@pytest.mark.parametrize("train_size", [100])
+@pytest.mark.parametrize("seed", [8, 9])
+def test_covariance_matrices_inplace(
+    train_size: int,
+    seed: int,
+) -> None:
+    # Covariance matrices should be the identical for with and without in-place ReLU.
+    model, train_dataset, _, data_collator, task = prepare_test(
+        test_name="conv",
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+
+    factor_args = pytest_factor_arguments()
+    analyzer.fit_covariance_matrices(
+        factors_name=DEFAULT_FACTORS_NAME,
+        dataset=train_dataset,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=DEFAULT_FACTORS_NAME,
+    )
+
+    model, _, _, _, task = prepare_test(
+        test_name="conv_inplace",
+        train_size=train_size,
+        seed=seed,
+    )
+    model = model.to(dtype=torch.float64)
+    model, analyzer = prepare_model_and_analyzer(
+        model=model,
+        task=task,
+    )
+    analyzer.fit_covariance_matrices(
+        factors_name=custom_factors_name("inplace"),
+        dataset=train_dataset,
+        per_device_batch_size=4,
+        overwrite_output_dir=True,
+        factor_args=factor_args,
+    )
+    inplace_covariance_factors = analyzer.load_covariance_matrices(
+        factors_name=custom_factors_name("inplace"),
+    )
+
+    assert check_tensor_dict_equivalence(
+        covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME],
+        inplace_covariance_factors[GRADIENT_COVARIANCE_MATRIX_NAME],
         atol=ATOL,
         rtol=RTOL,
     )
