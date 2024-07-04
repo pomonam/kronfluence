@@ -22,11 +22,15 @@ from kronfluence.score.self import (
     save_self_scores,
     self_scores_exist,
 )
-from kronfluence.utils.constants import FACTOR_TYPE, SCORE_TYPE
+from kronfluence.utils.constants import (
+    FACTOR_ARGUMENTS_NAME,
+    FACTOR_TYPE,
+    SCORE_ARGUMENTS_NAME,
+    SCORE_TYPE,
+)
 from kronfluence.utils.dataset import DataLoaderKwargs, find_executable_batch_size
 from kronfluence.utils.exceptions import FactorsNotFoundError
 from kronfluence.utils.logger import get_time
-from kronfluence.utils.save import FACTOR_ARGUMENTS_NAME, SCORE_ARGUMENTS_NAME
 
 
 class ScoreComputer(Computer):

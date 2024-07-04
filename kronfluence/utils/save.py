@@ -5,12 +5,6 @@ from typing import Any, Dict
 import torch
 from safetensors import safe_open
 
-# Constants for file naming conventions.
-FACTOR_SAVE_PREFIX = "factors_"
-SCORE_SAVE_PREFIX = "scores_"
-FACTOR_ARGUMENTS_NAME = "factor"
-SCORE_ARGUMENTS_NAME = "score"
-
 
 def load_file(path: Path) -> Dict[str, torch.Tensor]:
     """Loads a dictionary of tensors from a file using `safetensors`.

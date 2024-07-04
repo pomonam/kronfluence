@@ -196,7 +196,7 @@ class Diagonal(FactorConfig, factor_strategy=FactorStrategy.DIAGONAL):
 
     def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=device)
-        lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED])
+        lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED].to(device=device))
         damping_factor = score_args.damping_factor
         if damping_factor is None:
             damping_factor = 0.1 * torch.mean(lambda_matrix)
@@ -324,7 +324,7 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
         storage[GRADIENT_EIGENVALUES_NAME] = None
 
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=device)
-        lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED])
+        lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED].to(device=device))
         damping_factor = score_args.damping_factor
         if damping_factor is None:
             damping_factor = 0.1 * torch.mean(lambda_matrix)

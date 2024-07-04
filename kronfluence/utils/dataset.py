@@ -16,9 +16,9 @@ T_co = TypeVar("T_co", covariant=True)
 
 @dataclass
 class DataLoaderKwargs(KwargsHandler):
-    """Customization options for `DataLoader`.
+    """Customization options for DataLoader.
 
-    This class encapsulates the arguments used to customize PyTorch's `DataLoader`. Default values are based on
+    This class encapsulates the arguments used to customize PyTorch's DataLoader. Default values are based on
     PyTorch version 2.3. For detailed information on each argument, refer to:
     https://pytorch.org/docs/stable/data.html.
     """
@@ -52,7 +52,7 @@ def make_indices_partition(total_data_examples: int, partition_size: int) -> Lis
         ValueError: If `total_data_examples` is less than `partition_size`.
     """
     if total_data_examples < partition_size:
-        raise ValueError("The total data examples must be equal or greater than the partition size.")
+        raise ValueError("The total data examples must be equal to or greater than the partition size.")
     # See https://stackoverflow.com/questions/2130016/splitting-a-list-into-n-parts-of-approximately-equal-length.
     bins = list(map(len, np.array_split(range(total_data_examples), partition_size)))
     start_idx = 0

@@ -25,11 +25,10 @@ from kronfluence.factor.eigen import (
     save_eigendecomposition,
     save_lambda_matrices,
 )
-from kronfluence.utils.constants import FACTOR_TYPE
+from kronfluence.utils.constants import FACTOR_ARGUMENTS_NAME, FACTOR_TYPE
 from kronfluence.utils.dataset import DataLoaderKwargs, find_executable_batch_size
 from kronfluence.utils.exceptions import FactorsNotFoundError
 from kronfluence.utils.logger import get_time
-from kronfluence.utils.save import FACTOR_ARGUMENTS_NAME
 from kronfluence.utils.state import release_memory
 
 

@@ -87,7 +87,7 @@ class Analyzer(FactorComputer, ScoreComputer):
 
         Raises:
             ValueError:
-                If the provided model differs from a previously saved model when `disable_model_save` is `False`.
+                If the provided model differs from a previously saved model when `disable_model_save=False`.
         """
         super().__init__(
             name=analysis_name,
@@ -130,8 +130,7 @@ class Analyzer(FactorComputer, ScoreComputer):
             if not verify_models_equivalence(loaded_state_dict, extracted_model.state_dict()):
                 error_msg = (
                     "Detected a difference between the current model and the one saved at "
-                    f"`{model_save_path}`. Consider using a different `analysis_name` to "
-                    f"avoid conflicts."
+                    f"`{model_save_path}`. Consider using a different `analysis_name` to avoid conflicts."
                 )
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
