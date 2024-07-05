@@ -183,14 +183,6 @@ def fit_covariance_matrices_with_loader(
             - Number of data points processed.
             - Computed covariance matrices (nested dict: factor_name -> module_name -> tensor).
     """
-    import gc
-    for obj in gc.get_objects():
-        try:
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device("cuda"):
-                print(type(obj), obj.size())
-        except:
-            pass
-
     update_factor_args(model=model, factor_args=factor_args)
     if tracked_module_names is None:
         tracked_module_names = get_tracked_module_names(model=model)
@@ -243,13 +235,6 @@ def fit_covariance_matrices_with_loader(
             total_steps += 1
             pbar.update(1)
 
-    for obj in gc.get_objects():
-        try:
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device("cuda"):
-                print(type(obj), obj.size())
-        except:
-            pass
-
     if state.use_distributed:
         synchronize_modules(model=model, tracked_module_names=tracked_module_names)
         num_data_processed = num_data_processed.to(device=state.device)
@@ -275,12 +260,5 @@ def fit_covariance_matrices_with_loader(
         set_gradient_scale(model=model, gradient_scale=1.0)
     set_mode(model=model, mode=ModuleMode.DEFAULT, release_memory=True)
     state.wait_for_everyone()
-
-    for obj in gc.get_objects():
-        try:
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device("cuda"):
-                print(type(obj), obj.size())
-        except:
-            pass
 
     return num_data_processed, saved_factors
