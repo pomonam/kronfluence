@@ -307,7 +307,7 @@ class FactorComputer(Computer):
                         if torch.is_tensor(obj) or (
                                 hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device(
                                 "cuda"):
-                            print(type(obj), obj.size())
+                            print(type(obj), obj.size(), obj.device)
                     except:
                         pass
 
@@ -345,7 +345,7 @@ class FactorComputer(Computer):
                         if torch.is_tensor(obj) or (
                                 hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device(
                                 "cuda"):
-                            print(type(obj), obj.size())
+                            print(type(obj), obj.size(), obj.device)
                     except:
                         pass
 
