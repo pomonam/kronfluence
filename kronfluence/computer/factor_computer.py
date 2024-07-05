@@ -298,6 +298,9 @@ class FactorComputer(Computer):
                         total_data_examples=max_partition_examples,
                     )
 
+                self._reset_memory()
+
+
                 import gc
                 for obj in gc.get_objects():
                     try:
@@ -307,6 +310,7 @@ class FactorComputer(Computer):
                             print(type(obj), obj.size(), obj.device)
                     except:
                         pass
+
 
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Fit Covariance"):
@@ -332,7 +336,6 @@ class FactorComputer(Computer):
                     f"Fitted covariance matrices with {num_data_processed.item()} data points in "
                     f"{elapsed_time:.2f} seconds."
                 )
-                self._reset_memory()
 
                 print("Done")
                 import gc
