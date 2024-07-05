@@ -11,6 +11,7 @@ def default_score_arguments(
     """Creates default score arguments"""
     score_args = ScoreArguments(damping_factor=damping_factor, query_gradient_low_rank=query_gradient_low_rank)
     if score_args.query_gradient_low_rank is not None:
+        score_args.einsum_minimize_size = True
         score_args.query_gradient_accumulation_steps = 10
     return score_args
 
@@ -66,6 +67,7 @@ def reduce_memory_score_arguments(
     score_args = all_low_precision_score_arguments(
         damping_factor=damping_factor, query_gradient_low_rank=query_gradient_low_rank, dtype=dtype
     )
+    score_args.einsum_minimize_size = True
     score_args.offload_activations_to_cpu = True
     return score_args
 

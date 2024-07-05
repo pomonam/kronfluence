@@ -169,7 +169,7 @@ class ScoreArguments(Arguments):
         metadata={"help": "If `True`, offloads cached activations to CPU memory when computing per-sample gradients."},
     )
     einsum_minimize_size: bool = field(
-        default=True,
+        default=False,
         metadata={
             "help": "If `True`, einsum operations find the contraction that minimizes the size of the "
             "largest intermediate tensor."
