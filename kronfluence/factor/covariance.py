@@ -41,7 +41,7 @@ def covariance_matrices_save_path(
 
     Args:
         output_dir (Path):
-            Directory to save the matrices.
+            Directory to save or load the matrices.
         factor_name (str):
             Name of the factor (must be in `COVARIANCE_FACTOR_NAMES`).
         partition (PARTITION_TYPE, optional):
@@ -242,16 +242,17 @@ def fit_covariance_matrices_with_loader(
         num_data_processed = num_data_processed.cpu()
 
     saved_factors: FACTOR_TYPE = {}
-    for factor_name in COVARIANCE_FACTOR_NAMES:
-        factor = load_factors(
-            model=model,
-            factor_name=factor_name,
-            tracked_module_names=tracked_module_names,
-            clone=True,
-        )
-        if factor is None:
-            raise ValueError(f"Factor `{factor_name}` has not been computed.")
-        saved_factors[factor_name] = factor
+    if state.is_main_process:
+        for factor_name in COVARIANCE_FACTOR_NAMES:
+            factor = load_factors(
+                model=model,
+                factor_name=factor_name,
+                tracked_module_names=tracked_module_names,
+                cpu=True,
+            )
+            if len(factor) == 0:
+                raise ValueError(f"Factor `{factor_name}` has not been computed.")
+            saved_factors[factor_name] = factor
 
     model.zero_grad(set_to_none=True)
     set_attention_mask(model=model, attention_mask=None)

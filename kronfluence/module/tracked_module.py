@@ -177,8 +177,8 @@ class TrackedModule(nn.Module):
         self.current_mode = mode
 
         if release_memory:
-            for _mode in self._trackers:
-                self._trackers[_mode].release_memory()
+            for _, tracker in self._trackers.items():
+                tracker.release_memory()
 
         self._trackers[self.current_mode].register_hooks()
 

@@ -107,29 +107,29 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                         ),
                     )
             return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation)
-        else:
-            if self.einsum_expression is None:
-                if self.score_args.compute_per_token_scores and len(input_activation.shape) == 3:
-                    self.einsum_expression = contract_expression(
-                        "qio,bti,bto->qbt",
-                        preconditioned_gradient.shape,
-                        output_gradient.shape,
-                        input_activation.shape,
-                        optimize=DynamicProgramming(
-                            search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
-                        ),
-                    )
-                else:
-                    self.einsum_expression = contract_expression(
-                        "qio,b...i,b...o->qb",
-                        preconditioned_gradient.shape,
-                        output_gradient.shape,
-                        input_activation.shape,
-                        optimize=DynamicProgramming(
-                            search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
-                        ),
-                    )
-            return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
+
+        if self.einsum_expression is None:
+            if self.score_args.compute_per_token_scores and len(input_activation.shape) == 3:
+                self.einsum_expression = contract_expression(
+                    "qio,bti,bto->qbt",
+                    preconditioned_gradient.shape,
+                    output_gradient.shape,
+                    input_activation.shape,
+                    optimize=DynamicProgramming(
+                        search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
+                    ),
+                )
+            else:
+                self.einsum_expression = contract_expression(
+                    "qio,b...i,b...o->qb",
+                    preconditioned_gradient.shape,
+                    output_gradient.shape,
+                    input_activation.shape,
+                    optimize=DynamicProgramming(
+                        search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
+                    ),
+                )
+        return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
 
     def compute_self_measurement_score(
         self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor

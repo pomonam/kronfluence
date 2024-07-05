@@ -166,7 +166,7 @@ def load_factors(
     model: nn.Module,
     factor_name: str,
     tracked_module_names: List[str] = None,
-    clone: bool = False,
+    cpu: bool = True,
 ) -> Dict[str, torch.Tensor]:
     """Loads factors with the given name from all `TrackedModule` instances within a model (or all modules listed
     in `tracked_module_names` if not `None`)."""
@@ -177,8 +177,8 @@ def load_factors(
                 continue
             factor = module.get_factor(factor_name=factor_name)
             if factor is not None:
-                if clone:
-                    loaded_factors[module.name] = factor.clone(memory_format=torch.contiguous_format)
+                if cpu:
+                    loaded_factors[module.name] = factor.cpu()
                     module.release_factor(factor_name=factor_name)
                 else:
                     loaded_factors[module.name] = factor

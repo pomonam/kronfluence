@@ -2,7 +2,7 @@ from typing import Tuple
 
 import torch
 import torch.distributed as dist
-import torch.nn as nn
+from torch import nn
 
 from kronfluence.factor.config import FactorConfig
 from kronfluence.module.tracker.base import BaseTracker
@@ -93,9 +93,14 @@ class CovarianceTracker(BaseTracker):
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             # Computes and updates pseudo-gradient covariance during backward pass.
-            output_gradient = self._scale_output_gradient(
-                output_gradient=output_gradient, target_dtype=self.module.factor_args.gradient_covariance_dtype
-            )
+            original_dtype = output_gradient.dtype
+            target_dtype = self.module.factor_args.gradient_covariance_dtype
+            output_gradient = output_gradient.detach().to(dtype=target_dtype)
+            if self.module.gradient_scale != 1.0:
+                if original_dtype != target_dtype:
+                    output_gradient.mul_(self.module.gradient_scale)
+                else:
+                    output_gradient = output_gradient * self.module.gradient_scale
             self._update_gradient_covariance_matrix(output_gradient=output_gradient)
 
         self.registered_hooks.append(self.module.original_module.register_forward_hook(forward_hook))
@@ -149,7 +154,6 @@ class LambdaTracker(BaseTracker):
             self.module.storage[NUM_LAMBDA_PROCESSED] = torch.zeros(
                 size=(1,),
                 dtype=torch.int64,
-                device=None,
                 requires_grad=False,
             )
             self.module.storage[LAMBDA_MATRIX_NAME] = torch.zeros(
@@ -193,14 +197,19 @@ class LambdaTracker(BaseTracker):
                     )
                     self.module.storage[LAMBDA_MATRIX_NAME].add_(sqrt_lambda.square_())
             else:
-                per_sample_gradient = torch.matmul(
-                    self.module.storage[GRADIENT_EIGENVECTORS_NAME].t(),
-                    torch.matmul(per_sample_gradient, self.module.storage[ACTIVATION_EIGENVECTORS_NAME]),
+                per_sample_gradient = (
+                    torch.matmul(
+                        self.module.storage[GRADIENT_EIGENVECTORS_NAME].t(),
+                        torch.matmul(per_sample_gradient, self.module.storage[ACTIVATION_EIGENVECTORS_NAME]),
+                    )
+                    .square_()
+                    .sum(dim=0)
                 )
-                self.module.storage[LAMBDA_MATRIX_NAME].add_(per_sample_gradient.square_().sum(dim=0))
+                self.module.storage[LAMBDA_MATRIX_NAME].add_(per_sample_gradient)
         else:
             # Approximate the eigenbasis as identity.
-            self.module.storage[LAMBDA_MATRIX_NAME].add_(per_sample_gradient.square_().sum(dim=0))
+            per_sample_gradient = per_sample_gradient.square_().sum(dim=0)
+            self.module.storage[LAMBDA_MATRIX_NAME].add_(per_sample_gradient)
 
     def register_hooks(self) -> None:
         """Sets up hooks to compute lambda matrices."""
@@ -232,9 +241,14 @@ class LambdaTracker(BaseTracker):
             if self.cached_activations is None:
                 self._raise_cache_not_found_exception()
 
-            output_gradient = self._scale_output_gradient(
-                output_gradient=output_gradient, target_dtype=self.module.factor_args.per_sample_gradient_dtype
-            )
+            original_dtype = output_gradient.dtype
+            target_dtype = self.module.factor_args.per_sample_gradient_dtype
+            output_gradient = output_gradient.detach().to(dtype=target_dtype)
+            if self.module.gradient_scale != 1.0:
+                if original_dtype != target_dtype:
+                    output_gradient.mul_(self.module.gradient_scale)
+                else:
+                    output_gradient = output_gradient * self.module.gradient_scale
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=self.cached_activations.to(device=output_gradient.device),
                 output_gradient=output_gradient,
@@ -244,9 +258,14 @@ class LambdaTracker(BaseTracker):
 
         @torch.no_grad()
         def shared_backward_hook(output_gradient: torch.Tensor) -> None:
-            output_gradient = self._scale_output_gradient(
-                output_gradient=output_gradient, target_dtype=self.module.factor_args.per_sample_gradient_dtype
-            )
+            original_dtype = output_gradient.dtype
+            target_dtype = self.module.factor_args.per_sample_gradient_dtype
+            output_gradient = output_gradient.detach().to(dtype=target_dtype)
+            if self.module.gradient_scale != 1.0:
+                if original_dtype != target_dtype:
+                    output_gradient.mul_(self.module.gradient_scale)
+                else:
+                    output_gradient = output_gradient * self.module.gradient_scale
             cached_activation = self.cached_activations.pop()
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=cached_activation.to(device=output_gradient.device),
@@ -261,8 +280,10 @@ class LambdaTracker(BaseTracker):
     @torch.no_grad()
     def finalize_iteration(self) -> None:
         """Updates Lambda matrix using cached per-sample gradients."""
-        self.cached_per_sample_gradient = self.cached_per_sample_gradient.to(dtype=self.module.factor_args.lambda_dtype)
         if self.module.factor_args.has_shared_parameters:
+            self.cached_per_sample_gradient = self.cached_per_sample_gradient.to(
+                dtype=self.module.factor_args.lambda_dtype
+            )
             self._update_lambda_matrix(per_sample_gradient=self.cached_per_sample_gradient)
         self.clear_all_cache()
 
