@@ -29,7 +29,6 @@ from kronfluence.utils.constants import FACTOR_ARGUMENTS_NAME, FACTOR_TYPE
 from kronfluence.utils.dataset import DataLoaderKwargs, find_executable_batch_size
 from kronfluence.utils.exceptions import FactorsNotFoundError
 from kronfluence.utils.logger import get_time
-from kronfluence.utils.state import release_memory
 
 
 class FactorComputer(Computer):
@@ -298,20 +297,6 @@ class FactorComputer(Computer):
                         total_data_examples=max_partition_examples,
                     )
 
-                self._reset_memory()
-
-
-                import gc
-                for obj in gc.get_objects():
-                    try:
-                        if torch.is_tensor(obj) or (
-                                hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device(
-                                "cuda"):
-                            print(type(obj), obj.size(), obj.device)
-                    except:
-                        pass
-
-
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Fit Covariance"):
                     loader = self._get_dataloader(
@@ -336,17 +321,6 @@ class FactorComputer(Computer):
                     f"Fitted covariance matrices with {num_data_processed.item()} data points in "
                     f"{elapsed_time:.2f} seconds."
                 )
-
-                print("Done")
-                import gc
-                for obj in gc.get_objects():
-                    try:
-                        if torch.is_tensor(obj) or (
-                                hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device(
-                                "cuda"):
-                            print(type(obj), obj.size(), obj.device)
-                    except:
-                        pass
 
                 with self.profiler.profile("Save Covariance"):
                     if self.state.is_main_process:
@@ -456,7 +430,7 @@ class FactorComputer(Computer):
             covariance_factors = load_covariance_matrices(output_dir=load_factors_output_dir)
 
         if load_from_factors_name is not None and self.state.is_main_process:
-            # Saves the loaded covariances to the current factor output directory.
+            # Save the loaded covariances to the current factor output directory.
             with self.profiler.profile("Save Covariance"):
                 save_covariance_matrices(output_dir=factors_output_dir, factors=covariance_factors)
             loaded_factor_args = self.load_factor_args(factors_name=load_from_factors_name)
@@ -470,7 +444,6 @@ class FactorComputer(Computer):
 
         eigen_factors = None
         if self.state.is_main_process:
-            self._reset_memory()
             start_time = time.time()
             with self.profiler.profile("Perform Eigendecomposition"):
                 eigen_factors = perform_eigendecomposition(
@@ -672,7 +645,6 @@ class FactorComputer(Computer):
                         total_data_examples=max_partition_examples,
                     )
 
-                release_memory()
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Fit Lambda"):
                     loader = self._get_dataloader(

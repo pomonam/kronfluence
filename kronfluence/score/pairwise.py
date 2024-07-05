@@ -319,9 +319,9 @@ def compute_pairwise_query_aggregated_scores_with_loaders(
     )
     if len(loaded_factors) > 0:
         for name in loaded_factors:
-            set_factors(model=model, factor_name=name, factors=loaded_factors[name], clone=True)
-    del loaded_factors
+            set_factors(model=model, factor_name=name, factors=loaded_factors[name])
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
+    release_memory()
 
     enable_amp = score_args.amp_dtype is not None
     scaler = GradScaler(enabled=enable_amp)

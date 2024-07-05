@@ -29,7 +29,7 @@ from kronfluence.utils.constants import (
     PARTITION_TYPE,
 )
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
-from kronfluence.utils.state import State, no_sync
+from kronfluence.utils.state import State, no_sync, release_memory
 
 
 def covariance_matrices_save_path(
@@ -192,6 +192,7 @@ def fit_covariance_matrices_with_loader(
         mode=ModuleMode.COVARIANCE,
         release_memory=True,
     )
+    release_memory()
 
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
@@ -259,6 +260,7 @@ def fit_covariance_matrices_with_loader(
     if enable_amp:
         set_gradient_scale(model=model, gradient_scale=1.0)
     set_mode(model=model, mode=ModuleMode.DEFAULT, release_memory=True)
+    release_memory()
     state.wait_for_everyone()
 
     return num_data_processed, saved_factors

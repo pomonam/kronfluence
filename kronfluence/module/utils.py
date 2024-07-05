@@ -178,7 +178,7 @@ def load_factors(
             factor = module.get_factor(factor_name=factor_name)
             if factor is not None:
                 if cpu:
-                    loaded_factors[module.name] = factor.cpu()
+                    loaded_factors[module.name] = factor.to(device="cpu", copy=True)
                     module.release_factor(factor_name=factor_name)
                 else:
                     loaded_factors[module.name] = factor
