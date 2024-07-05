@@ -297,6 +297,7 @@ class FactorComputer(Computer):
                         total_data_examples=max_partition_examples,
                     )
 
+                self._reset_memory()
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Fit Covariance"):
                     loader = self._get_dataloader(
@@ -331,8 +332,9 @@ class FactorComputer(Computer):
                             metadata=factor_args.to_str_dict(),
                         )
                     self.state.wait_for_everyone()
-                del covariance_factors, loader
                 self.logger.info(f"Saved covariance matrices at `{factors_output_dir}`.")
+                del num_data_processed, covariance_factors, loader
+                self._reset_memory()
 
         all_end_time = get_time(state=self.state)
         elapsed_time = all_end_time - all_start_time
@@ -442,6 +444,7 @@ class FactorComputer(Computer):
             )
         self.state.wait_for_everyone()
 
+        self._reset_memory()
         eigen_factors = None
         if self.state.is_main_process:
             start_time = time.time()
@@ -462,6 +465,7 @@ class FactorComputer(Computer):
                     output_dir=factors_output_dir, factors=eigen_factors, metadata=factor_args.to_str_dict()
                 )
             self.logger.info(f"Saved eigendecomposition results at `{factors_output_dir}`.")
+            self._reset_memory()
         self.state.wait_for_everyone()
         self._log_profile_summary(name=f"factors_{factors_name}_eigendecomposition")
 
@@ -645,6 +649,7 @@ class FactorComputer(Computer):
                         total_data_examples=max_partition_examples,
                     )
 
+                self._reset_memory()
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Fit Lambda"):
                     loader = self._get_dataloader(
@@ -680,8 +685,9 @@ class FactorComputer(Computer):
                             metadata=factor_args.to_str_dict(),
                         )
                     self.state.wait_for_everyone()
-                del lambda_factors, loader
                 self.logger.info(f"Saved Lambda matrices at `{factors_output_dir}`.")
+                del num_data_processed, lambda_factors, loader
+                self._reset_memory()
 
         all_end_time = get_time(state=self.state)
         elapsed_time = all_end_time - all_start_time

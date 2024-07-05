@@ -392,7 +392,6 @@ def fit_lambda_matrices_with_loader(
     if eigen_factors is not None:
         for name in eigen_factors:
             set_factors(model=model, factor_name=name, factors=eigen_factors[name])
-    release_memory()
 
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
@@ -420,6 +419,7 @@ def fit_lambda_matrices_with_loader(
                         sample=not factor_args.use_empirical_fisher,
                     )
                 scaler.scale(loss).backward()
+            del loss
 
             if factor_args.has_shared_parameters:
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
@@ -459,6 +459,5 @@ def fit_lambda_matrices_with_loader(
         set_gradient_scale(model=model, gradient_scale=1.0)
     set_mode(model=model, mode=ModuleMode.DEFAULT, release_memory=True)
     state.wait_for_everyone()
-    release_memory()
 
     return num_data_processed, saved_factors

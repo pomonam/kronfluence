@@ -17,6 +17,7 @@ class BaseTracker:
         """
         self.module = module
         self.registered_hooks: List[RemovableHandle] = []
+        self.cached_hooks: List[RemovableHandle] = []
         self.cached_activations: Optional[Union[List[torch.Tensor]], torch.Tensor] = None
         self.cached_per_sample_gradient: Optional[torch.Tensor] = None
 
@@ -31,6 +32,11 @@ class BaseTracker:
         """Clears all cached data from memory."""
         del self.cached_activations, self.cached_per_sample_gradient
         self.cached_activations, self.cached_per_sample_gradient = None, None
+
+        while self.cached_hooks:
+            handle = self.cached_hooks.pop()
+            handle.remove()
+        self.cached_hooks = []
 
     def _scale_output_gradient(self, output_gradient: torch.Tensor, target_dtype: torch.dtype) -> torch.Tensor:
         """Scales the output gradient and convert to the target dtype.

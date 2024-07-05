@@ -82,16 +82,20 @@ class CovarianceTracker(BaseTracker):
     def register_hooks(self) -> None:
         """Sets up hooks to compute activation and gradient covariance matrices."""
 
-        @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
-            # Computes and updates activation covariance during forward pass.
-            input_activation = inputs[0].detach().to(dtype=self.module.factor_args.activation_covariance_dtype)
-            self._update_activation_covariance_matrix(input_activation=input_activation)
-            outputs.register_hook(backward_hook)
+            with torch.no_grad():
+                # Computes and updates activation covariance during forward pass.
+                input_activation = (
+                    inputs[0].detach().to(dtype=self.module.factor_args.activation_covariance_dtype, copy=True)
+                )
+                self._update_activation_covariance_matrix(input_activation=input_activation)
+            self.cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
+            handle = self.cached_hooks.pop()
+            handle.remove()
             # Computes and updates pseudo-gradient covariance during backward pass.
             original_dtype = output_gradient.dtype
             target_dtype = self.module.factor_args.gradient_covariance_dtype
@@ -103,7 +107,8 @@ class CovarianceTracker(BaseTracker):
                     output_gradient = output_gradient * self.module.gradient_scale
             self._update_gradient_covariance_matrix(output_gradient=output_gradient)
 
-        self.registered_hooks.append(self.module.original_module.register_forward_hook(forward_hook))
+        # self.registered_hooks.append(self.module.original_module.register_forward_hook(forward_hook))
+        self.registered_hooks.append(self.module.register_forward_hook(forward_hook))
 
     def exist(self) -> bool:
         """Checks if both activation and gradient covariance matrices are available."""
@@ -127,7 +132,6 @@ class CovarianceTracker(BaseTracker):
     def release_memory(self) -> None:
         """Clears all covariance matrices from memory."""
         for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
-            del self.module.storage[covariance_factor_name]
             self.module.storage[covariance_factor_name] = None
 
 
@@ -214,26 +218,27 @@ class LambdaTracker(BaseTracker):
     def register_hooks(self) -> None:
         """Sets up hooks to compute lambda matrices."""
 
-        @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
-            cached_activation = inputs[0].detach()
-            device = "cpu" if self.module.factor_args.offload_activations_to_cpu else cached_activation.device
-            cached_activation = cached_activation.to(
-                device=device,
-                dtype=self.module.factor_args.per_sample_gradient_dtype,
-                copy=True,
-            )
+            with torch.no_grad():
+                cached_activation = inputs[0].detach()
+                device = "cpu" if self.module.factor_args.offload_activations_to_cpu else cached_activation.device
+                cached_activation = cached_activation.to(
+                    device=device,
+                    dtype=self.module.factor_args.per_sample_gradient_dtype,
+                    copy=True,
+                )
+                if self.module.factor_args.has_shared_parameters:
+                    if self.cached_activations is None:
+                        self.cached_activations = []
+                    self.cached_activations.append(cached_activation)
+                else:
+                    self.cached_activations = cached_activation
 
-            if self.module.factor_args.has_shared_parameters:
-                if self.cached_activations is None:
-                    self.cached_activations = []
-                self.cached_activations.append(cached_activation)
-            else:
-                self.cached_activations = cached_activation
-
-            outputs.register_hook(
-                shared_backward_hook if self.module.factor_args.has_shared_parameters else backward_hook
+            self.cached_hooks.append(
+                outputs.register_hook(
+                    shared_backward_hook if self.module.factor_args.has_shared_parameters else backward_hook
+                )
             )
 
         @torch.no_grad()
@@ -241,6 +246,8 @@ class LambdaTracker(BaseTracker):
             if self.cached_activations is None:
                 self._raise_cache_not_found_exception()
 
+            handle = self.cached_hooks.pop()
+            handle.remove()
             original_dtype = output_gradient.dtype
             target_dtype = self.module.factor_args.per_sample_gradient_dtype
             output_gradient = output_gradient.detach().to(dtype=target_dtype)
@@ -258,6 +265,8 @@ class LambdaTracker(BaseTracker):
 
         @torch.no_grad()
         def shared_backward_hook(output_gradient: torch.Tensor) -> None:
+            handle = self.cached_hooks.pop()
+            handle.remove()
             original_dtype = output_gradient.dtype
             target_dtype = self.module.factor_args.per_sample_gradient_dtype
             output_gradient = output_gradient.detach().to(dtype=target_dtype)

@@ -27,6 +27,7 @@ from kronfluence.utils.constants import (
     PRECONDITIONED_GRADIENT_TYPE,
     SELF_SCORE_VECTOR_NAME,
 )
+from kronfluence.utils.state import State
 
 
 class ModuleMode(str, BaseEnum):
@@ -88,13 +89,14 @@ class TrackedModule(nn.Module):
         self._constant: torch.Tensor = nn.Parameter(
             torch.zeros(
                 1,
+                dtype=self.original_module.weight.dtype,
                 requires_grad=True,
-                dtype=torch.float16,
             )
         )
         self.current_mode = ModuleMode.DEFAULT
         self.factor_args = FactorArguments() if factor_args is None else factor_args
         self.score_args = ScoreArguments() if score_args is None else score_args
+        self.state = State()
         self.per_sample_gradient_process_fnc = per_sample_gradient_process_fnc
         self.einsum_expression = None
 
@@ -134,7 +136,8 @@ class TrackedModule(nn.Module):
 
     def forward(self, inputs: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         """A forward pass of the tracked module. This should have identical behavior to that of the original module."""
-        return self.original_module(inputs + self._constant, *args, **kwargs)
+        # return self.original_module(inputs + self._constant, *args, **kwargs)
+        return self.original_module(inputs, *args, **kwargs) + self._constant
 
     def prepare_storage(self, device: torch.device) -> None:
         """Performs any necessary operations on storage before computing any metrics."""

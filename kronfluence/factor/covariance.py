@@ -192,7 +192,6 @@ def fit_covariance_matrices_with_loader(
         mode=ModuleMode.COVARIANCE,
         release_memory=True,
     )
-    release_memory()
 
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
@@ -233,6 +232,7 @@ def fit_covariance_matrices_with_loader(
                 state.wait_for_everyone()
 
             num_data_processed.add_(find_batch_size(data=batch))
+            del batch, attention_mask, loss
             total_steps += 1
             pbar.update(1)
 
@@ -260,7 +260,6 @@ def fit_covariance_matrices_with_loader(
     if enable_amp:
         set_gradient_scale(model=model, gradient_scale=1.0)
     set_mode(model=model, mode=ModuleMode.DEFAULT, release_memory=True)
-    release_memory()
     state.wait_for_everyone()
 
     return num_data_processed, saved_factors
