@@ -186,7 +186,7 @@ def fit_covariance_matrices_with_loader(
     import gc
     for obj in gc.get_objects():
         try:
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device("cuda"):
                 print(type(obj), obj.size())
         except:
             pass
@@ -245,7 +245,7 @@ def fit_covariance_matrices_with_loader(
 
     for obj in gc.get_objects():
         try:
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device("cuda"):
                 print(type(obj), obj.size())
         except:
             pass
@@ -278,7 +278,7 @@ def fit_covariance_matrices_with_loader(
 
     for obj in gc.get_objects():
         try:
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)) and obj.device == torch.device("cuda"):
                 print(type(obj), obj.size())
         except:
             pass
