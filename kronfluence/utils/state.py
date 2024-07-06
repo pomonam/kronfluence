@@ -1,7 +1,7 @@
 import contextlib
 import gc
 import os
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List
 
 import torch
 import torch.distributed as dist
@@ -111,6 +111,18 @@ def release_memory() -> None:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+
+def get_active_tensors() -> List[torch.Tensor]:
+    # https://discuss.pytorch.org/t/how-to-debug-causes-of-gpu-memory-leaks/6741/3
+    tensor_lst = []
+    for obj in gc.get_objects():
+        try:
+            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                tensor_lst.append(type(obj), obj.size())
+        except:
+            pass
+    return tensor_lst
 
 
 @contextlib.contextmanager

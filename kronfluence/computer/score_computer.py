@@ -450,6 +450,7 @@ class ScoreComputer(Computer):
                         )
                     self.state.wait_for_everyone()
                 del scores, query_loader, train_loader
+                self._reset_memory()
                 self.logger.info(f"Saved pairwise scores at {scores_output_dir}.")
 
         all_end_time = get_time(state=self.state)
@@ -755,6 +756,7 @@ class ScoreComputer(Computer):
                         )
                     self.state.wait_for_everyone()
                 del scores, train_loader
+                self._reset_memory()
                 self.logger.info(f"Saved self-influence scores at `{scores_output_dir}`.")
 
         all_end_time = get_time(state=self.state)
