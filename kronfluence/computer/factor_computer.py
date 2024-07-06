@@ -465,6 +465,7 @@ class FactorComputer(Computer):
                     output_dir=factors_output_dir, factors=eigen_factors, metadata=factor_args.to_str_dict()
                 )
             self.logger.info(f"Saved eigendecomposition results at `{factors_output_dir}`.")
+            del eigen_factors
             self._reset_memory()
         self.state.wait_for_everyone()
         self._log_profile_summary(name=f"factors_{factors_name}_eigendecomposition")

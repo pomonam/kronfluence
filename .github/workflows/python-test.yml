@@ -28,10 +28,9 @@ jobs:
         pytest -vx tests/test_dataset_utils.py
         pytest -vx tests/test_testable_tasks.py
         pytest -vx tests/factors/test_covariances.py
-        pytest -vx tests/factors/test_eigens.py
+        pytest -vx tests/factors/test_eigendecompositions.py
         pytest -vx tests/factors/test_lambdas.py
         pytest -vx tests/modules/test_modules.py
         pytest -vx tests/modules/test_per_sample_gradients.py
-        pytest -vx tests/modules/test_svd.py
         pytest -vx tests/scores/test_pairwise_scores.py
         pytest -vx tests/scores/test_self_scores.py

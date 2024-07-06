@@ -34,4 +34,5 @@ disable = """
     implicit-str-concat,
     inconsistent-return-statements,
     too-many-lines,
+    too-many-public-methods,
 """
