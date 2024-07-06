@@ -44,7 +44,18 @@ def self_scores_save_path(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> Path:
-    """Generates the path for saving/loading self-influence scores."""
+    """Generates the path for saving or loading self-influence scores.
+
+    Args:
+        output_dir (Path):
+            Directory to save or load the matrices.
+        partition (PARTITION_TYPE, optional):
+            Partition information, if any.
+
+    Returns:
+        Path:
+            The full path for the score file.
+    """
     if partition is not None:
         data_partition, module_partition = partition
         return output_dir / (
@@ -53,25 +64,24 @@ def self_scores_save_path(
     return output_dir / "self_scores.safetensors"
 
 
-def self_scores_exist(
-    output_dir: Path,
-    partition: Optional[PARTITION_TYPE] = None,
-) -> bool:
-    """Checks if the self-influence scores exist at the specified path."""
-    save_path = self_scores_save_path(
-        output_dir=output_dir,
-        partition=partition,
-    )
-    return save_path.exists()
-
-
 def save_self_scores(
     output_dir: Path,
     scores: SCORE_TYPE,
     partition: Optional[PARTITION_TYPE] = None,
     metadata: Optional[Dict[str, str]] = None,
 ) -> None:
-    """Saves self-influence scores to disk."""
+    """Saves self-influence scores to disk.
+
+    Args:
+        output_dir (Path):
+            Directory to save the scores.
+        scores (FACTOR_TYPE):
+            Dictionary of scores to save.
+        partition (PARTITION_TYPE, optional):
+            Partition information, if any.
+        metadata (Dict[str, str], optional):
+            Additional metadata to save with the scores.
+    """
     save_path = self_scores_save_path(
         output_dir=output_dir,
         partition=partition,
@@ -83,12 +93,46 @@ def load_self_scores(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
 ) -> Dict[str, torch.Tensor]:
-    """Loads self-influence scores from disk."""
+    """Loads self-influence scores from disk.
+
+    Args:
+        output_dir (Path):
+            Directory to load the scores from.
+        partition (PARTITION_TYPE, optional):
+            Partition information, if any.
+
+    Returns:
+        SCORE_TYPE:
+            Dictionary of loaded scores.
+    """
     save_path = self_scores_save_path(
         output_dir=output_dir,
         partition=partition,
     )
     return load_file(filename=save_path)
+
+
+def self_scores_exist(
+    output_dir: Path,
+    partition: Optional[PARTITION_TYPE] = None,
+) -> bool:
+    """Checks if self-influence scores exist at the specified directory.
+
+    Args:
+        output_dir (Path):
+            Directory to check for scores.
+        partition (PARTITION_TYPE, optional):
+            Partition information, if any.
+
+    Returns:
+        bool:
+            `True` if scores exist, `False` otherwise.
+    """
+    save_path = self_scores_save_path(
+        output_dir=output_dir,
+        partition=partition,
+    )
+    return save_path.exists()
 
 
 def compute_self_scores_with_loaders(
@@ -106,7 +150,7 @@ def compute_self_scores_with_loaders(
 
     Args:
         loaded_factors (FACTOR_TYPE):
-            The factor results to load from, before computing the self-influence scores.
+            Computed factors.
         model (nn.Module):
             The model for which self-influence scores will be computed.
         state (State):
@@ -116,14 +160,14 @@ def compute_self_scores_with_loaders(
         train_loader (data.DataLoader):
             The data loader that will be used to compute training gradients.
         score_args (ScoreArguments):
-            Arguments related to computing self-influence scores.
+            Arguments for computing self-influence scores.
         factor_args (FactorArguments):
-            Arguments related to computing preconditioning factors.
+            Arguments used to compute factors.
         tracked_module_names (List[str], optional):
             A list of module names that self-influence scores will be computed. If not specified, scores
             will be computed for all available tracked modules.
         disable_tqdm (bool, optional):
-            Disables TQDM progress bars. Defaults to False.
+            Whether to disable the progress bar. Defaults to `False`.
 
     Returns:
         Dict[str, torch.Tensor]:
@@ -141,8 +185,7 @@ def compute_self_scores_with_loaders(
     )
     if len(loaded_factors) > 0:
         for name in loaded_factors:
-            set_factors(model=model, factor_name=name, factors=loaded_factors[name], clone=True)
-    del loaded_factors
+            set_factors(model=model, factor_name=name, factors=loaded_factors[name])
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
 
     dataset_size = len(train_loader.dataset)
@@ -153,6 +196,11 @@ def compute_self_scores_with_loaders(
                 score_chunks[module.name] = []
     else:
         score_chunks[ALL_MODULE_NAME] = []
+
+    cached_module_lst = []
+    for module in model.modules():
+        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+            cached_module_lst.append(module)
 
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
@@ -187,26 +235,25 @@ def compute_self_scores_with_loaders(
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
             if score_args.compute_per_module_scores:
-                for module in model.modules():
-                    if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                        score_chunks[module.name].append(
-                            module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).clone().cpu()
-                        )
+                for module in cached_module_lst:
+                    score_chunks[module.name].append(
+                        module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).clone().cpu()
+                    )
             else:
                 self_scores = None
-                for module in model.modules():
-                    if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                        if self_scores is None:
-                            self_scores = torch.zeros_like(
-                                module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
-                            )
-                        self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
+                for module in cached_module_lst:
+                    if self_scores is None:
+                        self_scores = torch.zeros_like(
+                            module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
+                        )
+                    self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
                 score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
             accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 
             if state.use_distributed and total_steps % DISTRIBUTED_SYNC_INTERVAL == 0:
                 state.wait_for_everyone()
 
+            del batch, loss
             total_steps += 1
             pbar.update(1)
 
@@ -260,9 +307,7 @@ def compute_self_measurement_scores_with_loaders(
                 model=model,
                 factor_name=name,
                 factors=loaded_factors[name],
-                clone=True,
             )
-    del loaded_factors
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
 
     dataset_size = len(train_loader.dataset)
@@ -273,6 +318,11 @@ def compute_self_measurement_scores_with_loaders(
                 score_chunks[module.name] = []
     else:
         score_chunks[ALL_MODULE_NAME] = []
+
+    cached_module_lst = []
+    for module in model.modules():
+        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+            cached_module_lst.append(module)
 
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
@@ -307,6 +357,7 @@ def compute_self_measurement_scores_with_loaders(
 
             if factor_args.has_shared_parameters:
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
+            del measurement
 
             set_mode(
                 model=model,
@@ -326,22 +377,21 @@ def compute_self_measurement_scores_with_loaders(
 
             if factor_args.has_shared_parameters:
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
+            del batch, loss
 
             if score_args.compute_per_module_scores:
-                for module in model.modules():
-                    if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                        score_chunks[module.name].append(
-                            module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).clone().cpu()
-                        )
+                for module in cached_module_lst:
+                    score_chunks[module.name].append(
+                        module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).clone().cpu()
+                    )
             else:
                 self_scores = None
-                for module in model.modules():
-                    if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                        if self_scores is None:
-                            self_scores = torch.zeros_like(
-                                module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
-                            )
-                        self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
+                for module in cached_module_lst:
+                    if self_scores is None:
+                        self_scores = torch.zeros_like(
+                            module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
+                        )
+                    self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
                 score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
             accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 

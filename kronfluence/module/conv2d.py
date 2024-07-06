@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from einconv.utils import get_conv_paddings
 from einops import rearrange, reduce
-from opt_einsum import DynamicProgramming, contract_expression
+from opt_einsum import DynamicProgramming, contract_expression, contract
 from torch import nn
 from torch.nn.modules.utils import _pair
 
@@ -160,7 +160,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
         input_activation = self._flatten_input_activation(input_activation=input_activation)
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
-        summed_gradient = torch.einsum("bci,bco->io", output_gradient, input_activation)
+        summed_gradient = contract("bci,bco->io", output_gradient, input_activation)
         return summed_gradient.view((1, *summed_gradient.size()))
 
     def compute_per_sample_gradient(
@@ -171,7 +171,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
         input_activation = self._flatten_input_activation(input_activation=input_activation)
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
-        per_sample_gradient = torch.einsum("bci,bco->bio", output_gradient, input_activation)
+        per_sample_gradient = contract("bci,bco->bio", output_gradient, input_activation)
         if self.per_sample_gradient_process_fnc is not None:
             per_sample_gradient = self.per_sample_gradient_process_fnc(
                 module_name=self.name, gradient=per_sample_gradient

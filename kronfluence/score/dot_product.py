@@ -66,6 +66,11 @@ def compute_dot_products_with_loader(
     else:
         score_chunks[ALL_MODULE_NAME] = []
 
+    cached_module_lst = []
+    for module in model.modules():
+        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+            cached_module_lst.append(module)
+
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
 
@@ -92,31 +97,30 @@ def compute_dot_products_with_loader(
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
             if score_args.compute_per_module_scores:
-                for module in model.modules():
-                    if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                        score_chunks[module.name].append(
-                            module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME).clone().cpu()
-                        )
+                for module in cached_module_lst:
+                    score_chunks[module.name].append(
+                        module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME).clone().cpu()
+                    )
             else:
                 pairwise_scores = None
-                for module in model.modules():
-                    if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                        if pairwise_scores is None:
-                            pairwise_scores = torch.zeros_like(
-                                module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME), requires_grad=False
-                            )
-                        try:
-                            pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
-                        except RuntimeError:
-                            if score_args.compute_per_token_scores:
-                                raise RuntimeError(DIMENSION_NOT_MATCH_ERROR_MSG)
-                            raise
+                for module in cached_module_lst:
+                    if pairwise_scores is None:
+                        pairwise_scores = torch.zeros_like(
+                            module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME), requires_grad=False
+                        )
+                    try:
+                        pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
+                    except RuntimeError:
+                        if score_args.compute_per_token_scores:
+                            raise RuntimeError(DIMENSION_NOT_MATCH_ERROR_MSG)
+                        raise
                 score_chunks[ALL_MODULE_NAME].append(pairwise_scores.cpu())
                 accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 
             if state.use_distributed and total_steps % DISTRIBUTED_SYNC_INTERVAL == 0:
                 state.wait_for_everyone()
 
+            del batch, loss
             total_steps += 1
             pbar.update(1)
 
@@ -200,6 +204,7 @@ def compute_aggregated_dot_products_with_loader(
                 if factor_args.has_shared_parameters:
                     finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
+                del batch, loss
                 pbar.update(1)
 
         if state.use_distributed:

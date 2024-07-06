@@ -259,9 +259,8 @@ class LambdaTracker(BaseTracker):
                     output_gradient.mul_(self.module.gradient_scale)
                 else:
                     output_gradient = output_gradient * self.module.gradient_scale
-            self.cached_activations = self.cached_activations.to(device=output_gradient.device)
             per_sample_gradient = self.module.compute_per_sample_gradient(
-                input_activation=self.cached_activations,
+                input_activation=self.cached_activations.to(device=output_gradient.device),
                 output_gradient=output_gradient,
             ).to(dtype=self.module.factor_args.lambda_dtype)
             self.clear_all_cache()
@@ -281,9 +280,8 @@ class LambdaTracker(BaseTracker):
                 else:
                     output_gradient = output_gradient * self.module.gradient_scale
             cached_activation = self.cached_activations.pop()
-            cached_activation = cached_activation.to(device=output_gradient.device)
             per_sample_gradient = self.module.compute_per_sample_gradient(
-                input_activation=cached_activation,
+                input_activation=cached_activation.to(device=output_gradient.device),
                 output_gradient=output_gradient,
             )
             if self.cached_per_sample_gradient is None:

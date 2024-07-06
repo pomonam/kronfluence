@@ -43,7 +43,7 @@ def pairwise_scores_save_path(
 
     Args:
         output_dir (Path):
-            Directory to save the matrices.
+            Directory to save or load the matrices.
         partition (PARTITION_TYPE, optional):
             Partition information, if any.
 
@@ -97,7 +97,7 @@ def load_pairwise_scores(
             Partition information, if any.
 
     Returns:
-        FACTOR_TYPE:
+        SCORE_TYPE:
             Dictionary of loaded scores.
     """
     save_path = pairwise_scores_save_path(
@@ -190,9 +190,7 @@ def compute_pairwise_scores_with_loaders(
                 model=model,
                 factor_name=name,
                 factors=loaded_factors[name],
-                clone=True,
             )
-    del loaded_factors
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
 
     total_scores_chunks: Dict[str, Union[List[torch.Tensor], torch.Tensor]] = {}
@@ -245,6 +243,7 @@ def compute_pairwise_scores_with_loaders(
                     # Removes duplicate data points if the dataset is not evenly divisible by the current batch size.
                     truncate(model=model, tracked_module_names=tracked_module_names, keep_size=query_remainder)
             accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
+            del query_batch, measurement
 
             num_accumulations += 1
             if (
@@ -321,7 +320,6 @@ def compute_pairwise_query_aggregated_scores_with_loaders(
         for name in loaded_factors:
             set_factors(model=model, factor_name=name, factors=loaded_factors[name])
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
-    release_memory()
 
     enable_amp = score_args.amp_dtype is not None
     scaler = GradScaler(enabled=enable_amp)
@@ -356,6 +354,7 @@ def compute_pairwise_query_aggregated_scores_with_loaders(
             if factor_args.has_shared_parameters:
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
+            del query_batch, measurement
             pbar.update(1)
 
     if state.use_distributed:
