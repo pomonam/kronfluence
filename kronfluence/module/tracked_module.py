@@ -136,8 +136,10 @@ class TrackedModule(nn.Module):
 
     def forward(self, inputs: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
         """A forward pass of the tracked module. This should have identical behavior to that of the original module."""
-        # return self.original_module(inputs + self._constant, *args, **kwargs)
-        return self.original_module(inputs, *args, **kwargs) + self._constant
+        outputs = self.original_module(inputs, *args, **kwargs)
+        if outputs.requires_grad:
+            return outputs
+        return outputs + self._constant
 
     def prepare_storage(self, device: torch.device) -> None:
         """Performs any necessary operations on storage before computing any metrics."""

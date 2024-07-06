@@ -87,7 +87,8 @@ class CovarianceTracker(BaseTracker):
             with torch.no_grad():
                 # Computes and updates activation covariance during forward pass.
                 input_activation = (
-                    inputs[0].detach().to(dtype=self.module.factor_args.activation_covariance_dtype, copy=True)
+                    inputs[0].detach().to(dtype=self.module.factor_args.activation_covariance_dtype,
+                                          copy=self.module.attention_mask is not None)
                 )
                 self._update_activation_covariance_matrix(input_activation=input_activation)
             self.cached_hooks.append(outputs.register_hook(backward_hook))
@@ -107,7 +108,6 @@ class CovarianceTracker(BaseTracker):
                     output_gradient = output_gradient * self.module.gradient_scale
             self._update_gradient_covariance_matrix(output_gradient=output_gradient)
 
-        # self.registered_hooks.append(self.module.original_module.register_forward_hook(forward_hook))
         self.registered_hooks.append(self.module.register_forward_hook(forward_hook))
 
     def exist(self) -> bool:
