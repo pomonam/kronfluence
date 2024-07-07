@@ -62,7 +62,7 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
 
     def compute_summed_gradient(self, input_activation: torch.Tensor, output_gradient: torch.Tensor) -> torch.Tensor:
         input_activation = self._flatten_input_activation(input_activation=input_activation)
-        summed_gradient = contract("b...i,b...o->io", output_gradient, input_activation).unsqueeze_(0)
+        summed_gradient = contract("b...i,b...o->io", output_gradient, input_activation).unsqueeze_(dim=0)
         return summed_gradient
 
     def compute_per_sample_gradient(
@@ -93,25 +93,23 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                     right_mat.shape,
                     output_gradient.shape,
                     input_activation.shape,
-                    optimize=DynamicProgramming(
-                        search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
-                    ),
+                    optimize=DynamicProgramming(search_outer=True, minimize="size"),
                 )
             return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation)
 
         if self.einsum_expression is None:
             if self.score_args.compute_per_token_scores and len(input_activation.shape) == 3:
                 expr = "qio,bti,bto->qbt"
+                minimize = "size"
             else:
                 expr = "qio,b...i,b...o->qb"
+                minimize = "flops"
             self.einsum_expression = contract_expression(
                 expr,
                 preconditioned_gradient.shape,
                 output_gradient.shape,
                 input_activation.shape,
-                optimize=DynamicProgramming(
-                    search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
-                ),
+                optimize=DynamicProgramming(search_outer=True, minimize=minimize),
             )
         return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
 
@@ -125,8 +123,6 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                 preconditioned_gradient.shape,
                 output_gradient.shape,
                 input_activation.shape,
-                optimize=DynamicProgramming(
-                    search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
-                ),
+                optimize=DynamicProgramming(search_outer=True, minimize="flops"),
             )
         return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)

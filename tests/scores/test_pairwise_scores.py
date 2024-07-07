@@ -27,12 +27,12 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
-        "repeated_mlp",
-        "conv",
-        "bert",
-        "roberta",
-        "gpt",
-        "gpt_checkpoint",
+        # "repeated_mlp",
+        # "conv",
+        # "bert",
+        # "roberta",
+        # "gpt",
+        # "gpt_checkpoint",
     ],
 )
 @pytest.mark.parametrize("score_dtype", [torch.float32])

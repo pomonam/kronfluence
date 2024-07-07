@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from einconv.utils import get_conv_paddings
 from einops import rearrange, reduce
-from opt_einsum import DynamicProgramming, contract_expression, contract
+from opt_einsum import DynamicProgramming, contract, contract_expression
 from torch import nn
 from torch.nn.modules.utils import _pair
 
@@ -116,7 +116,6 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
             tensor=input_activation,
             pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
         )
-
         if self.original_module.bias is not None:
             input_activation = torch.cat(
                 [
@@ -145,7 +144,6 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
             tensor=input_activation,
             pattern="b o1_o2 c_in_k1_k2 -> (b o1_o2) c_in_k1_k2",
         )
-
         if self.original_module.bias is not None:
             input_activation = torch.cat(
                 [
@@ -160,7 +158,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
         input_activation = self._flatten_input_activation(input_activation=input_activation)
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
-        summed_gradient = contract("bci,bco->io", output_gradient, input_activation)
+        summed_gradient = contract("bci,bco->io", output_gradient, input_activation).unsqueeze_(dim=0)
         return summed_gradient.view((1, *summed_gradient.size()))
 
     def compute_per_sample_gradient(
@@ -195,9 +193,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
                     right_mat.shape,
                     output_gradient.shape,
                     input_activation.shape,
-                    optimize=DynamicProgramming(
-                        search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
-                    ),
+                    optimize=DynamicProgramming(search_outer=True, minimize="size"),
                 )
             return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation)
 
@@ -207,9 +203,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
                 preconditioned_gradient.shape,
                 output_gradient.shape,
                 input_activation.shape,
-                optimize=DynamicProgramming(
-                    search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
-                ),
+                optimize=DynamicProgramming(search_outer=True, minimize="flops"),
             )
         return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
 
@@ -225,8 +219,6 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
                 preconditioned_gradient.shape,
                 output_gradient.shape,
                 input_activation.shape,
-                optimize=DynamicProgramming(
-                    search_outer=True, minimize="size" if self.score_args.einsum_minimize_size else "flops"
-                ),
+                optimize=DynamicProgramming(search_outer=True, minimize="flops"),
             )
         return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)

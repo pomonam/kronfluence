@@ -2,7 +2,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from opt_einsum import DynamicProgramming, contract_expression
+from opt_einsum import DynamicProgramming, contract, contract_expression
 
 from kronfluence.module.tracker.base import BaseTracker
 from kronfluence.utils.constants import (
@@ -32,13 +32,11 @@ class PairwiseScoreTracker(BaseTracker):
                     right_mat.shape,
                     per_sample_gradient.shape,
                     left_mat.shape,
-                    optimize=DynamicProgramming(
-                        search_outer=True, minimize="size" if self.module.score_args.einsum_minimize_size else "flops"
-                    ),
+                    optimize=DynamicProgramming(search_outer=True, minimize="size"),
                 )
             scores = self.module.einsum_expression(right_mat, per_sample_gradient, left_mat)
         else:
-            scores = torch.einsum(
+            scores = contract(
                 "qio,tio->qt",
                 self.module.storage[precondition_name],
                 per_sample_gradient,

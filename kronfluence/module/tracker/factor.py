@@ -82,33 +82,28 @@ class CovarianceTracker(BaseTracker):
     def register_hooks(self) -> None:
         """Sets up hooks to compute activation and gradient covariance matrices."""
 
+        @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
-            with torch.no_grad():
-                input_activation = (
-                    inputs[0]
-                    .detach()
-                    .to(
-                        dtype=self.module.factor_args.activation_covariance_dtype,
-                        copy=self.module.attention_mask is not None,
-                    )
+            input_activation = (
+                inputs[0]
+                .detach()
+                .to(
+                    dtype=self.module.factor_args.activation_covariance_dtype,
+                    copy=self.module.attention_mask is not None,
                 )
-                # Computes and updates activation covariance during forward pass.
-                self._update_activation_covariance_matrix(input_activation=input_activation)
+            )
+            # Computes and updates activation covariance during forward pass.
+            self._update_activation_covariance_matrix(input_activation=input_activation)
             self.cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
             handle = self.cached_hooks.pop()
             handle.remove()
-            original_dtype = output_gradient.dtype
-            target_dtype = self.module.factor_args.gradient_covariance_dtype
-            output_gradient = output_gradient.detach().to(dtype=target_dtype)
-            if self.module.gradient_scale != 1.0:
-                if original_dtype != target_dtype:
-                    output_gradient.mul_(self.module.gradient_scale)
-                else:
-                    output_gradient = output_gradient * self.module.gradient_scale
+            output_gradient = self._preprocess_gradient(
+                output_gradient, target_dtype=self.module.factor_args.gradient_covariance_dtype
+            )
             # Computes and updates pseudo-gradient covariance during backward pass.
             self._update_gradient_covariance_matrix(output_gradient=output_gradient)
 
@@ -222,23 +217,22 @@ class LambdaTracker(BaseTracker):
     def register_hooks(self) -> None:
         """Sets up hooks to compute lambda matrices."""
 
+        @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
-            with torch.no_grad():
-                cached_activation = inputs[0].detach()
-                device = "cpu" if self.module.factor_args.offload_activations_to_cpu else cached_activation.device
-                cached_activation = cached_activation.to(
-                    device=device,
-                    dtype=self.module.factor_args.per_sample_gradient_dtype,
-                    copy=True,
-                )
-                if self.module.factor_args.has_shared_parameters:
-                    if self.cached_activations is None:
-                        self.cached_activations = []
-                    self.cached_activations.append(cached_activation)
-                else:
-                    self.cached_activations = cached_activation
-
+            cached_activation = inputs[0].detach()
+            device = "cpu" if self.module.factor_args.offload_activations_to_cpu else cached_activation.device
+            cached_activation = cached_activation.to(
+                device=device,
+                dtype=self.module.factor_args.per_sample_gradient_dtype,
+                copy=True,
+            )
+            if self.module.factor_args.has_shared_parameters:
+                if self.cached_activations is None:
+                    self.cached_activations = []
+                self.cached_activations.append(cached_activation)
+            else:
+                self.cached_activations = cached_activation
             self.cached_hooks.append(
                 outputs.register_hook(
                     shared_backward_hook if self.module.factor_args.has_shared_parameters else backward_hook
@@ -251,14 +245,9 @@ class LambdaTracker(BaseTracker):
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
             handle.remove()
-            original_dtype = output_gradient.dtype
-            target_dtype = self.module.factor_args.per_sample_gradient_dtype
-            output_gradient = output_gradient.detach().to(dtype=target_dtype)
-            if self.module.gradient_scale != 1.0:
-                if original_dtype != target_dtype:
-                    output_gradient.mul_(self.module.gradient_scale)
-                else:
-                    output_gradient = output_gradient * self.module.gradient_scale
+            output_gradient = self._preprocess_gradient(
+                output_gradient=output_gradient, target_dtype=self.module.factor_args.per_sample_gradient_dtype
+            )
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=self.cached_activations.to(device=output_gradient.device),
                 output_gradient=output_gradient,
@@ -271,14 +260,9 @@ class LambdaTracker(BaseTracker):
         def shared_backward_hook(output_gradient: torch.Tensor) -> None:
             handle = self.cached_hooks.pop()
             handle.remove()
-            original_dtype = output_gradient.dtype
-            target_dtype = self.module.factor_args.per_sample_gradient_dtype
-            output_gradient = output_gradient.detach().to(dtype=target_dtype)
-            if self.module.gradient_scale != 1.0:
-                if original_dtype != target_dtype:
-                    output_gradient.mul_(self.module.gradient_scale)
-                else:
-                    output_gradient = output_gradient * self.module.gradient_scale
+            output_gradient = self._preprocess_gradient(
+                output_gradient=output_gradient, target_dtype=self.module.factor_args.per_sample_gradient_dtype
+            )
             cached_activation = self.cached_activations.pop()
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=cached_activation.to(device=output_gradient.device),

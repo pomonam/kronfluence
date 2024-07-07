@@ -57,19 +57,18 @@ def compute_dot_products_with_loader(
     )
     release_memory()
 
-    dataset_size = len(train_loader.dataset)
-    score_chunks: Dict[str, List[torch.Tensor]] = {}
-    if score_args.compute_per_module_scores:
-        for module in model.modules():
-            if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                score_chunks[module.name] = []
-    else:
-        score_chunks[ALL_MODULE_NAME] = []
-
     cached_module_lst = []
     for module in model.modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
             cached_module_lst.append(module)
+
+    dataset_size = len(train_loader.dataset)
+    score_chunks: Dict[str, List[torch.Tensor]] = {}
+    if score_args.compute_per_module_scores:
+        for module in cached_module_lst:
+            score_chunks[module.name] = []
+    else:
+        score_chunks[ALL_MODULE_NAME] = []
 
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None

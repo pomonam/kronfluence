@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional, Union, Dict
 
 import torch
 from torch import nn
@@ -34,14 +34,14 @@ class Task(ABC):
                 The PyTorch model used for loss computation.
             sample (bool):
                 Indicates whether to sample from the model's outputs or to use the actual targets from the
-                batch. Defaults to `False`. The case where `sample` is set to `True` must be implemented to
+                batch. Defaults to `False`. The case where `sample=True` must be implemented to
                 approximate the true Fisher.
 
         Returns:
             torch.Tensor:
                 The computed loss as a scalar tensor.
         """
-        raise NotImplementedError("Subclasses must implement the `compute_train_loss` method.")
+        raise NotImplementedError(f"{self.__class__.__name__} must implement the `compute_train_loss` method.")
 
     @abstractmethod
     def compute_measurement(
@@ -64,22 +64,22 @@ class Task(ABC):
             torch.Tensor:
                 The computed measurable quantity as a tensor.
         """
-        raise NotImplementedError("Subclasses must implement the `compute_measurement` method.")
+        raise NotImplementedError(f"{self.__class__.__name__} must implement the `compute_measurement` method.")
 
     def get_influence_tracked_modules(self) -> Optional[List[str]]:
-        """Specifies which modules should be tracked for influence score computations.
+        """Specifies which modules should be tracked for influence factor and score computations.
 
         Override this method in subclasses to return a list of specific module names if influence functions
         should only be computed for a subset of the model.
 
         Returns:
             Optional[List[str]]:
-                A list of module names to compute influence functions for, or None to compute for
-                all applicable modules (e.g., nn.Linear, nn.Conv2d).
+                A list of module names to compute influence functions for, or `None` to compute for
+                all applicable modules (e.g., `nn.Linear` and `nn.Conv2d`).
         """
 
     def get_attention_mask(self, batch: Any) -> Optional[Union[Dict[str, torch.Tensor], torch.Tensor]]:
-        """Returns attention masks for padded sequences in a batch.
+        """Gets attention masks for padded sequences in a batch.
 
         This method is typically used for models or datasets that require masking, such as transformer-based
         architectures. For more information, see: https://huggingface.co/docs/transformers/en/glossary#attention-mask.

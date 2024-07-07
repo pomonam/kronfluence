@@ -1,15 +1,11 @@
-from typing import List, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
-from opt_einsum import DynamicProgramming, contract_expression
 
 from kronfluence.factor.config import FactorConfig
 from kronfluence.module.tracker.base import BaseTracker
 from kronfluence.utils.constants import (
-    ACCUMULATED_PRECONDITIONED_GRADIENT_NAME,
-    AGGREGATED_GRADIENT_NAME,
-    PAIRWISE_SCORE_MATRIX_NAME,
     PRECONDITIONED_GRADIENT_NAME,
     SELF_SCORE_VECTOR_NAME,
 )
@@ -77,9 +73,11 @@ class SelfScoreTracker(BaseTracker):
                 else:
                     self.cached_activations = cached_activation
 
-            self.cached_hooks.append(outputs.register_hook(
-                shared_backward_hook if self.module.factor_args.has_shared_parameters else backward_hook
-            ))
+            self.cached_hooks.append(
+                outputs.register_hook(
+                    shared_backward_hook if self.module.factor_args.has_shared_parameters else backward_hook
+                )
+            )
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
@@ -163,9 +161,7 @@ class SelfScoreWithMeasurementTracker(BaseTracker):
             per_sample_gradient (torch.Tensor):
                 The per-sample-gradient tensor for the given batch.
         """
-        scores = per_sample_gradient.mul_(
-            self.module.storage[PRECONDITIONED_GRADIENT_NAME]
-        ).sum(dim=(1, 2))
+        scores = per_sample_gradient.mul_(self.module.storage[PRECONDITIONED_GRADIENT_NAME]).sum(dim=(1, 2))
         self.module.storage[PRECONDITIONED_GRADIENT_NAME] = None
         if self.module.storage[SELF_SCORE_VECTOR_NAME] is None:
             self.module.storage[SELF_SCORE_VECTOR_NAME] = scores
@@ -239,20 +235,6 @@ class SelfScoreWithMeasurementTracker(BaseTracker):
                 )
                 self.clear_all_cache()
                 self._compute_self_measurement_score_with_gradient(per_sample_gradient=per_sample_gradient)
-
-        @torch.no_grad()
-        def shared_backward_hook(output_gradient: torch.Tensor) -> None:
-            output_gradient = self._scale_output_gradient(
-                output_gradient=output_gradient, target_dtype=self.module.score_args.score_dtype
-            )
-            cached_activation = self.cached_activations.pop()
-            per_sample_gradient = self.module.compute_per_sample_gradient(
-                input_activation=cached_activation.to(device=output_gradient.device),
-                output_gradient=output_gradient,
-            )
-            if self.cached_per_sample_gradient is None:
-                self.cached_per_sample_gradient = torch.zeros_like(per_sample_gradient, requires_grad=False)
-            self.cached_per_sample_gradient.add_(per_sample_gradient)
 
         self.registered_hooks.append(self.module.register_forward_hook(forward_hook))
 

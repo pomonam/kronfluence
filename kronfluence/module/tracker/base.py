@@ -1,7 +1,7 @@
 from typing import List, Optional, Union
 
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.utils.hooks import RemovableHandle
 
 
@@ -23,42 +23,20 @@ class BaseTracker:
 
     def release_hooks(self) -> None:
         """Removes all registered hooks."""
+        self.clear_all_cache()
         while self.registered_hooks:
             handle = self.registered_hooks.pop()
             handle.remove()
         self.registered_hooks = []
 
     def clear_all_cache(self) -> None:
-        """Clears all cached data from memory."""
+        """Clears all cached data and removes cached hooks."""
         del self.cached_activations, self.cached_per_sample_gradient
         self.cached_activations, self.cached_per_sample_gradient = None, None
-
         while self.cached_hooks:
             handle = self.cached_hooks.pop()
             handle.remove()
         self.cached_hooks = []
-
-    def _scale_output_gradient(self, output_gradient: torch.Tensor, target_dtype: torch.dtype) -> torch.Tensor:
-        """Scales the output gradient and convert to the target dtype.
-
-        Args:
-            output_gradient (torch.Tensor):
-                The output gradient to scale.
-            target_dtype (torch.dtype):
-                The desired dtype for the output.
-
-        Returns:
-            torch.Tensor:
-                The scaled gradient in the target dtype.
-        """
-        original_dtype = output_gradient.dtype
-        output_gradient = output_gradient.detach().to(dtype=target_dtype)
-        if self.module.gradient_scale != 1.0:
-            if original_dtype != target_dtype:
-                output_gradient.mul_(self.module.gradient_scale)
-            else:
-                output_gradient = output_gradient * self.module.gradient_scale
-        return output_gradient
 
     def _raise_cache_not_found_exception(self) -> None:
         """Raises an exception when cached activations are not found."""
@@ -68,6 +46,28 @@ class BaseTracker:
             f"2. The module was encountered multiple times in the forward pass.\n"
             f"For case 2, set 'has_shared_parameters=True' to enable parameter sharing."
         )
+
+    def _preprocess_gradient(self, output_gradient: torch.Tensor, target_dtype: torch.dtype) -> torch.Tensor:
+        """Preprocesses the output gradient.
+
+        Args:
+            output_gradient (torch.Tensor):
+                The original output gradient.
+            target_dtype (torch.dtype):
+                The desired data type for the gradient tensor.
+
+        Returns:
+            torch.Tensor:
+                The preprocessed gradient.
+        """
+        original_dtype = output_gradient.dtype
+        output_gradient = output_gradient.to(dtype=target_dtype)
+        if self.module.gradient_scale != 1.0:
+            if original_dtype != target_dtype:
+                output_gradient.mul_(self.module.gradient_scale)
+            else:
+                output_gradient = output_gradient * self.module.gradient_scale
+        return output_gradient
 
     def register_hooks(self) -> None:
         """Registers hooks for the module."""
@@ -92,7 +92,7 @@ class BaseTracker:
 
         Args:
             keep_size (int):
-                The number of dimension to keep.
+                The number of dimensions to keep.
         """
 
     def accumulate_iterations(self) -> None:

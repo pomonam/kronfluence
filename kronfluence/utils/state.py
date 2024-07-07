@@ -7,7 +7,6 @@ import torch
 import torch.distributed as dist
 from accelerate.state import SharedDict
 from torch import nn
-from torch.distributed.fsdp import FullyShardedDataParallel
 
 
 class State:
@@ -50,7 +49,12 @@ class State:
                 self.device = torch.device("cpu") if self.cpu else self.default_device
 
     def __repr__(self) -> str:
-        """Provides a string representation of the State instance."""
+        """Provides a string representation of the `State` instance.
+
+        Returns:
+            str:
+                A formatted string containing process and device information.
+        """
         return (
             f"Num processes: {self.num_processes}\n"
             f"Process index: {self.process_index}\n"
@@ -65,7 +69,7 @@ class State:
 
     @property
     def initialized(self) -> bool:
-        """Checks if the State has been initialized."""
+        """Checks if the `State` has been initialized."""
         return self._shared_state != {}
 
     @property
@@ -99,28 +103,40 @@ class State:
 
     @property
     def default_device(self) -> torch.device:
-        """Determines the default device (CUDA if available, otherwise CPU)."""
+        """Determines the default device (CUDA if available, otherwise CPU).
+
+        Returns:
+            torch.device:
+                The default device.
+        """
         if torch.cuda.is_available():
             return torch.device("cuda")
         return torch.device("cpu")
 
 
 def release_memory() -> None:
-    """Releases unused memory. This function calls Python's garbage collector and empties CUDA cache
-    if CUDA is available."""
+    """Releases unused memory.
+
+    This function calls Python's garbage collector and empties CUDA cache if CUDA is available.
+    """
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 
 def get_active_tensors() -> List[torch.Tensor]:
-    # https://discuss.pytorch.org/t/how-to-debug-causes-of-gpu-memory-leaks/6741/3
+    """Gets a list of active tensors in memory.
+
+    Returns:
+        List[torch.Tensor]:
+            A list of tuples containing tensor type and size.
+    """
     tensor_lst = []
     for obj in gc.get_objects():
         try:
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+            if torch.is_tensor(obj) or (hasattr(obj, "data") and torch.is_tensor(obj.data)):
                 tensor_lst.append(type(obj), obj.size())
-        except:
+        except:  # pylint: disable=bare-except
             pass
     return tensor_lst
 
@@ -144,7 +160,7 @@ def no_sync(model: nn.Module, state: State) -> Callable:
     """
     context = contextlib.nullcontext
 
-    if state.use_distributed and not isinstance(model, FullyShardedDataParallel):
+    if state.use_distributed:
         context = getattr(model, "no_sync", context)
 
     with context():

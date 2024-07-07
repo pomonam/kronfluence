@@ -29,7 +29,7 @@ from kronfluence.utils.constants import (
     PARTITION_TYPE,
 )
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
-from kronfluence.utils.state import State, no_sync, release_memory
+from kronfluence.utils.state import State, no_sync
 
 
 def covariance_matrices_save_path(

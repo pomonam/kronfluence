@@ -110,7 +110,7 @@ class DistributedEvalSampler(Sampler[T_co]):
 
     def __init__(  # pylint: disable=super-init-not-called
         self,
-        dataset: torch.utils.data.Dataset,
+        dataset: data.Dataset,
         num_replicas: Optional[int] = None,
         rank: Optional[int] = None,
         seed: int = 0,

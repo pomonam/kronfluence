@@ -168,13 +168,6 @@ class ScoreArguments(Arguments):
         default=False,
         metadata={"help": "If `True`, offloads cached activations to CPU memory when computing per-sample gradients."},
     )
-    einsum_minimize_size: bool = field(
-        default=False,
-        metadata={
-            "help": "If `True`, einsum operations find the contraction that minimizes the size of the "
-            "largest intermediate tensor."
-        },
-    )
 
     # Partition configuration #
     data_partitions: int = field(
@@ -209,7 +202,7 @@ class ScoreArguments(Arguments):
     query_gradient_low_rank: Optional[int] = field(
         default=None,
         metadata={
-            "help": "Rank for the low-rank approximation of the query gradient. "
+            "help": "Rank for the low-rank approximation of the query gradient (query batching). "
             "If `None`, no low-rank approximation is applied."
         },
     )
@@ -248,7 +241,7 @@ class ScoreArguments(Arguments):
     )
     per_sample_gradient_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Data type for per-sample gradient computation."},
+        metadata={"help": "Data type for query per-sample gradient computation."},
     )
     precondition_dtype: torch.dtype = field(
         default=torch.float32,
@@ -260,8 +253,8 @@ class ScoreArguments(Arguments):
     )
 
     def __post_init__(self) -> None:
-        if self.damping_factor is not None and self.damping_factor <= 0:
-            raise ValueError("`damping_factor` must be None or positive.")
+        if self.damping_factor is not None and self.damping_factor < 0:
+            raise ValueError("`damping_factor` must be `None` or positive.")
 
         if any(partition <= 0 for partition in [self.data_partitions, self.module_partitions]):
             raise ValueError("Both data and module partitions must be positive.")
@@ -270,4 +263,4 @@ class ScoreArguments(Arguments):
             raise ValueError("`query_gradient_accumulation_steps` must be positive.")
 
         if self.query_gradient_low_rank is not None and self.query_gradient_low_rank <= 0:
-            raise ValueError("`query_gradient_low_rank` must be None or positive.")
+            raise ValueError("`query_gradient_low_rank` must be `None` or positive.")

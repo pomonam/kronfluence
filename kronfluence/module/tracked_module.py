@@ -54,7 +54,14 @@ class TrackedModule(nn.Module):
     SUPPORTED_MODULES: Dict[Type[nn.Module], Any] = {}
 
     def __init_subclass__(cls, module_type: Type[nn.Module] = None, **kwargs: Any) -> None:
-        """Automatically registers subclasses as supported modules."""
+        """Automatically registers subclasses as supported modules.
+
+        Args:
+            module_type (Type[nn.Module], optional):
+                The type of module this subclass supports.
+            **kwargs:
+                Additional keyword arguments.
+        """
         super().__init_subclass__(**kwargs)
         if module_type is not None:
             cls.SUPPORTED_MODULES[module_type] = cls
@@ -75,17 +82,16 @@ class TrackedModule(nn.Module):
             original_module (nn.Module):
                 The original module to be wrapped.
             factor_args (FactorArguments, optional):
-                Arguments for computing influence factors.
+                Arguments for computing factors.
             score_args (ScoreArguments, optional):
                 Arguments for computing influence scores.
             per_sample_gradient_process_fnc (Callable, optional):
-                Function to post-process per-sample gradients.
+                Optional function to post-process per-sample gradients.
         """
         super().__init__()
 
         self.name = name
         self.original_module = original_module
-        # A way to avoid Autograd computing the gradient with respect to the model parameters.
         self._constant: torch.Tensor = nn.Parameter(
             torch.zeros(
                 1,
@@ -96,9 +102,7 @@ class TrackedModule(nn.Module):
         self.current_mode = ModuleMode.DEFAULT
         self.factor_args = FactorArguments() if factor_args is None else factor_args
         self.score_args = ScoreArguments() if score_args is None else score_args
-        self.state = State()
         self.per_sample_gradient_process_fnc = per_sample_gradient_process_fnc
-        self.einsum_expression = None
 
         self._trackers = {
             ModuleMode.DEFAULT: BaseTracker(self),
@@ -114,6 +118,13 @@ class TrackedModule(nn.Module):
         self.attention_mask: Optional[torch.Tensor] = None
         self.gradient_scale: float = 1.0
         self.storage: Dict[str, Optional[Union[torch.Tensor, PRECONDITIONED_GRADIENT_TYPE]]] = {}
+        self.state: State = State()
+        self.einsum_expression: Optional[Callable] = None
+
+        self._initialize_storage()
+
+    def _initialize_storage(self) -> None:
+        """Initializes trackers for different module modes."""
 
         # Storage for activation and pseudo-gradient covariance matrices #
         for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
@@ -142,7 +153,7 @@ class TrackedModule(nn.Module):
         return outputs + self._constant
 
     def prepare_storage(self, device: torch.device) -> None:
-        """Performs any necessary operations on storage before computing any metrics."""
+        """Performs any necessary operations on storage before computing influence scores."""
         FactorConfig.CONFIGS[self.factor_args.strategy].prepare(
             storage=self.storage,
             score_args=self.score_args,

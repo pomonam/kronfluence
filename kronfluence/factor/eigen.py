@@ -221,8 +221,6 @@ def perform_eigendecomposition(
 
             pbar.update(1)
 
-    release_memory()
-
     return eigen_factors
 
 
@@ -391,7 +389,7 @@ def fit_lambda_matrices_with_loader(
     )
     if eigen_factors is not None:
         for name in eigen_factors:
-            set_factors(model=model, factor_name=name, factors=eigen_factors[name])
+            set_factors(model=model, factor_name=name, factors=eigen_factors[name], clone=True)
 
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)

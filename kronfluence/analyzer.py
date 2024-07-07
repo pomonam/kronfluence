@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 from typing import Dict, Optional, Union
 
@@ -45,8 +46,7 @@ def prepare_model(
 
 
 class Analyzer(FactorComputer, ScoreComputer):
-    """Handles the computation of factors (e.g., covariance and Lambda matrices for EKFAC) and
-    influence scores for a given PyTorch model."""
+    """Handles the computation of factors (e.g., covariance matrices) and scores for a given PyTorch model."""
 
     def __init__(
         self,
@@ -83,7 +83,7 @@ class Analyzer(FactorComputer, ScoreComputer):
             output_dir (str):
                 Directory path for storing analysis results. Defaults to './influence_results'.
             disable_model_save (bool, optional):
-                If `True`, prevents saving the model's state_dict. Defaults to `True`.
+                If `True`, prevents saving the model's `state_dict`. Defaults to `True`.
 
         Raises:
             ValueError:
@@ -100,8 +100,8 @@ class Analyzer(FactorComputer, ScoreComputer):
             disable_tqdm=disable_tqdm,
             output_dir=output_dir,
         )
-        self.logger.info(f"Initializing Computer with parameters: {locals()}")
-        self.logger.debug(f"Process state configuration:\n{repr(self.state)}")
+        self.logger.info(f"Initializing `Analyzer` with parameters: {locals()}")
+        self.logger.info(f"Process state configuration:\n{repr(self.state)}")
 
         # Save model parameters if necessary.
         if self.state.is_main_process and not disable_model_save:
@@ -113,7 +113,7 @@ class Analyzer(FactorComputer, ScoreComputer):
 
         Args:
             dataloader_kwargs (DataLoaderKwargs):
-                The object containing arguments for DataLoader.
+                The object containing arguments for PyTorch DataLoader.
         """
         self._dataloader_params = dataloader_kwargs
 
@@ -121,7 +121,7 @@ class Analyzer(FactorComputer, ScoreComputer):
     def _save_model(self) -> None:
         """Saves the model to the output directory."""
         model_save_path = self.output_dir / "model.safetensors"
-        extracted_model = extract_model_from_parallel(model=self.model, keep_fp32_wrapper=True)
+        extracted_model = extract_model_from_parallel(model=copy.deepcopy(self.model), keep_fp32_wrapper=True)
 
         if model_save_path.exists():
             self.logger.info(f"Found existing saved model at `{model_save_path}`.")
@@ -151,13 +151,13 @@ class Analyzer(FactorComputer, ScoreComputer):
         factor_args: Optional[FactorArguments] = None,
         overwrite_output_dir: bool = False,
     ) -> None:
-        """Computes all necessary factors for the given factor strategy.
+        """Computes all necessary factors for the given strategy.
 
         Args:
             factors_name (str):
                 Unique identifier for the factor, used for organizing results.
             dataset (data.Dataset):
-                Dataset used to fit all the factors.
+                Dataset used to fit all influence factors.
             per_device_batch_size (int, optional):
                 Per-device batch size for factor fitting. If not specified, executable per-device batch size
                 is automatically determined.
@@ -168,7 +168,7 @@ class Analyzer(FactorComputer, ScoreComputer):
             factor_args (FactorArguments, optional):
                 Arguments for factor computation. Defaults to `FactorArguments` default values.
             overwrite_output_dir (bool, optional):
-                If `True`, overwrites existing factors with the same name. Defaults to `False`.
+                If `True`, overwrites existing factors with the same `factors_name`. Defaults to `False`.
         """
         self.fit_covariance_matrices(
             factors_name=factors_name,
@@ -211,7 +211,7 @@ class Analyzer(FactorComputer, ScoreComputer):
                 If the specified file does not exist.
 
         Note:
-            For more information on safetensors, see https://github.com/huggingface/safetensors.
+            For more information on `safetensors`, see https://github.com/huggingface/safetensors.
         """
         if isinstance(path, str):
             path = Path(path).resolve()

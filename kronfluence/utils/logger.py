@@ -278,7 +278,12 @@ class TorchProfiler(Profiler):
 # Timing utilities copied from:
 # https://github.com/mlcommons/algorithmic-efficiency/blob/main/algorithmic_efficiency/pytorch_utils.py.
 def _get_monotonic_time() -> float:
-    """Gets the monotonic time after the CUDA synchronization if necessary."""
+    """Gets the time after the CUDA synchronization.
+
+    Returns:
+        float:
+            The current time.
+    """
     if torch.cuda.is_available() and torch.cuda.is_initialized():
         torch.cuda.synchronize()
     return time.monotonic()
@@ -286,7 +291,16 @@ def _get_monotonic_time() -> float:
 
 @torch.no_grad()
 def get_time(state: State) -> float:
-    """Gets the current time after synchronizing with other devices."""
+    """Gets the current time after synchronizing with other devices.
+
+    Args:
+        state (State):
+            The current process's information (e.g., device being used).
+
+    Returns:
+        float:
+            The current time.
+    """
     if not state.use_distributed:
         if torch.cuda.is_available() and torch.cuda.is_initialized():
             torch.cuda.synchronize()
