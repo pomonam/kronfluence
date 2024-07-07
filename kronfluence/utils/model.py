@@ -40,7 +40,8 @@ def apply_ddp(
         RuntimeError:
             If the distributed initialization fails.
     """
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    if not dist.is_initialized():
+        dist.init_process_group("nccl", rank=rank, world_size=world_size)
     device = torch.device(f"cuda:{local_rank}")
     torch.cuda.set_device(local_rank)
 
