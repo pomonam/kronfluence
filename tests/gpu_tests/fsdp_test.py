@@ -87,7 +87,7 @@ class FSDPTest(unittest.TestCase):
                     rtol=RTOL,
                 )
 
-    def test_lambda_matrices(self):
+    def test_lambda_matrices(self) -> None:
         lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
         factor_args = pytest_factor_arguments()
         self.analyzer.fit_lambda_matrices(
