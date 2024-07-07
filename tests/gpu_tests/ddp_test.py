@@ -10,6 +10,7 @@ from torch.utils import data
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
 from kronfluence.utils.constants import (
     ALL_MODULE_NAME,
     COVARIANCE_FACTOR_NAMES,
@@ -18,7 +19,7 @@ from kronfluence.utils.constants import (
 from kronfluence.utils.model import apply_ddp
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
-from tests.utils import check_tensor_dict_equivalence
+from tests.utils import check_tensor_dict_equivalence, ATOL, RTOL
 
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
 WORLD_RANK = int(os.environ["RANK"])
@@ -60,12 +61,7 @@ class DDPTest(unittest.TestCase):
 
     def test_covariance_matrices(self) -> None:
         covariance_factors = self.analyzer.load_covariance_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = FactorArguments(
-            use_empirical_fisher=True,
-            activation_covariance_dtype=torch.float64,
-            gradient_covariance_dtype=torch.float64,
-            lambda_dtype=torch.float64,
-        )
+        factor_args = pytest_factor_arguments()
         self.analyzer.fit_covariance_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -85,18 +81,13 @@ class DDPTest(unittest.TestCase):
                 assert check_tensor_dict_equivalence(
                     covariance_factors[name],
                     new_covariance_factors[name],
-                    atol=1e-5,
-                    rtol=1e-3,
+                    atol=ATOL,
+                    rtol=RTOL,
                 )
 
-    def test_lambda_matrices(self):
+    def test_lambda_matrices(self) -> None:
         lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = FactorArguments(
-            use_empirical_fisher=True,
-            activation_covariance_dtype=torch.float64,
-            gradient_covariance_dtype=torch.float64,
-            lambda_dtype=torch.float64,
-        )
+        factor_args = pytest_factor_arguments()
         self.analyzer.fit_lambda_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -117,20 +108,15 @@ class DDPTest(unittest.TestCase):
                 assert check_tensor_dict_equivalence(
                     lambda_factors[name],
                     new_lambda_factors[name],
-                    atol=1e-3,
-                    rtol=1e-1,
+                    atol=ATOL,
+                    rtol=RTOL,
                 )
 
-    def test_lambda_partition_matrices(self):
+    def test_lambda_partition_matrices(self) -> None:
         lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = FactorArguments(
-            use_empirical_fisher=True,
-            activation_covariance_dtype=torch.float64,
-            gradient_covariance_dtype=torch.float64,
-            lambda_dtype=torch.float64,
-            lambda_module_partitions=2,
-            lambda_data_partitions=2,
-        )
+        factor_args = pytest_factor_arguments()
+        factor_args.lambda_module_partitions = 2
+        factor_args.lambda_data_partitions = 2
         self.analyzer.fit_lambda_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -151,8 +137,36 @@ class DDPTest(unittest.TestCase):
                 assert check_tensor_dict_equivalence(
                     lambda_factors[name],
                     new_lambda_factors[name],
-                    atol=1e-3,
-                    rtol=1e-1,
+                    atol=ATOL,
+                    rtol=RTOL,
+                )
+
+    def test_lambda_shared_matrices(self) -> None:
+        lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
+        factor_args = pytest_factor_arguments()
+        factor_args.has_shared_parameters = True
+        self.analyzer.fit_lambda_matrices(
+            factors_name=NEW_FACTOR_NAME,
+            dataset=self.train_dataset,
+            factor_args=factor_args,
+            per_device_batch_size=512,
+            overwrite_output_dir=True,
+            load_from_factors_name=OLD_FACTOR_NAME,
+        )
+        new_lambda_factors = self.analyzer.load_lambda_matrices(factors_name=NEW_FACTOR_NAME)
+
+        for name in LAMBDA_FACTOR_NAMES:
+            if LOCAL_RANK == 0:
+                for module_name in lambda_factors[name]:
+                    print(f"Name: {name, module_name}")
+                    print(f"Previous factor: {lambda_factors[name][module_name]}")
+                    print(f"New factor: {new_lambda_factors[name][module_name]}")
+            if LOCAL_RANK == 0:
+                assert check_tensor_dict_equivalence(
+                    lambda_factors[name],
+                    new_lambda_factors[name],
+                    atol=ATOL,
+                    rtol=RTOL,
                 )
 
     # def test_pairwise_scores(self) -> None:

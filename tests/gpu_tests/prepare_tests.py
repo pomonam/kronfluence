@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 
 # Pick difficult cases where the dataset is not perfectly divisible by batch size.
@@ -92,12 +93,7 @@ def run_analysis() -> None:
         task=task,
     )
 
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        lambda_dtype=torch.float64,
-    )
+    factor_args = pytest_factor_arguments()
     analyzer.fit_all_factors(
         factors_name="single_gpu",
         dataset=train_dataset,
