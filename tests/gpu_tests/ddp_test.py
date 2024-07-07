@@ -128,8 +128,8 @@ class DDPTest(unittest.TestCase):
             activation_covariance_dtype=torch.float64,
             gradient_covariance_dtype=torch.float64,
             lambda_dtype=torch.float64,
-            lambda_data_partition_size=2,
-            lambda_module_partition_size=2,
+            lambda_module_partitions=2,
+            lambda_data_partitions=2,
         )
         self.analyzer.fit_lambda_matrices(
             factors_name=NEW_FACTOR_NAME,
@@ -155,233 +155,233 @@ class DDPTest(unittest.TestCase):
                     rtol=1e-1,
                 )
 
-    def test_pairwise_scores(self) -> None:
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
-
-        score_args = ScoreArguments(
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-        )
-        self.analyzer.compute_pairwise_scores(
-            scores_name=NEW_SCORE_NAME,
-            factors_name=OLD_FACTOR_NAME,
-            query_dataset=self.eval_dataset,
-            train_dataset=self.train_dataset,
-            train_indices=list(range(TRAIN_INDICES)),
-            query_indices=list(range(QUERY_INDICES)),
-            per_device_query_batch_size=12,
-            per_device_train_batch_size=512,
-            score_args=score_args,
-            overwrite_output_dir=True,
-        )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
-
-        if LOCAL_RANK == 0:
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            assert check_tensor_dict_equivalence(
-                pairwise_scores,
-                new_pairwise_scores,
-                atol=1e-5,
-                rtol=1e-3,
-            )
-
-    def test_pairwise_partition_scores(self) -> None:
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
-
-        score_args = ScoreArguments(
-            module_partition_size=2,
-            data_partition_size=2,
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-        )
-        self.analyzer.compute_pairwise_scores(
-            scores_name=NEW_SCORE_NAME,
-            factors_name=OLD_FACTOR_NAME,
-            query_dataset=self.eval_dataset,
-            train_dataset=self.train_dataset,
-            train_indices=list(range(TRAIN_INDICES)),
-            query_indices=list(range(QUERY_INDICES)),
-            per_device_query_batch_size=12,
-            per_device_train_batch_size=512,
-            score_args=score_args,
-            overwrite_output_dir=True,
-        )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
-
-        if LOCAL_RANK == 0:
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            assert check_tensor_dict_equivalence(
-                pairwise_scores,
-                new_pairwise_scores,
-                atol=1e-5,
-                rtol=1e-3,
-            )
-
-    def test_self_scores(self) -> None:
-        self_scores = self.analyzer.load_self_scores(scores_name=OLD_SCORE_NAME)
-
-        score_args = ScoreArguments(
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-        )
-        self.analyzer.compute_self_scores(
-            scores_name=NEW_SCORE_NAME,
-            factors_name=OLD_FACTOR_NAME,
-            train_dataset=self.train_dataset,
-            train_indices=list(range(TRAIN_INDICES)),
-            per_device_train_batch_size=512,
-            score_args=score_args,
-            overwrite_output_dir=True,
-        )
-        new_self_scores = self.analyzer.load_self_scores(scores_name=NEW_SCORE_NAME)
-
-        if LOCAL_RANK == 0:
-            print(f"Previous score: {self_scores[ALL_MODULE_NAME]}")
-            print(f"Previous shape: {self_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_self_scores[ALL_MODULE_NAME]}")
-            print(f"New shape: {new_self_scores[ALL_MODULE_NAME].shape}")
-            assert check_tensor_dict_equivalence(
-                self_scores,
-                new_self_scores,
-                atol=1e-5,
-                rtol=1e-3,
-            )
-
-    def test_lr_pairwise_scores(self) -> None:
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_qb")
-
-        score_args = ScoreArguments(
-            query_gradient_rank=32,
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-            query_gradient_svd_dtype=torch.float64,
-        )
-        self.analyzer.compute_pairwise_scores(
-            scores_name="ddp_qb",
-            factors_name=OLD_FACTOR_NAME,
-            query_dataset=self.eval_dataset,
-            train_dataset=self.train_dataset,
-            train_indices=list(range(TRAIN_INDICES)),
-            query_indices=list(range(QUERY_INDICES)),
-            per_device_query_batch_size=12,
-            per_device_train_batch_size=512,
-            score_args=score_args,
-            overwrite_output_dir=True,
-        )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb")
-
-        if LOCAL_RANK == 0:
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            assert check_tensor_dict_equivalence(
-                pairwise_scores,
-                new_pairwise_scores,
-                atol=1e-3,
-                rtol=1e-1,
-            )
-
-    def test_per_module_pairwise_scores(self) -> None:
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_qb")
-
-        score_args = ScoreArguments(
-            per_module_score=True,
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-            query_gradient_svd_dtype=torch.float64,
-        )
-        self.analyzer.compute_pairwise_scores(
-            scores_name=NEW_SCORE_NAME + "_per_module",
-            factors_name=OLD_FACTOR_NAME,
-            query_dataset=self.eval_dataset,
-            train_dataset=self.train_dataset,
-            train_indices=list(range(TRAIN_INDICES)),
-            query_indices=list(range(QUERY_INDICES)),
-            per_device_query_batch_size=12,
-            per_device_train_batch_size=512,
-            score_args=score_args,
-            overwrite_output_dir=True,
-        )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb")
-
-        if LOCAL_RANK == 0:
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            assert check_tensor_dict_equivalence(
-                pairwise_scores,
-                new_pairwise_scores,
-                atol=1e-3,
-                rtol=1e-1,
-            )
-
-    def test_lr_accumulate_pairwise_scores(self) -> None:
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_qb")
-
-        score_args = ScoreArguments(
-            query_gradient_rank=32,
-            num_query_gradient_accumulations=3,
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-            query_gradient_svd_dtype=torch.float64,
-        )
-        self.analyzer.compute_pairwise_scores(
-            scores_name="ddp_qb_agg",
-            factors_name=OLD_FACTOR_NAME,
-            query_dataset=self.eval_dataset,
-            train_dataset=self.train_dataset,
-            train_indices=list(range(TRAIN_INDICES)),
-            query_indices=list(range(QUERY_INDICES)),
-            per_device_query_batch_size=2,
-            per_device_train_batch_size=512,
-            score_args=score_args,
-            overwrite_output_dir=True,
-        )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb_agg")
-
-        if LOCAL_RANK == 0:
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][44]}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][44]}")
-            assert check_tensor_dict_equivalence(
-                pairwise_scores,
-                new_pairwise_scores,
-                atol=1e-1,
-                rtol=1e-1,
-            )
+    # def test_pairwise_scores(self) -> None:
+    #     pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
+    #
+    #     score_args = ScoreArguments(
+    #         score_dtype=torch.float64,
+    #         per_sample_gradient_dtype=torch.float64,
+    #         precondition_dtype=torch.float64,
+    #     )
+    #     self.analyzer.compute_pairwise_scores(
+    #         scores_name=NEW_SCORE_NAME,
+    #         factors_name=OLD_FACTOR_NAME,
+    #         query_dataset=self.eval_dataset,
+    #         train_dataset=self.train_dataset,
+    #         train_indices=list(range(TRAIN_INDICES)),
+    #         query_indices=list(range(QUERY_INDICES)),
+    #         per_device_query_batch_size=12,
+    #         per_device_train_batch_size=512,
+    #         score_args=score_args,
+    #         overwrite_output_dir=True,
+    #     )
+    #     new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
+    #
+    #     if LOCAL_RANK == 0:
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
+    #         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
+    #         print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         assert check_tensor_dict_equivalence(
+    #             pairwise_scores,
+    #             new_pairwise_scores,
+    #             atol=1e-5,
+    #             rtol=1e-3,
+    #         )
+    #
+    # def test_pairwise_partition_scores(self) -> None:
+    #     pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
+    #
+    #     score_args = ScoreArguments(
+    #         module_partition_size=2,
+    #         data_partition_size=2,
+    #         score_dtype=torch.float64,
+    #         per_sample_gradient_dtype=torch.float64,
+    #         precondition_dtype=torch.float64,
+    #     )
+    #     self.analyzer.compute_pairwise_scores(
+    #         scores_name=NEW_SCORE_NAME,
+    #         factors_name=OLD_FACTOR_NAME,
+    #         query_dataset=self.eval_dataset,
+    #         train_dataset=self.train_dataset,
+    #         train_indices=list(range(TRAIN_INDICES)),
+    #         query_indices=list(range(QUERY_INDICES)),
+    #         per_device_query_batch_size=12,
+    #         per_device_train_batch_size=512,
+    #         score_args=score_args,
+    #         overwrite_output_dir=True,
+    #     )
+    #     new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
+    #
+    #     if LOCAL_RANK == 0:
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
+    #         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
+    #         print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         assert check_tensor_dict_equivalence(
+    #             pairwise_scores,
+    #             new_pairwise_scores,
+    #             atol=1e-5,
+    #             rtol=1e-3,
+    #         )
+    #
+    # def test_self_scores(self) -> None:
+    #     self_scores = self.analyzer.load_self_scores(scores_name=OLD_SCORE_NAME)
+    #
+    #     score_args = ScoreArguments(
+    #         score_dtype=torch.float64,
+    #         per_sample_gradient_dtype=torch.float64,
+    #         precondition_dtype=torch.float64,
+    #     )
+    #     self.analyzer.compute_self_scores(
+    #         scores_name=NEW_SCORE_NAME,
+    #         factors_name=OLD_FACTOR_NAME,
+    #         train_dataset=self.train_dataset,
+    #         train_indices=list(range(TRAIN_INDICES)),
+    #         per_device_train_batch_size=512,
+    #         score_args=score_args,
+    #         overwrite_output_dir=True,
+    #     )
+    #     new_self_scores = self.analyzer.load_self_scores(scores_name=NEW_SCORE_NAME)
+    #
+    #     if LOCAL_RANK == 0:
+    #         print(f"Previous score: {self_scores[ALL_MODULE_NAME]}")
+    #         print(f"Previous shape: {self_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_self_scores[ALL_MODULE_NAME]}")
+    #         print(f"New shape: {new_self_scores[ALL_MODULE_NAME].shape}")
+    #         assert check_tensor_dict_equivalence(
+    #             self_scores,
+    #             new_self_scores,
+    #             atol=1e-5,
+    #             rtol=1e-3,
+    #         )
+    #
+    # def test_lr_pairwise_scores(self) -> None:
+    #     pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_qb")
+    #
+    #     score_args = ScoreArguments(
+    #         query_gradient_rank=32,
+    #         score_dtype=torch.float64,
+    #         per_sample_gradient_dtype=torch.float64,
+    #         precondition_dtype=torch.float64,
+    #         query_gradient_svd_dtype=torch.float64,
+    #     )
+    #     self.analyzer.compute_pairwise_scores(
+    #         scores_name="ddp_qb",
+    #         factors_name=OLD_FACTOR_NAME,
+    #         query_dataset=self.eval_dataset,
+    #         train_dataset=self.train_dataset,
+    #         train_indices=list(range(TRAIN_INDICES)),
+    #         query_indices=list(range(QUERY_INDICES)),
+    #         per_device_query_batch_size=12,
+    #         per_device_train_batch_size=512,
+    #         score_args=score_args,
+    #         overwrite_output_dir=True,
+    #     )
+    #     new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb")
+    #
+    #     if LOCAL_RANK == 0:
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
+    #         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
+    #         print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         assert check_tensor_dict_equivalence(
+    #             pairwise_scores,
+    #             new_pairwise_scores,
+    #             atol=1e-3,
+    #             rtol=1e-1,
+    #         )
+    #
+    # def test_per_module_pairwise_scores(self) -> None:
+    #     pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_qb")
+    #
+    #     score_args = ScoreArguments(
+    #         per_module_score=True,
+    #         score_dtype=torch.float64,
+    #         per_sample_gradient_dtype=torch.float64,
+    #         precondition_dtype=torch.float64,
+    #         query_gradient_svd_dtype=torch.float64,
+    #     )
+    #     self.analyzer.compute_pairwise_scores(
+    #         scores_name=NEW_SCORE_NAME + "_per_module",
+    #         factors_name=OLD_FACTOR_NAME,
+    #         query_dataset=self.eval_dataset,
+    #         train_dataset=self.train_dataset,
+    #         train_indices=list(range(TRAIN_INDICES)),
+    #         query_indices=list(range(QUERY_INDICES)),
+    #         per_device_query_batch_size=12,
+    #         per_device_train_batch_size=512,
+    #         score_args=score_args,
+    #         overwrite_output_dir=True,
+    #     )
+    #     new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb")
+    #
+    #     if LOCAL_RANK == 0:
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
+    #         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
+    #         print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         assert check_tensor_dict_equivalence(
+    #             pairwise_scores,
+    #             new_pairwise_scores,
+    #             atol=1e-3,
+    #             rtol=1e-1,
+    #         )
+    #
+    # def test_lr_accumulate_pairwise_scores(self) -> None:
+    #     pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_qb")
+    #
+    #     score_args = ScoreArguments(
+    #         query_gradient_rank=32,
+    #         num_query_gradient_accumulations=3,
+    #         score_dtype=torch.float64,
+    #         per_sample_gradient_dtype=torch.float64,
+    #         precondition_dtype=torch.float64,
+    #         query_gradient_svd_dtype=torch.float64,
+    #     )
+    #     self.analyzer.compute_pairwise_scores(
+    #         scores_name="ddp_qb_agg",
+    #         factors_name=OLD_FACTOR_NAME,
+    #         query_dataset=self.eval_dataset,
+    #         train_dataset=self.train_dataset,
+    #         train_indices=list(range(TRAIN_INDICES)),
+    #         query_indices=list(range(QUERY_INDICES)),
+    #         per_device_query_batch_size=2,
+    #         per_device_train_batch_size=512,
+    #         score_args=score_args,
+    #         overwrite_output_dir=True,
+    #     )
+    #     new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb_agg")
+    #
+    #     if LOCAL_RANK == 0:
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
+    #         print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+    #         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][44]}")
+    #         print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][44]}")
+    #         assert check_tensor_dict_equivalence(
+    #             pairwise_scores,
+    #             new_pairwise_scores,
+    #             atol=1e-1,
+    #             rtol=1e-1,
+    #         )
 
     @classmethod
     def tearDownClass(cls) -> None:

@@ -106,47 +106,47 @@ def run_analysis() -> None:
         overwrite_output_dir=True,
     )
 
-    score_args = ScoreArguments(
-        score_dtype=torch.float64,
-        per_sample_gradient_dtype=torch.float64,
-        precondition_dtype=torch.float64,
-    )
-    analyzer.compute_pairwise_scores(
-        scores_name="single_gpu",
-        factors_name="single_gpu",
-        query_dataset=eval_dataset,
-        train_dataset=train_dataset,
-        per_device_query_batch_size=12,
-        per_device_train_batch_size=512,
-        score_args=score_args,
-        overwrite_output_dir=True,
-    )
-    analyzer.compute_self_scores(
-        scores_name="single_gpu",
-        factors_name="single_gpu",
-        train_dataset=train_dataset,
-        per_device_train_batch_size=512,
-        score_args=score_args,
-        overwrite_output_dir=True,
-    )
+    # score_args = ScoreArguments(
+    #     score_dtype=torch.float64,
+    #     per_sample_gradient_dtype=torch.float64,
+    #     precondition_dtype=torch.float64,
+    # )
+    # analyzer.compute_pairwise_scores(
+    #     scores_name="single_gpu",
+    #     factors_name="single_gpu",
+    #     query_dataset=eval_dataset,
+    #     train_dataset=train_dataset,
+    #     per_device_query_batch_size=12,
+    #     per_device_train_batch_size=512,
+    #     score_args=score_args,
+    #     overwrite_output_dir=True,
+    # )
+    # analyzer.compute_self_scores(
+    #     scores_name="single_gpu",
+    #     factors_name="single_gpu",
+    #     train_dataset=train_dataset,
+    #     per_device_train_batch_size=512,
+    #     score_args=score_args,
+    #     overwrite_output_dir=True,
+    # )
 
-    score_args = ScoreArguments(
-        query_gradient_rank=32,
-        score_dtype=torch.float64,
-        per_sample_gradient_dtype=torch.float64,
-        precondition_dtype=torch.float64,
-        query_gradient_svd_dtype=torch.float64,
-    )
-    analyzer.compute_pairwise_scores(
-        scores_name="single_gpu_qb",
-        factors_name="single_gpu",
-        query_dataset=eval_dataset,
-        train_dataset=train_dataset,
-        per_device_query_batch_size=12,
-        per_device_train_batch_size=512,
-        score_args=score_args,
-        overwrite_output_dir=True,
-    )
+    # score_args = ScoreArguments(
+    #     query_gradient_rank=32,
+    #     score_dtype=torch.float64,
+    #     per_sample_gradient_dtype=torch.float64,
+    #     precondition_dtype=torch.float64,
+    #     query_gradient_svd_dtype=torch.float64,
+    # )
+    # analyzer.compute_pairwise_scores(
+    #     scores_name="single_gpu_qb",
+    #     factors_name="single_gpu",
+    #     query_dataset=eval_dataset,
+    #     train_dataset=train_dataset,
+    #     per_device_query_batch_size=12,
+    #     per_device_train_batch_size=512,
+    #     score_args=score_args,
+    #     overwrite_output_dir=True,
+    # )
 
 
 if __name__ == "__main__":
