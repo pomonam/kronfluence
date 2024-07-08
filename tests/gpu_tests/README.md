@@ -20,7 +20,7 @@ python cpu_test.py
 To test if running with Distributed Data Parallel (DDP) with 3 GPUs obtains the same result, run:
 
 ```bash
-torchrun --nnodes=1 --nproc_per_node=3 ddp_test.py
+torchrun --nnodes=1 --nproc_per_node=4 ddp_test.py
 ```
 
 ### FSDP Tests

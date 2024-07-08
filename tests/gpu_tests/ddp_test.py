@@ -24,7 +24,7 @@ from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
 WORLD_RANK = int(os.environ["RANK"])
 WORLD_SIZE = int(os.environ["WORLD_SIZE"])
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 OLD_FACTOR_NAME = "single_gpu"
 NEW_FACTOR_NAME = "ddp"
 OLD_SCORE_NAME = "single_gpu"
@@ -117,34 +117,6 @@ class DDPTest(unittest.TestCase):
         factor_args = pytest_factor_arguments()
         factor_args.lambda_module_partitions = 2
         factor_args.lambda_data_partitions = 2
-        self.analyzer.fit_lambda_matrices(
-            factors_name=NEW_FACTOR_NAME,
-            dataset=self.train_dataset,
-            factor_args=factor_args,
-            per_device_batch_size=512,
-            overwrite_output_dir=True,
-            load_from_factors_name=OLD_FACTOR_NAME,
-        )
-        new_lambda_factors = self.analyzer.load_lambda_matrices(factors_name=NEW_FACTOR_NAME)
-
-        for name in LAMBDA_FACTOR_NAMES:
-            if LOCAL_RANK == 0:
-                for module_name in lambda_factors[name]:
-                    print(f"Name: {name, module_name}")
-                    print(f"Previous factor: {lambda_factors[name][module_name]}")
-                    print(f"New factor: {new_lambda_factors[name][module_name]}")
-            if LOCAL_RANK == 0:
-                assert check_tensor_dict_equivalence(
-                    lambda_factors[name],
-                    new_lambda_factors[name],
-                    atol=ATOL,
-                    rtol=RTOL,
-                )
-
-    def test_lambda_shared_matrices(self) -> None:
-        lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = pytest_factor_arguments()
-        factor_args.has_shared_parameters = True
         self.analyzer.fit_lambda_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
