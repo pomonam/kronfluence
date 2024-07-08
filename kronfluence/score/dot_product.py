@@ -133,6 +133,7 @@ def compute_dot_products_with_loader(
             total_steps += 1
             pbar.update(1)
 
+            release_memory()
             print("End")
             print(torch.cuda.memory_allocated())
             print(torch.cuda.memory_reserved())
