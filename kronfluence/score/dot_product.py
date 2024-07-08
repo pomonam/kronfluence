@@ -103,6 +103,10 @@ def compute_dot_products_with_loader(
             if factor_args.has_shared_parameters:
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
+            print("Middle")
+            print(torch.cuda.memory_allocated())
+            print(torch.cuda.memory_reserved())
+
             with torch.no_grad():
                 if score_args.compute_per_module_scores:
                     for module in cached_module_lst:
