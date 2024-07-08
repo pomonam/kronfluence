@@ -134,11 +134,8 @@ def get_active_tensors() -> List[torch.Tensor]:
     """
     tensor_lst = []
     for obj in gc.get_objects():
-        try:
-            if torch.is_tensor(obj) or (hasattr(obj, "data") and torch.is_tensor(obj.data)):
-                tensor_lst.append(type(obj), obj.size())
-        except:  # pylint: disable=bare-except
-            pass
+        if torch.is_tensor(obj) or (hasattr(obj, "data") and torch.is_tensor(obj.data)):
+            tensor_lst.append(type(obj), obj.size())
     return tensor_lst
 
 

@@ -124,6 +124,7 @@ def compute_dot_products_with_loader(
                             raise
                     pairwise_scores = pairwise_scores.cpu()
                     score_chunks[ALL_MODULE_NAME].append(pairwise_scores)
+                    del pairwise_scores
                     accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 
             if state.use_distributed and total_steps % DISTRIBUTED_SYNC_INTERVAL == 0:
@@ -133,7 +134,6 @@ def compute_dot_products_with_loader(
             total_steps += 1
             pbar.update(1)
 
-            release_memory()
             print("End")
             print(torch.cuda.memory_allocated())
             print(torch.cuda.memory_reserved())
