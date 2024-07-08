@@ -27,7 +27,6 @@ from kronfluence.utils.constants import (
     PRECONDITIONED_GRADIENT_TYPE,
     SELF_SCORE_VECTOR_NAME,
 )
-from kronfluence.utils.state import State
 
 
 class ModuleMode(str, BaseEnum):
@@ -121,7 +120,6 @@ class TrackedModule(nn.Module):
         self.attention_mask: Optional[torch.Tensor] = None
         self.gradient_scale: float = 1.0
         self.storage: Dict[str, Optional[Union[torch.Tensor, PRECONDITIONED_GRADIENT_TYPE]]] = {}
-        self.state: State = State()
         self.einsum_expression: Optional[Callable] = None
 
         self._initialize_storage()
