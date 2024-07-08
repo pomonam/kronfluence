@@ -273,6 +273,7 @@ class LambdaTracker(BaseTracker):
 
         @torch.no_grad()
         def shared_backward_hook(output_gradient: torch.Tensor) -> None:
+            print("Shared processed")
             handle = self.cached_hooks.pop()
             handle.remove()
             output_gradient = self._preprocess_gradient(
