@@ -73,6 +73,10 @@ def compute_dot_products_with_loader(
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
 
+    print("Start")
+    print(torch.cuda.memory_allocated())
+    print(torch.cuda.memory_reserved())
+
     with tqdm(
         total=len(train_loader),
         desc="Computing pairwise scores (training gradient)",
@@ -81,6 +85,10 @@ def compute_dot_products_with_loader(
     ) as pbar:
         for batch in train_loader:
             batch = send_to_device(tensor=batch, device=state.device)
+
+            print("Begin")
+            print(torch.cuda.memory_allocated())
+            print(torch.cuda.memory_reserved())
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
@@ -124,6 +132,10 @@ def compute_dot_products_with_loader(
             del loss
             total_steps += 1
             pbar.update(1)
+
+            print("End")
+            print(torch.cuda.memory_allocated())
+            print(torch.cuda.memory_reserved())
 
     model.zero_grad(set_to_none=True)
     finalize_all_iterations(model=model, tracked_module_names=tracked_module_names)
