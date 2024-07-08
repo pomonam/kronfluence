@@ -103,7 +103,7 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                 minimize = "size"
             else:
                 expr = "qio,b...i,b...o->qb"
-                minimize = "flops"
+                minimize = "size"
             self.einsum_expression = contract_expression(
                 expr,
                 preconditioned_gradient.shape,
