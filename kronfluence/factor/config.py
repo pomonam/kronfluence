@@ -202,6 +202,7 @@ class Diagonal(FactorConfig, factor_strategy=FactorStrategy.DIAGONAL):
             damping_factor = 0.1 * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
         storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
+        storage[NUM_LAMBDA_PROCESSED] = None
 
     def precondition_gradient(
         self,
@@ -261,6 +262,7 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
             damping_factor = 0.1 * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
         storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
+        storage[NUM_LAMBDA_PROCESSED] = None
         storage[ACTIVATION_EIGENVALUES_NAME] = None
         storage[GRADIENT_EIGENVALUES_NAME] = None
 
@@ -329,6 +331,7 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
             damping_factor = 0.1 * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
         storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
+        storage[NUM_LAMBDA_PROCESSED] = None
 
     @torch.no_grad()
     def precondition_gradient(

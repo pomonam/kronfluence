@@ -245,7 +245,8 @@ def compute_self_scores_with_loaders(
                                 module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
                             )
                         self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
-                    score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
+                    self_scores = self_scores.cpu()
+                    score_chunks[ALL_MODULE_NAME].append(self_scores)
                 accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 
             if (
@@ -397,7 +398,8 @@ def compute_self_measurement_scores_with_loaders(
                                 module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
                             )
                         self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
-                    score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
+                    self_scores = self_scores.cpu()
+                    score_chunks[ALL_MODULE_NAME].append(self_scores)
                 accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 
             if (
