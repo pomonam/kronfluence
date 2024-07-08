@@ -82,7 +82,7 @@ def compute_dot_products_with_loader(
         for batch in train_loader:
             batch = send_to_device(tensor=batch, device=state.device)
 
-            print(tracked_module_names)
+            print(cached_module_lst[0])
 
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
