@@ -297,17 +297,15 @@ class DDPTest(unittest.TestCase):
         new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME + "_per_module")
 
         if LOCAL_RANK == 0:
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
+            total_scores = None
+            for module_name in new_pairwise_scores:
+                if total_scores is None:
+                    total_scores = new_pairwise_scores[module_name]
+                else:
+                    total_scores.add_(new_pairwise_scores[module_name])
             assert check_tensor_dict_equivalence(
                 pairwise_scores,
-                new_pairwise_scores,
+                {ALL_MODULE_NAME: total_scores},
                 atol=ATOL,
                 rtol=RTOL,
             )
@@ -369,7 +367,7 @@ class DDPTest(unittest.TestCase):
             overwrite_output_dir=True,
         )
         new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp")
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu")
+        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_all_agg")
 
         if LOCAL_RANK == 0:
             assert check_tensor_dict_equivalence(
