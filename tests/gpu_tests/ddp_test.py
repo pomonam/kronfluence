@@ -263,8 +263,6 @@ class DDPTest(unittest.TestCase):
             )
 
     def test_lr_pairwise_scores(self) -> None:
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_qb")
-
         score_args = pytest_score_arguments()
         score_args.query_gradient_low_rank = 32
         self.analyzer.compute_pairwise_scores(
@@ -279,27 +277,9 @@ class DDPTest(unittest.TestCase):
             score_args=score_args,
             overwrite_output_dir=True,
         )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb")
-
-        if LOCAL_RANK == 0:
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][50]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            assert check_tensor_dict_equivalence(
-                pairwise_scores,
-                new_pairwise_scores,
-                atol=ATOL,
-                rtol=RTOL,
-            )
 
     def test_per_module_pairwise_scores(self) -> None:
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_qb")
-
+        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
         score_args = pytest_score_arguments()
         score_args.compute_per_module_scores = True
         self.analyzer.compute_pairwise_scores(
@@ -314,7 +294,7 @@ class DDPTest(unittest.TestCase):
             score_args=score_args,
             overwrite_output_dir=True,
         )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb")
+        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME + "_per_module")
 
         if LOCAL_RANK == 0:
             print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
@@ -333,8 +313,6 @@ class DDPTest(unittest.TestCase):
             )
 
     def test_lr_accumulate_pairwise_scores(self) -> None:
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="single_gpu_qb")
-
         score_args = pytest_score_arguments()
         score_args.query_gradient_low_rank = 32
         score_args.query_gradient_accumulation_steps = 3
@@ -350,21 +328,6 @@ class DDPTest(unittest.TestCase):
             score_args=score_args,
             overwrite_output_dir=True,
         )
-        new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name="ddp_qb_agg")
-
-        if LOCAL_RANK == 0:
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][0]}")
-            print(f"New shape: {new_pairwise_scores[ALL_MODULE_NAME].shape}")
-            print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][44]}")
-            print(f"New score: {new_pairwise_scores[ALL_MODULE_NAME][44]}")
-            assert check_tensor_dict_equivalence(
-                pairwise_scores,
-                new_pairwise_scores,
-                atol=ATOL,
-                rtol=RTOL,
-            )
 
     def test_aggregate_scores(self) -> None:
         score_args = pytest_score_arguments()

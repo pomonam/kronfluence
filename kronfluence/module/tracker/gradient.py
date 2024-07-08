@@ -81,6 +81,7 @@ class GradientTracker(BaseTracker):
                     device="cuda",
                     requires_grad=False,
                 )
+            self.module.storage[AGGREGATED_GRADIENT_NAME] = self.module.storage[AGGREGATED_GRADIENT_NAME].contiguous()
             dist.all_reduce(
                 tensor=self.module.storage[AGGREGATED_GRADIENT_NAME],
                 op=dist.ReduceOp.SUM,
