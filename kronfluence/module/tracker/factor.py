@@ -255,6 +255,7 @@ class LambdaTracker(BaseTracker):
 
         @torch.no_grad()
         def backward_hook(output_gradient: torch.Tensor) -> None:
+            print("Normal")
             if self.cached_activations is None:
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
