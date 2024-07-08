@@ -120,6 +120,7 @@ def release_memory() -> None:
     This function calls Python's garbage collector and empties CUDA cache if CUDA is available.
     """
     gc.collect()
+    torch.compiler.reset()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
