@@ -82,8 +82,6 @@ def compute_dot_products_with_loader(
         for batch in train_loader:
             batch = send_to_device(tensor=batch, device=state.device)
 
-            print(cached_module_lst[0].storage)
-
             with no_sync(model=model, state=state):
                 model.zero_grad(set_to_none=True)
                 with autocast(device_type=state.device.type, enabled=enable_amp, dtype=score_args.amp_dtype):
