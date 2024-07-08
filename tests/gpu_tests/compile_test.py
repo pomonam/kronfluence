@@ -42,6 +42,9 @@ class CompileTest(unittest.TestCase):
         cls.model = cls.model.cuda()
         cls.model = torch.compile(cls.model)
 
+        print(cls.model)
+        print(list(cls.model.named_modules()))
+
         cls.analyzer = Analyzer(
             analysis_name="gpu_test",
             model=cls.model,
