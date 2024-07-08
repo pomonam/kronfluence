@@ -6,6 +6,8 @@ import torch
 
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
+from kronfluence.utils.common.score_arguments import pytest_score_arguments
 from kronfluence.utils.constants import ALL_MODULE_NAME
 from kronfluence.utils.dataset import DataLoaderKwargs
 from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
@@ -23,13 +25,13 @@ from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence, prepare_test
         "gpt",
     ],
 )
-@pytest.mark.parametrize("cached_activation_cpu_offload", [True, False])
+@pytest.mark.parametrize("offload_activations_to_cpu", [True, False])
 @pytest.mark.parametrize("query_size", [16])
 @pytest.mark.parametrize("train_size", [32])
 @pytest.mark.parametrize("seed", [1])
 def test_cpu_offloads(
     test_name: str,
-    cached_activation_cpu_offload: bool,
+    offload_activations_to_cpu: bool,
     query_size: int,
     train_size: int,
     seed: int,
@@ -50,10 +52,10 @@ def test_cpu_offloads(
         disable_tqdm=True,
     )
     factor_args = FactorArguments(
-        cached_activation_cpu_offload=cached_activation_cpu_offload,
+        offload_activations_to_cpu=offload_activations_to_cpu,
     )
     if test_name == "repeated_mlp":
-        factor_args.shared_parameters_exist = True
+        factor_args.has_shared_parameters = True
     factors_name = f"pytest_{test_name}_{test_cpu_offloads.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
@@ -65,7 +67,7 @@ def test_cpu_offloads(
     )
 
     score_args = ScoreArguments(
-        cached_activation_cpu_offload=cached_activation_cpu_offload,
+        offload_activations_to_cpu=offload_activations_to_cpu,
     )
     scores_name = f"pytest_{test_name}_{test_cpu_offloads.__name__}_scores"
     analyzer.compute_pairwise_scores(
@@ -122,15 +124,9 @@ def test_cpu_offloads_identical(
         disable_model_save=True,
         disable_tqdm=True,
     )
-    factor_args = FactorArguments(
-        use_empirical_fisher=True,
-        cached_activation_cpu_offload=False,
-        activation_covariance_dtype=torch.float64,
-        gradient_covariance_dtype=torch.float64,
-        lambda_dtype=torch.float64,
-    )
+    factor_args = pytest_factor_arguments()
     if test_name == "repeated_mlp":
-        factor_args.shared_parameters_exist = True
+        factor_args.has_shared_parameters = True
     factors_name = f"pytest_{test_name}_{test_cpu_offloads_identical.__name__}"
     analyzer.fit_all_factors(
         factors_name=factors_name,
@@ -140,13 +136,7 @@ def test_cpu_offloads_identical(
         factor_args=factor_args,
         overwrite_output_dir=True,
     )
-    score_args = ScoreArguments(
-        cached_activation_cpu_offload=False,
-        per_sample_gradient_dtype=torch.float64,
-        score_dtype=torch.float64,
-        precondition_dtype=torch.float64,
-        per_module_score=per_module_score,
-    )
+    score_args = pytest_score_arguments()
     scores_name = f"pytest_{test_name}_{test_cpu_offloads_identical.__name__}_scores"
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
@@ -162,7 +152,7 @@ def test_cpu_offloads_identical(
     pairwise_scores = analyzer.load_pairwise_scores(scores_name=scores_name)
 
     factors_name = f"pytest_{test_name}_{test_cpu_offloads_identical.__name__}_cached"
-    factor_args.cached_activation_cpu_offload = True
+    factor_args.offload_activations_to_cpu = True
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
@@ -171,7 +161,7 @@ def test_cpu_offloads_identical(
         factor_args=factor_args,
         overwrite_output_dir=True,
     )
-    score_args.cached_activation_cpu_offload = True
+    score_args.offload_activations_to_cpu = True
     scores_name = f"pytest_{test_name}_{test_cpu_offloads_identical.__name__}_cached_scores"
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,

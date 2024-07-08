@@ -32,7 +32,7 @@ from kronfluence.score.dot_product import (
 from kronfluence.task import Task
 from kronfluence.utils.constants import FACTOR_TYPE, PARTITION_TYPE, SCORE_TYPE
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
-from kronfluence.utils.state import State, no_sync, release_memory
+from kronfluence.utils.state import State, no_sync
 
 
 def pairwise_scores_save_path(
@@ -70,7 +70,7 @@ def save_pairwise_scores(
     Args:
         output_dir (Path):
             Directory to save the scores.
-        scores (FACTOR_TYPE):
+        scores (SCORE_TYPE):
             Dictionary of scores to save.
         partition (PARTITION_TYPE, optional):
             Partition information, if any.
@@ -87,7 +87,7 @@ def save_pairwise_scores(
 def load_pairwise_scores(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
-) -> Dict[str, torch.Tensor]:
+) -> SCORE_TYPE:
     """Loads pairwise scores from disk.
 
     Args:
@@ -171,7 +171,7 @@ def compute_pairwise_scores_with_loaders(
             Whether to disable the progress bar. Defaults to `False`.
 
     Returns:
-        Dict[str, torch.Tensor]:
+        SCORE_TYPE:
             A dictionary containing the module name and its pairwise influence scores.
     """
     update_factor_args(model=model, factor_args=factor_args)
@@ -190,6 +190,7 @@ def compute_pairwise_scores_with_loaders(
                 model=model,
                 factor_name=name,
                 factors=loaded_factors[name],
+                clone=True,
             )
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
 
@@ -271,6 +272,7 @@ def compute_pairwise_scores_with_loaders(
                     if module_name not in total_scores_chunks:
                         total_scores_chunks[module_name] = []
                     total_scores_chunks[module_name].append(current_scores)
+            del scores
             state.wait_for_everyone()
 
             num_accumulations = 0
@@ -318,7 +320,7 @@ def compute_pairwise_query_aggregated_scores_with_loaders(
     )
     if len(loaded_factors) > 0:
         for name in loaded_factors:
-            set_factors(model=model, factor_name=name, factors=loaded_factors[name])
+            set_factors(model=model, factor_name=name, factors=loaded_factors[name], clone=True)
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
 
     enable_amp = score_args.amp_dtype is not None
@@ -354,7 +356,7 @@ def compute_pairwise_query_aggregated_scores_with_loaders(
             if factor_args.has_shared_parameters:
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
-            del query_batch, measurement
+            del measurement
             pbar.update(1)
 
     if state.use_distributed:

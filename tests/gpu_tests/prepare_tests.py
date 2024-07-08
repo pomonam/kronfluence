@@ -6,8 +6,8 @@ from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
+from kronfluence.utils.common.score_arguments import pytest_score_arguments
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 
 # Pick difficult cases where the dataset is not perfectly divisible by batch size.
@@ -102,47 +102,89 @@ def run_analysis() -> None:
         overwrite_output_dir=True,
     )
 
-    # score_args = ScoreArguments(
-    #     score_dtype=torch.float64,
-    #     per_sample_gradient_dtype=torch.float64,
-    #     precondition_dtype=torch.float64,
-    # )
-    # analyzer.compute_pairwise_scores(
-    #     scores_name="single_gpu",
-    #     factors_name="single_gpu",
-    #     query_dataset=eval_dataset,
-    #     train_dataset=train_dataset,
-    #     per_device_query_batch_size=12,
-    #     per_device_train_batch_size=512,
-    #     score_args=score_args,
-    #     overwrite_output_dir=True,
-    # )
-    # analyzer.compute_self_scores(
-    #     scores_name="single_gpu",
-    #     factors_name="single_gpu",
-    #     train_dataset=train_dataset,
-    #     per_device_train_batch_size=512,
-    #     score_args=score_args,
-    #     overwrite_output_dir=True,
-    # )
+    score_args = pytest_score_arguments()
+    analyzer.compute_pairwise_scores(
+        scores_name="single_gpu",
+        factors_name="single_gpu",
+        query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        per_device_query_batch_size=12,
+        per_device_train_batch_size=512,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    analyzer.compute_self_scores(
+        scores_name="single_gpu",
+        factors_name="single_gpu",
+        train_dataset=train_dataset,
+        per_device_train_batch_size=512,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
 
-    # score_args = ScoreArguments(
-    #     query_gradient_rank=32,
-    #     score_dtype=torch.float64,
-    #     per_sample_gradient_dtype=torch.float64,
-    #     precondition_dtype=torch.float64,
-    #     query_gradient_svd_dtype=torch.float64,
-    # )
-    # analyzer.compute_pairwise_scores(
-    #     scores_name="single_gpu_qb",
-    #     factors_name="single_gpu",
-    #     query_dataset=eval_dataset,
-    #     train_dataset=train_dataset,
-    #     per_device_query_batch_size=12,
-    #     per_device_train_batch_size=512,
-    #     score_args=score_args,
-    #     overwrite_output_dir=True,
-    # )
+    score_args = pytest_score_arguments()
+    score_args.use_measurement_for_self_influence = True
+    analyzer.compute_self_scores(
+        scores_name="single_gpu_measurement",
+        factors_name="single_gpu",
+        train_dataset=train_dataset,
+        per_device_train_batch_size=512,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+
+    score_args = pytest_score_arguments()
+    score_args.query_gradient_low_rank = 32
+    analyzer.compute_pairwise_scores(
+        scores_name="single_gpu_qb",
+        factors_name="single_gpu",
+        query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        per_device_query_batch_size=12,
+        per_device_train_batch_size=512,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+
+    score_args = pytest_score_arguments()
+    score_args.aggregate_train_gradients = True
+    analyzer.compute_pairwise_scores(
+        scores_name="single_gpu_train_agg",
+        factors_name="single_gpu",
+        query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        per_device_query_batch_size=12,
+        per_device_train_batch_size=512,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+
+    score_args = pytest_score_arguments()
+    score_args.aggregate_query_gradients = True
+    analyzer.compute_pairwise_scores(
+        scores_name="single_gpu_query_agg",
+        factors_name="single_gpu",
+        query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        per_device_query_batch_size=12,
+        per_device_train_batch_size=512,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+
+    score_args = pytest_score_arguments()
+    score_args.aggregate_train_gradients = True
+    score_args.aggregate_query_gradients = True
+    analyzer.compute_pairwise_scores(
+        scores_name="single_gpu_all_agg",
+        factors_name="single_gpu",
+        query_dataset=eval_dataset,
+        train_dataset=train_dataset,
+        per_device_query_batch_size=12,
+        per_device_train_batch_size=512,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
 
 
 if __name__ == "__main__":

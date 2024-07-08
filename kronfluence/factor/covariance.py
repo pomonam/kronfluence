@@ -232,7 +232,7 @@ def fit_covariance_matrices_with_loader(
                 state.wait_for_everyone()
 
             num_data_processed.add_(find_batch_size(data=batch))
-            del batch, attention_mask, loss
+            del loss
             total_steps += 1
             pbar.update(1)
 

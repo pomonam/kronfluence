@@ -76,7 +76,12 @@ class BaseTracker:
         """Finalizes statistics for the current iteration."""
 
     def exist(self) -> bool:
-        """Checks if the desired statistics are available."""
+        """Checks if the desired statistics are available.
+
+        Returns:
+            bool:
+                `True` if statistics exist, `False` otherwise.
+        """
         return False
 
     def synchronize(self, num_processes: int) -> None:

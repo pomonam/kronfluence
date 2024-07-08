@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import torch
+import torch.distributed as dist
 from accelerate.utils import send_to_device
 from safetensors.torch import load_file, save_file
 from torch import autocast, nn
@@ -15,12 +16,8 @@ from kronfluence.module.tracked_module import ModuleMode
 from kronfluence.module.utils import (
     accumulate_iterations,
     finalize_iteration,
-    finalize_preconditioned_gradient,
-    finalize_self_measurement_scores,
-    finalize_self_scores,
     get_tracked_module_names,
     prepare_modules,
-    release_scores,
     set_factors,
     set_gradient_scale,
     set_mode,
@@ -75,7 +72,7 @@ def save_self_scores(
     Args:
         output_dir (Path):
             Directory to save the scores.
-        scores (FACTOR_TYPE):
+        scores (SCORE_TYPE):
             Dictionary of scores to save.
         partition (PARTITION_TYPE, optional):
             Partition information, if any.
@@ -92,7 +89,7 @@ def save_self_scores(
 def load_self_scores(
     output_dir: Path,
     partition: Optional[PARTITION_TYPE] = None,
-) -> Dict[str, torch.Tensor]:
+) -> SCORE_TYPE:
     """Loads self-influence scores from disk.
 
     Args:
@@ -170,7 +167,7 @@ def compute_self_scores_with_loaders(
             Whether to disable the progress bar. Defaults to `False`.
 
     Returns:
-        Dict[str, torch.Tensor]:
+        SCORE_TYPE:
             A dictionary containing the module name and its self-influence scores.
     """
     update_factor_args(model=model, factor_args=factor_args)
@@ -185,7 +182,7 @@ def compute_self_scores_with_loaders(
     )
     if len(loaded_factors) > 0:
         for name in loaded_factors:
-            set_factors(model=model, factor_name=name, factors=loaded_factors[name])
+            set_factors(model=model, factor_name=name, factors=loaded_factors[name], clone=True)
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
 
     dataset_size = len(train_loader.dataset)
@@ -215,7 +212,7 @@ def compute_self_scores_with_loaders(
         bar_format=TQDM_BAR_FORMAT,
         disable=not state.is_main_process or disable_tqdm,
     ) as pbar:
-        for batch in train_loader:
+        for index, batch in enumerate(train_loader):
             batch = send_to_device(
                 tensor=batch,
                 device=state.device,
@@ -234,26 +231,31 @@ def compute_self_scores_with_loaders(
             if factor_args.has_shared_parameters:
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
-            if score_args.compute_per_module_scores:
-                for module in cached_module_lst:
-                    score_chunks[module.name].append(
-                        module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).clone().cpu()
-                    )
-            else:
-                self_scores = None
-                for module in cached_module_lst:
-                    if self_scores is None:
-                        self_scores = torch.zeros_like(
-                            module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
+            with torch.no_grad():
+                if score_args.compute_per_module_scores:
+                    for module in cached_module_lst:
+                        score_chunks[module.name].append(
+                            module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).to(device="cpu", copy=True)
                         )
-                    self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
-                score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
-            accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
+                else:
+                    self_scores = None
+                    for module in cached_module_lst:
+                        if self_scores is None:
+                            self_scores = torch.zeros_like(
+                                module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
+                            )
+                        self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
+                    score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
+                accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 
-            if state.use_distributed and total_steps % DISTRIBUTED_SYNC_INTERVAL == 0:
+            if (
+                state.use_distributed
+                and total_steps % DISTRIBUTED_SYNC_INTERVAL == 0
+                and index not in [len(train_loader) - 1, len(train_loader) - 2]
+            ):
                 state.wait_for_everyone()
 
-            del batch, loss
+            del loss
             total_steps += 1
             pbar.update(1)
 
@@ -276,9 +278,11 @@ def compute_self_scores_with_loaders(
             gather_list = None
             if state.is_main_process:
                 gather_list = [torch.zeros_like(total_scores[module_name]) for _ in range(state.num_processes)]
-            torch.distributed.gather(total_scores[module_name], gather_list)
+            dist.gather(total_scores[module_name], gather_list)
             if state.is_main_process:
                 total_scores[module_name] = torch.cat(gather_list, dim=0)[:dataset_size].cpu()
+            else:
+                total_scores[module_name] = total_scores[module_name].cpu()
     state.wait_for_everyone()
 
     return total_scores
@@ -307,22 +311,22 @@ def compute_self_measurement_scores_with_loaders(
                 model=model,
                 factor_name=name,
                 factors=loaded_factors[name],
+                clone=True,
             )
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
-
-    dataset_size = len(train_loader.dataset)
-    score_chunks: Dict[str, List[torch.Tensor]] = {}
-    if score_args.compute_per_module_scores:
-        for module in model.modules():
-            if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                score_chunks[module.name] = []
-    else:
-        score_chunks[ALL_MODULE_NAME] = []
 
     cached_module_lst = []
     for module in model.modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
             cached_module_lst.append(module)
+
+    dataset_size = len(train_loader.dataset)
+    score_chunks: Dict[str, List[torch.Tensor]] = {}
+    if score_args.compute_per_module_scores:
+        for module in cached_module_lst:
+            score_chunks[module.name] = []
+    else:
+        score_chunks[ALL_MODULE_NAME] = []
 
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
@@ -337,7 +341,7 @@ def compute_self_measurement_scores_with_loaders(
         bar_format=TQDM_BAR_FORMAT,
         disable=not state.is_main_process or disable_tqdm,
     ) as pbar:
-        for batch in train_loader:
+        for index, batch in enumerate(train_loader):
             batch = send_to_device(
                 tensor=batch,
                 device=state.device,
@@ -377,25 +381,30 @@ def compute_self_measurement_scores_with_loaders(
 
             if factor_args.has_shared_parameters:
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
-            del batch, loss
+            del loss
 
-            if score_args.compute_per_module_scores:
-                for module in cached_module_lst:
-                    score_chunks[module.name].append(
-                        module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).clone().cpu()
-                    )
-            else:
-                self_scores = None
-                for module in cached_module_lst:
-                    if self_scores is None:
-                        self_scores = torch.zeros_like(
-                            module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
+            with torch.no_grad():
+                if score_args.compute_per_module_scores:
+                    for module in cached_module_lst:
+                        score_chunks[module.name].append(
+                            module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME).to(device="cpu", copy=True)
                         )
-                    self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
-                score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
-            accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
+                else:
+                    self_scores = None
+                    for module in cached_module_lst:
+                        if self_scores is None:
+                            self_scores = torch.zeros_like(
+                                module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME), requires_grad=False
+                            )
+                        self_scores.add_(module.get_factor(factor_name=SELF_SCORE_VECTOR_NAME))
+                    score_chunks[ALL_MODULE_NAME].append(self_scores.cpu())
+                accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 
-            if state.use_distributed and total_steps % DISTRIBUTED_SYNC_INTERVAL == 0:
+            if (
+                state.use_distributed
+                and total_steps % DISTRIBUTED_SYNC_INTERVAL == 0
+                and index not in [len(train_loader) - 1, len(train_loader) - 2]
+            ):
                 state.wait_for_everyone()
 
             total_steps += 1
@@ -420,9 +429,11 @@ def compute_self_measurement_scores_with_loaders(
             gather_list = None
             if state.is_main_process:
                 gather_list = [torch.zeros_like(total_scores[module_name]) for _ in range(state.num_processes)]
-            torch.distributed.gather(total_scores[module_name], gather_list)
+            dist.gather(total_scores[module_name], gather_list)
             if state.is_main_process:
                 total_scores[module_name] = torch.cat(gather_list, dim=0)[:dataset_size].cpu()
+            else:
+                total_scores[module_name] = total_scores[module_name].cpu()
     state.wait_for_everyone()
 
     return total_scores

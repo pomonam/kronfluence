@@ -1,8 +1,8 @@
 from typing import Tuple
 
 import torch
-import torch.nn as nn
 from opt_einsum import DynamicProgramming, contract, contract_expression
+from torch import nn
 
 from kronfluence.module.tracker.base import BaseTracker
 from kronfluence.utils.constants import (
@@ -50,23 +50,22 @@ class PairwiseScoreTracker(BaseTracker):
     def register_hooks(self) -> None:
         """Sets up hooks to compute pairwise influence scores."""
 
+        @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
-            with torch.no_grad():
-                cached_activation = inputs[0].detach()
-                device = "cpu" if self.module.score_args.offload_activations_to_cpu else cached_activation.device
-                cached_activation = cached_activation.to(
-                    device=device,
-                    dtype=self.module.score_args.score_dtype,
-                    copy=True,
-                )
-                if self.module.factor_args.has_shared_parameters:
-                    if self.cached_activations is None:
-                        self.cached_activations = []
-                    self.cached_activations.append(cached_activation)
-                else:
-                    self.cached_activations = cached_activation
-
+            cached_activation = inputs[0].detach()
+            device = "cpu" if self.module.score_args.offload_activations_to_cpu else cached_activation.device
+            cached_activation = cached_activation.to(
+                device=device,
+                dtype=self.module.score_args.score_dtype,
+                copy=True,
+            )
+            if self.module.factor_args.has_shared_parameters:
+                if self.cached_activations is None:
+                    self.cached_activations = []
+                self.cached_activations.append(cached_activation)
+            else:
+                self.cached_activations = cached_activation
             self.cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
@@ -75,15 +74,9 @@ class PairwiseScoreTracker(BaseTracker):
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
             handle.remove()
-            original_dtype = output_gradient.dtype
-            target_dtype = self.module.score_args.score_dtype
-            output_gradient = output_gradient.detach().to(dtype=target_dtype)
-            if self.module.gradient_scale != 1.0:
-                if original_dtype != target_dtype:
-                    output_gradient.mul_(self.module.gradient_scale)
-                else:
-                    output_gradient = output_gradient * self.module.gradient_scale
-
+            output_gradient = self._preprocess_gradient(
+                output_gradient.detach(), target_dtype=self.module.score_args.score_dtype
+            )
             if isinstance(self.cached_activations, list):
                 cached_activation = self.cached_activations.pop()
             else:
@@ -101,14 +94,13 @@ class PairwiseScoreTracker(BaseTracker):
                     input_activation=cached_activation.to(device=output_gradient.device),
                     output_gradient=output_gradient,
                 )
-                self.clear_all_cache()
+                del cached_activation, output_gradient
                 self._compute_pairwise_score_with_gradient(per_sample_gradient=per_sample_gradient)
 
         self.registered_hooks.append(self.module.register_forward_hook(forward_hook))
 
-    @torch.no_grad()
     def finalize_iteration(self) -> None:
-        """Clears all cached activations from memory."""
+        """Clears all cached data from memory."""
         self.clear_all_cache()
 
     def exist(self) -> bool:
@@ -119,12 +111,13 @@ class PairwiseScoreTracker(BaseTracker):
         """Removes pairwise scores from memory after a single iteration."""
         self.release_memory()
 
+    @torch.no_grad()
     def finalize_all_iterations(self) -> None:
         """Removes cached preconditioned gradient from memory. Additionally, if aggregated gradients are available,
         computes the pairwise score using them."""
         if self.module.storage[AGGREGATED_GRADIENT_NAME] is not None:
             self.module.storage[AGGREGATED_GRADIENT_NAME] = self.module.storage[AGGREGATED_GRADIENT_NAME].to(
-                dtype=self.module.score_args.precondition_dtype
+                dtype=self.module.score_args.score_dtype
             )
             self._compute_pairwise_score_with_gradient(
                 per_sample_gradient=self.module.storage[AGGREGATED_GRADIENT_NAME]

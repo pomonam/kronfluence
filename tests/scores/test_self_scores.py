@@ -163,8 +163,7 @@ def test_compute_self_scores_dtype(
         "conv_bn",
     ],
 )
-# @pytest.mark.parametrize("strategy", ["identity", "diagonal", "kfac", "ekfac"])
-@pytest.mark.parametrize("strategy", ["ekfac"])
+@pytest.mark.parametrize("strategy", ["identity", "diagonal", "kfac", "ekfac"])
 @pytest.mark.parametrize("train_size", [49])
 @pytest.mark.parametrize("seed", [2])
 def test_self_scores_batch_size_equivalence(

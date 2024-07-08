@@ -23,6 +23,7 @@ from tests.utils import prepare_test
         ModuleMode.COVARIANCE,
         ModuleMode.LAMBDA,
         ModuleMode.PRECONDITION_GRADIENT,
+        ModuleMode.GRADIENT_AGGREGATION,
     ],
 )
 @pytest.mark.parametrize("train_size", [32])
@@ -82,6 +83,7 @@ def test_tracked_modules_forward_equivalence(
         ModuleMode.COVARIANCE,
         ModuleMode.LAMBDA,
         ModuleMode.PRECONDITION_GRADIENT,
+        ModuleMode.GRADIENT_AGGREGATION,
     ],
 )
 @pytest.mark.parametrize("train_size", [32])
@@ -126,7 +128,8 @@ def test_tracked_modules_backward_equivalence(
         wrapped_loss = task.compute_train_loss(batch, wrapped_model, sample=False)
         wrapped_loss.backward()
         for name, param in wrapped_model.named_parameters():
-            wrapped_grads[name] = param.grad.detach()
+            if param.grad is not None:
+                wrapped_grads[name] = param.grad.detach()
 
     for name, grad in wrapped_grads.items():
         original_name = name.replace(".original_module", "")

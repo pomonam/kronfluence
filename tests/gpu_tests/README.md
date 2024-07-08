@@ -49,7 +49,7 @@ python amp_test.py
 
 ### CPU Offload Test
 
-To test if `cached_activation_cpu_offload` option is properly implemented, run:
+To test if `offload_activations_to_cpu` option is properly implemented, run:
 
 ```bash
 pytest test_offload_cpu.py

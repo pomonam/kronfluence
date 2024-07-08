@@ -207,6 +207,6 @@ def reshape_parameter_gradient_to_module_matrix(
             if remove_gradient:
                 del gradient_dict[module_name + ".bias"]
     else:
-        error_msg = f"Unsupported module type: {type(module)}. Only nn.Linear or nn.Conv2d are supported."
+        error_msg = f"Unsupported module type: {type(module)}. Only `nn.Linear` or `nn.Conv2d` are supported."
         raise UnsupportableModuleError(error_msg)
     return gradient_matrix

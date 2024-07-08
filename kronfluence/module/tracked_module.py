@@ -31,8 +31,11 @@ from kronfluence.utils.state import State
 
 
 class ModuleMode(str, BaseEnum):
-    """Enum representing a module's mode, indicating which factors and scores
-    need to be computed during forward and backward passes."""
+    """Enum representing a module's mode for factor and score computation.
+
+    This enum indicates which factors and scores need to be computed during
+    forward and backward passes.
+    """
 
     DEFAULT = "default"
     COVARIANCE = "covariance"
@@ -124,7 +127,7 @@ class TrackedModule(nn.Module):
         self._initialize_storage()
 
     def _initialize_storage(self) -> None:
-        """Initializes trackers for different module modes."""
+        """Initializes storage for various factors and scores."""
 
         # Storage for activation and pseudo-gradient covariance matrices #
         for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
@@ -138,22 +141,44 @@ class TrackedModule(nn.Module):
         for lambda_factor_name in LAMBDA_FACTOR_NAMES:
             self.storage[lambda_factor_name]: Optional[torch.Tensor] = None
 
-        # Storage for preconditioned query gradients and influence scores #
+        # Storage for preconditioned gradients and influence scores #
         self.storage[AGGREGATED_GRADIENT_NAME]: Optional[torch.Tensor] = None
         self.storage[PRECONDITIONED_GRADIENT_NAME]: PRECONDITIONED_GRADIENT_TYPE = None
         self.storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME]: PRECONDITIONED_GRADIENT_TYPE = None
         self.storage[PAIRWISE_SCORE_MATRIX_NAME]: Optional[torch.Tensor] = None
         self.storage[SELF_SCORE_VECTOR_NAME]: Optional[torch.Tensor] = None
 
-    def forward(self, inputs: torch.Tensor, *args: Any, **kwargs: Any) -> Any:
-        """A forward pass of the tracked module. This should have identical behavior to that of the original module."""
+    def forward(self, inputs: torch.Tensor, *args: Any, **kwargs: Any) -> torch.Tensor:
+        """Performs a forward pass of the tracked module.
+
+        This method should have identical behavior to that of the original module.
+
+        Args:
+            inputs (torch.Tensor):
+                Input tensor to the module.
+            *args:
+                Variable length argument list.
+            **kwargs:
+                Arbitrary keyword arguments.
+
+        Returns:
+            torch.Tensor:
+                The output of the forward pass.
+        """
         outputs = self.original_module(inputs, *args, **kwargs)
         if outputs.requires_grad:
             return outputs
         return outputs + self._constant
 
     def prepare_storage(self, device: torch.device) -> None:
-        """Performs any necessary operations on storage before computing influence scores."""
+        """Prepares storage for computing influence scores.
+
+        This method performs necessary operations on storage before computing influence scores.
+
+        Args:
+            device (torch.device):
+                The device to prepare the storage for.
+        """
         FactorConfig.CONFIGS[self.factor_args.strategy].prepare(
             storage=self.storage,
             score_args=self.score_args,
@@ -161,33 +186,73 @@ class TrackedModule(nn.Module):
         )
 
     def update_factor_args(self, factor_args: FactorArguments) -> None:
-        """Updates the factor arguments."""
+        """Updates the factor arguments.
+
+        Args:
+            factor_args (FactorArguments):
+                New factor arguments to set.
+        """
         self.factor_args = factor_args
 
     def update_score_args(self, score_args: ScoreArguments) -> None:
-        """Updates the score arguments."""
+        """Updates the score arguments.
+
+        Args:
+            score_args (ScoreArguments):
+                New score arguments to set.
+        """
         self.score_args = score_args
 
     def get_factor(self, factor_name: str) -> Optional[torch.Tensor]:
-        """Returns the factor with the given name."""
+        """Retrieves a factor by name from storage.
+
+        Args:
+            factor_name (str):
+                The name of the factor to retrieve.
+
+        Returns:
+            Optional[torch.Tensor]:
+                The requested factor, or `None` if not found.
+        """
         if factor_name not in self.storage or self.storage[factor_name] is None:
             return None
         return self.storage[factor_name]
 
     def release_factor(self, factor_name: str) -> None:
-        """Release the factor with the given name from memory."""
+        """Releases a factor from memory.
+
+        Args:
+            factor_name (str):
+                The name of the factor to release.
+        """
         if factor_name not in self.storage or self.storage[factor_name] is None:
             return None
         del self.storage[factor_name]
         self.storage[factor_name] = None
 
     def set_factor(self, factor_name: str, factor: Any) -> None:
-        """Sets the factor with the given name."""
+        """Sets a factor in storage.
+
+        Args:
+            factor_name (str):
+                The name of the factor to set.
+            factor (Any):
+                The factor value to store.
+        """
         if factor_name in self.storage:
             self.storage[factor_name] = factor
 
     def set_mode(self, mode: ModuleMode, release_memory: bool = False) -> None:
-        """Sets the module mode of the current `TrackedModule` instance."""
+        """Sets the operating mode of the `TrackedModule`.
+
+        This method changes the current mode and manages associated trackers and memory.
+
+        Args:
+            mode (ModuleMode):
+                The new mode to set.
+            release_memory (bool):
+                Whether to release memory for all trackers.
+        """
         self._trackers[self.current_mode].release_hooks()
         self.einsum_expression = None
         self.current_mode = mode
@@ -199,11 +264,21 @@ class TrackedModule(nn.Module):
         self._trackers[self.current_mode].register_hooks()
 
     def set_attention_mask(self, attention_mask: Optional[torch.Tensor] = None) -> None:
-        """Sets the attention mask for activation covariance computations."""
+        """Sets the attention mask for activation covariance computations.
+
+        Args:
+            attention_mask (torch.Tensor, optional):
+                The attention mask to set.
+        """
         self.attention_mask = attention_mask
 
     def set_gradient_scale(self, scale: float = 1.0) -> None:
-        """Sets the scale of the gradient obtained from `GradScaler`."""
+        """Sets the scale of the gradient obtained from `GradScaler`.
+
+        Args:
+            scale (float):
+                The scale factor to set.
+        """
         self.gradient_scale = scale
 
     def finalize_iteration(self) -> None:
@@ -211,7 +286,12 @@ class TrackedModule(nn.Module):
         self._trackers[self.current_mode].finalize_iteration()
 
     def exist(self) -> bool:
-        """Checks if the desired statistics are available."""
+        """Checks if the desired statistics are available.
+
+        Returns:
+            bool:
+                `True` if statistics exist, `False` otherwise.
+        """
         return self._trackers[self.current_mode].exist()
 
     def synchronize(self, num_processes: int) -> None:

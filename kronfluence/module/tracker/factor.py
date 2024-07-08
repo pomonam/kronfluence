@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import torch
 import torch.distributed as dist
@@ -25,42 +25,51 @@ from kronfluence.utils.exceptions import FactorsNotFoundError
 class CovarianceTracker(BaseTracker):
     """Tracks and computes activation and gradient covariance matrices for a given module."""
 
-    def _update_activation_covariance_matrix(self, input_activation: torch.Tensor) -> None:
+    _activation_covariance_initialized: bool = False
+    _gradient_covariance_initialized: bool = False
+
+    def _update_activation_covariance_matrix(
+        self, input_activation: torch.Tensor, count: Union[torch.Tensor, int]
+    ) -> None:
         """Computes and updates the activation covariance matrix.
 
         Args:
             input_activation (torch.Tensor):
-                The input tensor to the module, provided by PyTorch's forward hook.
+                The flattened input tensor to the module, provided by PyTorch's forward hook.
+            count (int):
+                The number of activations.
         """
-        flattened_activation, count = self.module.get_flattened_activation(input_activation=input_activation)
-
-        if self.module.storage[NUM_ACTIVATION_COVARIANCE_PROCESSED] is None:
+        if not self._activation_covariance_initialized:
             self.module.storage[NUM_ACTIVATION_COVARIANCE_PROCESSED] = torch.zeros(
                 size=(1,),
                 dtype=torch.int64,
                 device=count.device if isinstance(count, torch.Tensor) else None,
                 requires_grad=False,
             )
-            dimension = flattened_activation.size(1)
+            dimension = input_activation.size(1)
             self.module.storage[ACTIVATION_COVARIANCE_MATRIX_NAME] = torch.zeros(
                 size=(dimension, dimension),
-                dtype=flattened_activation.dtype,
-                device=flattened_activation.device,
+                dtype=input_activation.dtype,
+                device=input_activation.device,
                 requires_grad=False,
             )
+            self._activation_covariance_initialized = True
         self.module.storage[NUM_ACTIVATION_COVARIANCE_PROCESSED].add_(count)
-        self.module.storage[ACTIVATION_COVARIANCE_MATRIX_NAME].addmm_(flattened_activation.t(), flattened_activation)
+        self.module.storage[ACTIVATION_COVARIANCE_MATRIX_NAME].addmm_(input_activation.t(), input_activation)
 
-    def _update_gradient_covariance_matrix(self, output_gradient: torch.Tensor) -> None:
+    def _update_gradient_covariance_matrix(
+        self, output_gradient: torch.Tensor, count: Union[torch.Tensor, int]
+    ) -> None:
         """Computes and updates the pseudo-gradient covariance matrix.
 
         Args:
             output_gradient (torch.Tensor):
-                The gradient tensor with respect to the output of the module, provided by PyTorch's backward hook.
+                The flattened gradient tensor with respect to the output of the module, provided
+                by PyTorch's backward hook.
+            count (int):
+                The number of gradients.
         """
-        flattened_gradient, count = self.module.get_flattened_gradient(output_gradient=output_gradient)
-
-        if self.module.storage[NUM_GRADIENT_COVARIANCE_PROCESSED] is None:
+        if not self._gradient_covariance_initialized:
             # In most cases, `NUM_GRADIENT_COVARIANCE_PROCESSED` and `NUM_ACTIVATION_COVARIANCE_PROCESSED` are
             # identical. However, they may differ when using gradient checkpointing or `torch.compile()`.
             self.module.storage[NUM_GRADIENT_COVARIANCE_PROCESSED] = torch.zeros(
@@ -69,15 +78,16 @@ class CovarianceTracker(BaseTracker):
                 device=count.device if isinstance(count, torch.Tensor) else None,
                 requires_grad=False,
             )
-            dimension = flattened_gradient.size(1)
+            dimension = output_gradient.size(1)
             self.module.storage[GRADIENT_COVARIANCE_MATRIX_NAME] = torch.zeros(
                 size=(dimension, dimension),
-                dtype=flattened_gradient.dtype,
-                device=flattened_gradient.device,
+                dtype=output_gradient.dtype,
+                device=output_gradient.device,
                 requires_grad=False,
             )
+            self._gradient_covariance_initialized = True
         self.module.storage[NUM_GRADIENT_COVARIANCE_PROCESSED].add_(count)
-        self.module.storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(flattened_gradient.t(), flattened_gradient)
+        self.module.storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(output_gradient.t(), output_gradient)
 
     def register_hooks(self) -> None:
         """Sets up hooks to compute activation and gradient covariance matrices."""
@@ -94,7 +104,8 @@ class CovarianceTracker(BaseTracker):
                 )
             )
             # Computes and updates activation covariance during forward pass.
-            self._update_activation_covariance_matrix(input_activation=input_activation)
+            input_activation, count = self.module.get_flattened_activation(input_activation=input_activation)
+            self._update_activation_covariance_matrix(input_activation=input_activation, count=count)
             self.cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
@@ -102,10 +113,11 @@ class CovarianceTracker(BaseTracker):
             handle = self.cached_hooks.pop()
             handle.remove()
             output_gradient = self._preprocess_gradient(
-                output_gradient, target_dtype=self.module.factor_args.gradient_covariance_dtype
+                output_gradient.detach(), target_dtype=self.module.factor_args.gradient_covariance_dtype
             )
             # Computes and updates pseudo-gradient covariance during backward pass.
-            self._update_gradient_covariance_matrix(output_gradient=output_gradient)
+            output_gradient, count = self.module.get_flattened_gradient(output_gradient=output_gradient)
+            self._update_gradient_covariance_matrix(output_gradient=output_gradient, count=count)
 
         self.registered_hooks.append(self.module.register_forward_hook(forward_hook))
 
@@ -130,6 +142,8 @@ class CovarianceTracker(BaseTracker):
 
     def release_memory(self) -> None:
         """Clears all covariance matrices from memory."""
+        self._activation_covariance_initialized = False
+        self._gradient_covariance_initialized = False
         for covariance_factor_name in COVARIANCE_FACTOR_NAMES:
             self.module.storage[covariance_factor_name] = None
 
@@ -246,13 +260,14 @@ class LambdaTracker(BaseTracker):
             handle = self.cached_hooks.pop()
             handle.remove()
             output_gradient = self._preprocess_gradient(
-                output_gradient=output_gradient, target_dtype=self.module.factor_args.per_sample_gradient_dtype
+                output_gradient=output_gradient.detach(), target_dtype=self.module.factor_args.per_sample_gradient_dtype
             )
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=self.cached_activations.to(device=output_gradient.device),
                 output_gradient=output_gradient,
             ).to(dtype=self.module.factor_args.lambda_dtype)
             self.clear_all_cache()
+            del output_gradient
             # Computes and updates lambda matrix during backward pass.
             self._update_lambda_matrix(per_sample_gradient=per_sample_gradient)
 
@@ -261,7 +276,7 @@ class LambdaTracker(BaseTracker):
             handle = self.cached_hooks.pop()
             handle.remove()
             output_gradient = self._preprocess_gradient(
-                output_gradient=output_gradient, target_dtype=self.module.factor_args.per_sample_gradient_dtype
+                output_gradient=output_gradient.detach(), target_dtype=self.module.factor_args.per_sample_gradient_dtype
             )
             cached_activation = self.cached_activations.pop()
             per_sample_gradient = self.module.compute_per_sample_gradient(

@@ -2,7 +2,7 @@ from typing import Tuple
 
 import torch
 import torch.distributed as dist
-import torch.nn as nn
+from torch import nn
 
 from kronfluence.module.tracker.base import BaseTracker
 from kronfluence.utils.constants import AGGREGATED_GRADIENT_NAME
@@ -14,23 +14,22 @@ class GradientTracker(BaseTracker):
     def register_hooks(self) -> None:
         """Sets up hooks to compute and keep track of aggregated gradient."""
 
+        @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
-            with torch.no_grad():
-                cached_activation = inputs[0].detach()
-                device = "cpu" if self.module.score_args.offload_activations_to_cpu else cached_activation.device
-                cached_activation = cached_activation.to(
-                    device=device,
-                    dtype=self.module.score_args.per_sample_gradient_dtype,
-                    copy=True,
-                )
-                if self.module.factor_args.has_shared_parameters:
-                    if self.cached_activations is None:
-                        self.cached_activations = []
-                    self.cached_activations.append(cached_activation)
-                else:
-                    self.cached_activations = cached_activation
-
+            cached_activation = inputs[0].detach()
+            device = "cpu" if self.module.score_args.offload_activations_to_cpu else cached_activation.device
+            cached_activation = cached_activation.to(
+                device=device,
+                dtype=self.module.score_args.per_sample_gradient_dtype,
+                copy=True,
+            )
+            if self.module.factor_args.has_shared_parameters:
+                if self.cached_activations is None:
+                    self.cached_activations = []
+                self.cached_activations.append(cached_activation)
+            else:
+                self.cached_activations = cached_activation
             self.cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
@@ -39,15 +38,9 @@ class GradientTracker(BaseTracker):
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
             handle.remove()
-            original_dtype = output_gradient.dtype
-            target_dtype = self.module.score_args.per_sample_gradient_dtype
-            output_gradient = output_gradient.detach().to(dtype=target_dtype)
-            if self.module.gradient_scale != 1.0:
-                if original_dtype != target_dtype:
-                    output_gradient.mul_(self.module.gradient_scale)
-                else:
-                    output_gradient = output_gradient * self.module.gradient_scale
-
+            output_gradient = self._preprocess_gradient(
+                output_gradient.detach(), target_dtype=self.module.score_args.per_sample_gradient_dtype
+            )
             if isinstance(self.cached_activations, list):
                 cached_activation = self.cached_activations.pop()
             else:
@@ -57,22 +50,20 @@ class GradientTracker(BaseTracker):
                     input_activation=cached_activation.to(device=output_gradient.device),
                     output_gradient=output_gradient,
                 )
+                self.clear_all_cache()
             else:
                 summed_gradient = self.module.compute_per_sample_gradient(
                     input_activation=cached_activation.to(device=output_gradient.device),
                     output_gradient=output_gradient,
                 ).sum(dim=0, keepdim=True)
-            self.clear_all_cache()
-
             if self.module.storage[AGGREGATED_GRADIENT_NAME] is None:
                 self.module.storage[AGGREGATED_GRADIENT_NAME] = torch.zeros_like(summed_gradient, requires_grad=False)
             self.module.storage[AGGREGATED_GRADIENT_NAME].add_(summed_gradient)
 
         self.registered_hooks.append(self.module.register_forward_hook(forward_hook))
 
-    @torch.no_grad()
     def finalize_iteration(self):
-        """Clears all cached activations from memory."""
+        """Clears all cached data from memory."""
         self.clear_all_cache()
 
     def exist(self) -> bool:

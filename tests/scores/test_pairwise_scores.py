@@ -27,12 +27,12 @@ from tests.utils import (
     "test_name",
     [
         "mlp",
-        # "repeated_mlp",
-        # "conv",
-        # "bert",
-        # "roberta",
-        # "gpt",
-        # "gpt_checkpoint",
+        "repeated_mlp",
+        "conv",
+        "bert",
+        "roberta",
+        "gpt",
+        "gpt_checkpoint",
     ],
 )
 @pytest.mark.parametrize("score_dtype", [torch.float32])
@@ -96,7 +96,6 @@ def test_compute_pairwise_scores(
 
 
 @pytest.mark.parametrize("test_name", ["mlp"])
-@pytest.mark.parametrize("einsum_minimize_size", [True, False])
 @pytest.mark.parametrize("has_shared_parameters", [True, False])
 @pytest.mark.parametrize("per_sample_gradient_dtype", [torch.float32, torch.float16])
 @pytest.mark.parametrize("precondition_dtype", [torch.float32, torch.float16])
@@ -109,7 +108,6 @@ def test_compute_pairwise_scores(
 def test_compute_pairwise_scores_dtype(
     test_name: str,
     has_shared_parameters: bool,
-    einsum_minimize_size: bool,
     per_sample_gradient_dtype: torch.dtype,
     precondition_dtype: torch.dtype,
     score_dtype: torch.dtype,
@@ -145,7 +143,6 @@ def test_compute_pairwise_scores_dtype(
 
     score_args = ScoreArguments(
         damping_factor=damping_factor,
-        einsum_minimize_size=einsum_minimize_size,
         score_dtype=score_dtype,
         query_gradient_low_rank=query_gradient_low_rank,
         per_sample_gradient_dtype=per_sample_gradient_dtype,
@@ -655,9 +652,7 @@ def test_query_accumulation_steps(
 @pytest.mark.parametrize(
     "test_name",
     [
-        "mlp",
-        # "repeated_mlp",
-        # "roberta",
+        "mlp", "conv"
     ],
 )
 @pytest.mark.parametrize("query_size", [50])
@@ -745,9 +740,7 @@ def test_query_gradient_aggregation(
 @pytest.mark.parametrize(
     "test_name",
     [
-        "mlp",
-        # "conv_bn",
-        # "gpt",
+        "mlp", "conv"
     ],
 )
 @pytest.mark.parametrize("query_size", [64])

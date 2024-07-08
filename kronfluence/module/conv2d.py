@@ -159,7 +159,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
         summed_gradient = contract("bci,bco->io", output_gradient, input_activation).unsqueeze_(dim=0)
-        return summed_gradient.view((1, *summed_gradient.size()))
+        return summed_gradient
 
     def compute_per_sample_gradient(
         self,
@@ -176,14 +176,12 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
             )
         return per_sample_gradient
 
-    @torch.no_grad()
     def compute_pairwise_score(
-        self, preconditioned_gradient, input_activation: torch.Tensor, output_gradient: torch.Tensor
+        self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
         input_activation = self._flatten_input_activation(input_activation=input_activation)
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
-
         if isinstance(preconditioned_gradient, list):
             left_mat, right_mat = preconditioned_gradient
             if self.einsum_expression is None:

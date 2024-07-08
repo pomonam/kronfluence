@@ -129,7 +129,6 @@ def test_default_score_arguments() -> None:
     assert score_args.damping_factor == 1e-08
     assert score_args.amp_dtype is None
     assert score_args.offload_activations_to_cpu is False
-    assert score_args.einsum_minimize_size is False
 
     assert score_args.data_partitions == 1
     assert score_args.module_partitions == 1
@@ -146,6 +145,6 @@ def test_default_score_arguments() -> None:
     assert score_args.use_measurement_for_self_influence is False
 
     assert score_args.query_gradient_svd_dtype == torch.float32
-    assert score_args.score_dtype == torch.float32
     assert score_args.per_sample_gradient_dtype == torch.float32
     assert score_args.precondition_dtype == torch.float32
+    assert score_args.score_dtype == torch.float32

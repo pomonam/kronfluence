@@ -1,9 +1,9 @@
 from typing import Tuple
 
 import torch
-import torch.nn as nn
+from torch import nn
 
-from kronfluence.factor.config import FactorConfig
+from kronfluence.factor.config import STORAGE_TYPE, FactorConfig
 from kronfluence.module.tracker.base import BaseTracker
 from kronfluence.utils.constants import (
     PRECONDITIONED_GRADIENT_NAME,
@@ -11,14 +11,21 @@ from kronfluence.utils.constants import (
 )
 
 
-def move_storage_to_device(storage, target_device: torch.device) -> None:
-    """Moves stored factors into the target device."""
+def move_storage_to_device(storage: STORAGE_TYPE, target_device: torch.device) -> None:
+    """Moves all stored factors in the storage dictionary to the specified target device.
+
+    Args:
+        storage (STORAGE_TYPE):
+            A dictionary containing stored factors.
+        target_device (torch.device):
+            The target device to move the factors to.
+    """
     for name, factor in storage.items():
         if factor is not None:
             if isinstance(factor, list):
                 for i in range(len(storage[name])):
                     storage[name][i] = factor[i].to(device=target_device)
-            else:
+            if isinstance(factor, torch.Tensor):
                 storage[name] = factor.to(device=target_device)
 
 
@@ -56,23 +63,22 @@ class SelfScoreTracker(BaseTracker):
     def register_hooks(self) -> None:
         """Sets up hooks to compute self-influence scores."""
 
+        @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
-            with torch.no_grad():
-                cached_activation = inputs[0].detach()
-                device = "cpu" if self.module.score_args.offload_activations_to_cpu else cached_activation.device
-                cached_activation = cached_activation.to(
-                    device=device,
-                    dtype=self.module.score_args.per_sample_gradient_dtype,
-                    copy=True,
-                )
-                if self.module.factor_args.has_shared_parameters:
-                    if self.cached_activations is None:
-                        self.cached_activations = []
-                    self.cached_activations.append(cached_activation)
-                else:
-                    self.cached_activations = cached_activation
-
+            cached_activation = inputs[0].detach()
+            device = "cpu" if self.module.score_args.offload_activations_to_cpu else cached_activation.device
+            cached_activation = cached_activation.to(
+                device=device,
+                dtype=self.module.score_args.per_sample_gradient_dtype,
+                copy=True,
+            )
+            if self.module.factor_args.has_shared_parameters:
+                if self.cached_activations is None:
+                    self.cached_activations = []
+                self.cached_activations.append(cached_activation)
+            else:
+                self.cached_activations = cached_activation
             self.cached_hooks.append(
                 outputs.register_hook(
                     shared_backward_hook if self.module.factor_args.has_shared_parameters else backward_hook
@@ -85,33 +91,24 @@ class SelfScoreTracker(BaseTracker):
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
             handle.remove()
-            original_dtype = output_gradient.dtype
-            target_dtype = self.module.score_args.per_sample_gradient_dtype
-            output_gradient = output_gradient.detach().to(dtype=target_dtype)
-            if self.module.gradient_scale != 1.0:
-                if original_dtype != target_dtype:
-                    output_gradient.mul_(self.module.gradient_scale)
-                else:
-                    output_gradient = output_gradient * self.module.gradient_scale
+            output_gradient = self._preprocess_gradient(
+                output_gradient.detach(), target_dtype=self.module.score_args.per_sample_gradient_dtype
+            )
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=self.cached_activations.to(device=output_gradient.device),
                 output_gradient=output_gradient,
             ).to(dtype=self.module.score_args.precondition_dtype)
             self.clear_all_cache()
+            del output_gradient
             self._compute_self_score(per_sample_gradient=per_sample_gradient)
 
         @torch.no_grad()
         def shared_backward_hook(output_gradient: torch.Tensor) -> None:
             handle = self.cached_hooks.pop()
             handle.remove()
-            original_dtype = output_gradient.dtype
-            target_dtype = self.module.score_args.per_sample_gradient_dtype
-            output_gradient = output_gradient.detach().to(dtype=target_dtype)
-            if self.module.gradient_scale != 1.0:
-                if original_dtype != target_dtype:
-                    output_gradient.mul_(self.module.gradient_scale)
-                else:
-                    output_gradient = output_gradient * self.module.gradient_scale
+            output_gradient = self._preprocess_gradient(
+                output_gradient.detach(), target_dtype=self.module.score_args.per_sample_gradient_dtype
+            )
             cached_activation = self.cached_activations.pop()
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=cached_activation.to(device=output_gradient.device),
@@ -144,6 +141,8 @@ class SelfScoreTracker(BaseTracker):
     def release_memory(self) -> None:
         """Releases self-influence scores from memory."""
         self.clear_all_cache()
+        if self.storage_at_device:
+            move_storage_to_device(storage=self.module.storage, target_device=torch.device("cpu"))
         self.storage_at_device = False
         del self.module.storage[SELF_SCORE_VECTOR_NAME]
         self.module.storage[SELF_SCORE_VECTOR_NAME] = None
@@ -169,24 +168,24 @@ class SelfScoreWithMeasurementTracker(BaseTracker):
             self.module.storage[SELF_SCORE_VECTOR_NAME].add_(scores)
 
     def register_hooks(self) -> None:
-        """Sets up hooks to compute pairwise influence scores."""
+        """Sets up hooks to compute self-influence scores with measurement."""
 
+        @torch.no_grad()
         def forward_hook(module: nn.Module, inputs: Tuple[torch.Tensor], outputs: torch.Tensor) -> None:
             del module
-            with torch.no_grad():
-                cached_activation = inputs[0].detach()
-                device = "cpu" if self.module.score_args.offload_activations_to_cpu else cached_activation.device
-                cached_activation = cached_activation.to(
-                    device=device,
-                    dtype=self.module.score_args.score_dtype,
-                    copy=True,
-                )
-                if self.module.factor_args.has_shared_parameters:
-                    if self.cached_activations is None:
-                        self.cached_activations = []
-                    self.cached_activations.append(cached_activation)
-                else:
-                    self.cached_activations = cached_activation
+            cached_activation = inputs[0].detach()
+            device = "cpu" if self.module.score_args.offload_activations_to_cpu else cached_activation.device
+            cached_activation = cached_activation.to(
+                device=device,
+                dtype=self.module.score_args.score_dtype,
+                copy=True,
+            )
+            if self.module.factor_args.has_shared_parameters:
+                if self.cached_activations is None:
+                    self.cached_activations = []
+                self.cached_activations.append(cached_activation)
+            else:
+                self.cached_activations = cached_activation
             self.cached_hooks.append(outputs.register_hook(backward_hook))
 
         @torch.no_grad()
@@ -200,22 +199,16 @@ class SelfScoreWithMeasurementTracker(BaseTracker):
                     target_device=output_gradient.device,
                 )
                 self.storage_at_device = True
+
             handle = self.cached_hooks.pop()
             handle.remove()
-            original_dtype = output_gradient.dtype
-            target_dtype = self.module.score_args.score_dtype
-            output_gradient = output_gradient.detach().to(dtype=target_dtype)
-            if self.module.gradient_scale != 1.0:
-                if original_dtype != target_dtype:
-                    output_gradient.mul_(self.module.gradient_scale)
-                else:
-                    output_gradient = output_gradient * self.module.gradient_scale
-
+            output_gradient = self._preprocess_gradient(
+                output_gradient.detach(), target_dtype=self.module.score_args.score_dtype
+            )
             if isinstance(self.cached_activations, list):
                 cached_activation = self.cached_activations.pop()
             else:
                 cached_activation = self.cached_activations
-
             if self.module.per_sample_gradient_process_fnc is None:
                 scores = self.module.compute_self_measurement_score(
                     preconditioned_gradient=self.module.storage[PRECONDITIONED_GRADIENT_NAME],
@@ -233,14 +226,13 @@ class SelfScoreWithMeasurementTracker(BaseTracker):
                     input_activation=cached_activation.to(device=output_gradient.device),
                     output_gradient=output_gradient,
                 )
-                self.clear_all_cache()
+                del cached_activation, output_gradient
                 self._compute_self_measurement_score_with_gradient(per_sample_gradient=per_sample_gradient)
 
         self.registered_hooks.append(self.module.register_forward_hook(forward_hook))
 
-    @torch.no_grad()
     def finalize_iteration(self) -> None:
-        """Removes all cached activations from memory."""
+        """Clears all cached data from memory."""
         self.clear_all_cache()
 
     def exist(self) -> bool:
@@ -254,6 +246,8 @@ class SelfScoreWithMeasurementTracker(BaseTracker):
     def release_memory(self) -> None:
         """Releases self-influence scores from memory."""
         self.clear_all_cache()
+        if self.storage_at_device:
+            move_storage_to_device(storage=self.module.storage, target_device=torch.device("cpu"))
         self.storage_at_device = False
         del self.module.storage[SELF_SCORE_VECTOR_NAME]
         self.module.storage[SELF_SCORE_VECTOR_NAME] = None

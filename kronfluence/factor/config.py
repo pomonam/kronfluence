@@ -201,7 +201,7 @@ class Diagonal(FactorConfig, factor_strategy=FactorStrategy.DIAGONAL):
         if damping_factor is None:
             damping_factor = 0.1 * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
-        storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu")
+        storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
 
     def precondition_gradient(
         self,
@@ -249,10 +249,10 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
     def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
         storage[ACTIVATION_EIGENVECTORS_NAME] = storage[ACTIVATION_EIGENVECTORS_NAME].to(
             dtype=score_args.precondition_dtype
-        )
+        ).contiguous()
         storage[GRADIENT_EIGENVECTORS_NAME] = storage[GRADIENT_EIGENVECTORS_NAME].to(
             dtype=score_args.precondition_dtype
-        )
+        ).contiguous()
         activation_eigenvalues = storage[ACTIVATION_EIGENVALUES_NAME].to(device=device)
         gradient_eigenvalues = storage[GRADIENT_EIGENVALUES_NAME].to(device=device)
         lambda_matrix = torch.kron(activation_eigenvalues.unsqueeze(0), gradient_eigenvalues.unsqueeze(-1)).unsqueeze(0)
@@ -260,7 +260,7 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
         if damping_factor is None:
             damping_factor = 0.1 * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
-        storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu")
+        storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
         storage[ACTIVATION_EIGENVALUES_NAME] = None
         storage[GRADIENT_EIGENVALUES_NAME] = None
 
@@ -316,20 +316,19 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
     def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
         storage[ACTIVATION_EIGENVECTORS_NAME] = storage[ACTIVATION_EIGENVECTORS_NAME].to(
             dtype=score_args.precondition_dtype
-        )
+        ).contiguous()
         storage[GRADIENT_EIGENVECTORS_NAME] = storage[GRADIENT_EIGENVECTORS_NAME].to(
             dtype=score_args.precondition_dtype
-        )
+        ).contiguous()
         storage[ACTIVATION_EIGENVALUES_NAME] = None
         storage[GRADIENT_EIGENVALUES_NAME] = None
-
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=device)
         lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED].to(device=device))
         damping_factor = score_args.damping_factor
         if damping_factor is None:
             damping_factor = 0.1 * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
-        storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu")
+        storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
 
     @torch.no_grad()
     def precondition_gradient(

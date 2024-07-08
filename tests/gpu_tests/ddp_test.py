@@ -19,7 +19,7 @@ from kronfluence.utils.constants import (
 from kronfluence.utils.model import apply_ddp
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
-from tests.utils import check_tensor_dict_equivalence, ATOL, RTOL
+from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence
 
 LOCAL_RANK = int(os.environ["LOCAL_RANK"])
 WORLD_RANK = int(os.environ["RANK"])

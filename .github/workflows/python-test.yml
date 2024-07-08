@@ -32,5 +32,6 @@ jobs:
         pytest -vx tests/factors/test_lambdas.py
         pytest -vx tests/modules/test_modules.py
         pytest -vx tests/modules/test_per_sample_gradients.py
+        pytest -vx tests/modules/test_matmul.py
         pytest -vx tests/scores/test_pairwise_scores.py
         pytest -vx tests/scores/test_self_scores.py

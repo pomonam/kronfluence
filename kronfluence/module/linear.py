@@ -77,7 +77,7 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
         return per_sample_gradient
 
     def compute_pairwise_score(
-        self, preconditioned_gradient, input_activation: torch.Tensor, output_gradient: torch.Tensor
+        self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
         input_activation = self._flatten_input_activation(input_activation=input_activation)
         if isinstance(preconditioned_gradient, list):

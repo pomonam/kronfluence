@@ -16,7 +16,7 @@ from kronfluence.utils.constants import (
 )
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
-from tests.utils import check_tensor_dict_equivalence, ATOL, RTOL
+from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence
 
 logging.basicConfig(level=logging.DEBUG)
 OLD_FACTOR_NAME = "single_gpu"

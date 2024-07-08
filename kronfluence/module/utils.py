@@ -13,8 +13,18 @@ from kronfluence.utils.exceptions import IllegalTaskConfigurationError
 
 
 def _get_submodules(model: nn.Module, key: str) -> Tuple[nn.Module, str]:
-    """Returns the parent module and its name given the name of the current module."""
-    # The code is modified from: https://github.com/huggingface/peft/blob/main/src/peft/utils/other.py.
+    """Retrieves the parent module and its name given the name of the current module.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model to inspect.
+        key (str):
+            The full name of the current module.
+
+    Returns:
+        Tuple[nn.Module, str]:
+            The parent module and the name of the target module.
+    """
     parent = model.get_submodule(".".join(key.split(".")[:-1]))
     target_name = key.split(".")[-1]
     return parent, target_name
@@ -34,13 +44,13 @@ def wrap_tracked_modules(
         task (Task):
             The specific task associated with the model.
         factor_args (FactorArguments, optional):
-            Arguments related to computing the influence factors.
+            Arguments related to computing influence factors.
         score_args (ScoreArguments, optional):
-            Arguments related to computing the influence scores.
+            Arguments related to computing influence scores.
 
     Returns:
         nn.Module:
-            The wrapped Pytorch model with `TrackedModule` installed.
+            The processed model with `TrackedModule` installed.
     """
     if isinstance(model, (DP, DDP, FSDP)):
         raise ValueError(
@@ -48,7 +58,6 @@ def wrap_tracked_modules(
             "or FullyShardedDataParallel. Call `prepare_model` before wrapping the model."
         )
 
-    tracked_module_count = 0
     tracked_module_names = task.get_influence_tracked_modules() if task is not None else None
     tracked_module_exists_dict = None
     if tracked_module_names is not None:
@@ -77,7 +86,6 @@ def wrap_tracked_modules(
             )
             parent, target_name = _get_submodules(model=model, key=module_name)
             setattr(parent, target_name, tracked_module)
-            tracked_module_count += 1
 
             if tracked_module_exists_dict is not None:
                 tracked_module_exists_dict[module_name] = True
@@ -88,22 +96,34 @@ def wrap_tracked_modules(
         )
         raise IllegalTaskConfigurationError(error_msg)
 
-    if tracked_module_count == 0:
-        supported_modules_names = [module.__name__ for module in TrackedModule.SUPPORTED_MODULES]
-        error_msg = (
-            f"Kronfluence currently supports following PyTorch modules: `{supported_modules_names}`. "
-            f"However, these modules were not found in the provided model. If you want to analyze "
-            "custom layers, consider rewriting your model to use the supported modules, "
-            "or define your own custom module by subclassing `TrackedModule`."
+    if not any(isinstance(module, TrackedModule) for module in model.modules()):
+        supported_modules = ", ".join(module.__name__ for module in TrackedModule.SUPPORTED_MODULES)
+        raise IllegalTaskConfigurationError(
+            f"No supported modules found. Kronfluence supports: {supported_modules}. "
+            "Consider rewriting your model or subclassing `TrackedModule` for custom layers.\n"
+            f"Current Model:\n{model}"
         )
-        error_msg += f"\nCurrent Model:\n{model}"
-        raise IllegalTaskConfigurationError(error_msg)
-
     return model
 
 
 def make_modules_partition(total_module_names: List[str], partition_size: int) -> List[List[str]]:
-    """Divides a list of module names into smaller partitions of a specified size."""
+    """Divides a list of module names into smaller partitions of a specified size.
+
+    Args:
+        total_module_names (List[str]):
+            The list of all module names.
+        partition_size (int):
+            The number of partitions to create.
+
+    Returns:
+        List[List[str]]:
+            A list of partitioned module names.
+
+    Raises:
+        ValueError: If `len(total_module_names)` is less than `partition_size`.
+    """
+    if len(total_module_names) < partition_size:
+        raise ValueError("The total modules must be equal to or greater than the partition size.")
     # See https://stackoverflow.com/questions/2130016/splitting-a-list-into-n-parts-of-approximately-equal-length.
     div, mod = divmod(len(total_module_names), partition_size)
     return list(
@@ -117,20 +137,17 @@ def set_mode(
     tracked_module_names: List[str] = None,
     release_memory: bool = False,
 ) -> None:
-    """Sets the module mode of all `TrackedModule` instances within a model. For example, to compute
-    and update covariance matrices, the module mode needs to be set to `ModuleMode.COVARIANCE`. If
-    `tracked_module_names` are provided, the module mode is only set for modules listed in `tracked_module_names`.
+    """Sets the module mode of specified `TrackedModule` instances within a model.
 
     Args:
         model (nn.Module):
-            The PyTorch model which contains `TrackedModule`.
+            The PyTorch model containing `TrackedModule` instances.
         mode (ModuleMode):
             The new mode to set for `TrackedModule`.
         tracked_module_names (List[str], optional):
-            The list of names for `TrackedModule` to set the new mode. If not provided, the new mode is
-            set for all available `TrackedModule` within the model.
+             Names of modules to update. If `None`, updates all.
         release_memory (bool, optional):
-            If `False`, existing factors are kept in memory.
+            If `True`, releases memory of existing factors.
     """
     for module in model.modules():
         if isinstance(module, TrackedModule):
@@ -140,26 +157,45 @@ def set_mode(
 
 
 def update_factor_args(model: nn.Module, factor_args: FactorArguments) -> None:
-    """Updates the factor arguments for all `TrackedModule` instances within a model."""
+    """Updates the factor arguments for all `TrackedModule` instances within a model.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        factor_args (FactorArguments):
+            The new factor arguments to set.
+    """
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.update_factor_args(factor_args=factor_args)
 
 
 def update_score_args(model: nn.Module, score_args: ScoreArguments) -> None:
-    """Updates the score arguments for all `TrackedModule` instances within a model."""
+    """Updates the score arguments for all `TrackedModule` instances within a model.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        score_args (ScoreArguments):
+            The new score arguments to set.
+    """
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.update_score_args(score_args=score_args)
 
 
 def get_tracked_module_names(model: nn.Module) -> List[str]:
-    """Returns the names of `TrackedModule` instances within a model."""
-    tracked_modules = []
-    for module in model.modules():
-        if isinstance(module, TrackedModule):
-            tracked_modules.append(module.name)
-    return tracked_modules
+    """Returns the names of `TrackedModule` instances within a model.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model to inspect.
+
+    Returns:
+        List[str]:
+            A list of names of `TrackedModule` instances.
+    """
+    return [module.name for module in model.modules() if isinstance(module, TrackedModule)]
 
 
 def load_factors(
@@ -168,8 +204,22 @@ def load_factors(
     tracked_module_names: List[str] = None,
     cpu: bool = True,
 ) -> Dict[str, torch.Tensor]:
-    """Loads factors with the given name from all `TrackedModule` instances within a model (or all modules listed
-    in `tracked_module_names` if not `None`)."""
+    """Loads factors with the given name from specified `TrackedModule` instances.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        factor_name (str):
+            The name of the factor to load.
+        tracked_module_names (Optional[List[str]]):
+            Names of modules to load from. If `None`, loads from all.
+        cpu (bool):
+            If `True`, moves factors to CPU and releases GPU memory.
+
+    Returns:
+        Dict[str, torch.Tensor]:
+            A dictionary of loaded factors, keyed by module name.
+    """
     loaded_factors = {}
     for module in model.modules():
         if isinstance(module, TrackedModule):
@@ -186,7 +236,18 @@ def load_factors(
 
 
 def set_factors(model: nn.Module, factor_name: str, factors: Dict[str, torch.Tensor], clone: bool = False) -> None:
-    """Sets new factor for all `TrackedModule` instances within a model."""
+    """Sets new factors for all `TrackedModule` instances within a model.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        factor_name (str):
+            The name of the factor to set.
+        factors (Dict[str, torch.Tensor]):
+            A dictionary of factors to set, keyed by module name.
+        clone (bool):
+            If `True`, clones the factors before setting.
+    """
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.set_factor(
@@ -198,7 +259,18 @@ def set_attention_mask(
     model: nn.Module,
     attention_mask: Optional[Union[Dict[str, torch.Tensor], torch.Tensor]] = None,
 ) -> None:
-    """Sets the attention mask for all `TrackedModule` instances within a model."""
+    """Sets the attention mask for all `TrackedModule` instances within a model.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        attention_mask (Optional[Union[Dict[str, torch.Tensor], torch.Tensor]]):
+            The attention mask to set. Can be a dictionary (keyed by module name) or a single tensor.
+
+    Raises:
+        RuntimeError:
+            If an invalid attention mask is provided.
+    """
     for module in model.modules():
         if isinstance(module, TrackedModule):
             if isinstance(attention_mask, dict):
@@ -218,164 +290,124 @@ def set_gradient_scale(
     model: nn.Module,
     gradient_scale: float = 1.0,
 ) -> None:
-    """Sets the gradient scale for all `TrackedModule` instances within a model."""
+    """Sets the gradient scale for all `TrackedModule` instances within a model.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        gradient_scale (float):
+            The gradient scale to set.
+    """
     for module in model.modules():
         if isinstance(module, TrackedModule):
             module.set_gradient_scale(scale=gradient_scale)
 
 
 def prepare_modules(model: nn.Module, tracked_module_names: List[str], device: torch.device) -> None:
+    """Prepares specified `TrackedModule` instances for score computation.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        tracked_module_names (List[str]):
+            Names of modules to prepare.
+        device (torch.device):
+            The device to prepare the modules for.
+    """
     for module in model.modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
             module.prepare_storage(device=device)
 
 
 def synchronize_modules(model: nn.Module, tracked_module_names: List[str], num_processes: int = 1) -> None:
+    """Synchronizes specified `TrackedModule` instances across processes.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        tracked_module_names (List[str]):
+            Names of modules to synchronize.
+        num_processes (int):
+            The number of processes to synchronize across.
+    """
     for module in model.modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
             module.synchronize(num_processes=num_processes)
 
 
 def truncate(model: nn.Module, tracked_module_names: List[str], keep_size: int) -> None:
+    """Truncates the data in specified `TrackedModule` instances.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        tracked_module_names (List[str]):
+            Names of modules to truncate.
+        keep_size (int):
+            The number of elements to keep after truncation.
+    """
     for module in model.modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
             module.truncate(keep_size=keep_size)
 
 
 def exist_for_all_modules(model: nn.Module, tracked_module_names: List[str]) -> bool:
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            if not module.exist():
-                return False
-    return True
+    """Checks if all specified `TrackedModule` instances have existing factor.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        tracked_module_names (List[str]):
+            Names of modules to check.
+
+    Returns:
+        bool:
+            `True` if all specified modules have existing factor, `False` otherwise.
+    """
+    return all(
+        module.exist()
+        for module in model.modules()
+        if isinstance(module, TrackedModule) and module.name in tracked_module_names
+    )
 
 
 def accumulate_iterations(model: nn.Module, tracked_module_names: List[str]) -> None:
+    """Accumulates iterations for specified `TrackedModule` instances.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        tracked_module_names (List[str]):
+            Names of modules to accumulate iterations for.
+    """
     for module in model.modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
             module.accumulate_iterations()
 
 
 def finalize_iteration(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Updates Lambda matrices for all modules listed in `tracked_module_names`."""
-    for name, module in model.named_modules():
+    """Finalizes the current iteration for specified `TrackedModule` instances.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        tracked_module_names (List[str]):
+            Names of modules to finalize iteration for.
+    """
+    for module in model.modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
             module.finalize_iteration()
 
 
 def finalize_all_iterations(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Updates Lambda matrices for all modules listed in `tracked_module_names`."""
-    for name, module in model.named_modules():
+    """Finalizes all iterations for specified `TrackedModule` instances.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model containing `TrackedModule` instances.
+        tracked_module_names (List[str]):
+            Names of modules to finalize all iterations for.
+    """
+    for module in model.modules():
         if isinstance(module, TrackedModule) and module.name in tracked_module_names:
             module.finalize_all_iterations()
-
-
-def finalize_preconditioned_gradient(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Computes preconditioned gradient for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.finalize_preconditioned_gradient()
-
-
-def accumulate_preconditioned_gradient(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Accumulates preconditioned gradient for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.accumulate_preconditioned_gradient()
-
-
-def release_preconditioned_gradient(model: nn.Module) -> None:
-    """Releases preconditioned gradient of all `TrackedModule` instances within a model."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule):
-            module.release_preconditioned_gradient()
-
-
-def truncate_preconditioned_gradient(model: nn.Module, tracked_module_names: List[str], keep_size: int) -> None:
-    """Truncates preconditioned gradient for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.truncate_preconditioned_gradient(keep_size=keep_size)
-
-
-def synchronize_preconditioned_gradient(model: nn.Module, tracked_module_names: List[str], num_processes: int) -> None:
-    """Synchronizes preconditioned gradient for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.synchronize_preconditioned_gradient(num_processes=num_processes)
-
-
-def release_scores(model: nn.Module) -> None:
-    """Releases scores of all `TrackedModule` instances within a model."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule):
-            module.release_scores()
-
-
-def finalize_pairwise_scores(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Computes pairwise influence scores for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.finalize_pairwise_score()
-
-
-def finalize_self_scores(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Computes self-influence scores for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.finalize_self_score()
-
-
-def finalize_self_measurement_scores(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Computes self-influence scores with measurement for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.finalize_self_measurement_score()
-
-
-def finalize_gradient_aggregation(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Computes aggregated gradient for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.finalize_gradient_aggregation()
-
-
-def synchronize_aggregated_gradient(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Synchronizes aggregated gradient for all modules listed in `tracked_module_names`."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.synchronize_aggregated_gradient()
-
-
-def release_aggregated_gradient(model: nn.Module) -> None:
-    """Releases aggregated gradient of all `TrackedModule` instances within a model."""
-    for module in model.modules():
-        if isinstance(module, TrackedModule):
-            module.release_aggregated_gradient()
-
-
-def aggregated_gradient_exist(model: nn.Module, tracked_module_names: List[str]) -> bool:
-    """Checks if the aggregated gradient is computed for all modules listed in `tracked_module_names`."""
-    exists = True
-    for name, module in model.named_modules():
-        if (
-            isinstance(module, TrackedModule)
-            and module.name in tracked_module_names
-            and module.aggregated_gradient is None
-        ):
-            exists = False
-    return exists
-
-
-def compute_preconditioned_gradient_from_aggregation(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Computes preconditioned aggregated gradient for all modules listed in `tracked_module_names`"""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.compute_preconditioned_gradient_from_aggregation()
-
-
-def compute_pairwise_scores_from_aggregation(model: nn.Module, tracked_module_names: List[str]) -> None:
-    """Computes preconditioned aggregated gradient for all modules listed in `tracked_module_names`"""
-    for module in model.modules():
-        if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-            module.compute_pairwise_scores_from_aggregation()

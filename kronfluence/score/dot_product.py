@@ -95,31 +95,32 @@ def compute_dot_products_with_loader(
             if factor_args.has_shared_parameters:
                 finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
-            if score_args.compute_per_module_scores:
-                for module in cached_module_lst:
-                    score_chunks[module.name].append(
-                        module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME).clone().cpu()
-                    )
-            else:
-                pairwise_scores = None
-                for module in cached_module_lst:
-                    if pairwise_scores is None:
-                        pairwise_scores = torch.zeros_like(
-                            module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME), requires_grad=False
+            with torch.no_grad():
+                if score_args.compute_per_module_scores:
+                    for module in cached_module_lst:
+                        score_chunks[module.name].append(
+                            module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME).to(device="cpu", copy=True)
                         )
-                    try:
-                        pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
-                    except RuntimeError:
-                        if score_args.compute_per_token_scores:
-                            raise RuntimeError(DIMENSION_NOT_MATCH_ERROR_MSG)
-                        raise
-                score_chunks[ALL_MODULE_NAME].append(pairwise_scores.cpu())
-                accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
+                else:
+                    pairwise_scores = None
+                    for module in cached_module_lst:
+                        if pairwise_scores is None:
+                            pairwise_scores = torch.zeros_like(
+                                module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME), requires_grad=False
+                            )
+                        try:
+                            pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
+                        except RuntimeError as exc:
+                            if score_args.compute_per_token_scores:
+                                raise RuntimeError(DIMENSION_NOT_MATCH_ERROR_MSG) from exc
+                            raise
+                    score_chunks[ALL_MODULE_NAME].append(pairwise_scores.cpu())
+                    accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 
             if state.use_distributed and total_steps % DISTRIBUTED_SYNC_INTERVAL == 0:
                 state.wait_for_everyone()
 
-            del batch, loss
+            del loss
             total_steps += 1
             pbar.update(1)
 
@@ -141,9 +142,11 @@ def compute_dot_products_with_loader(
             gather_list = None
             if state.is_main_process:
                 gather_list = [torch.zeros_like(total_scores[module_name]) for _ in range(state.num_processes)]
-            torch.distributed.gather(total_scores[module_name], gather_list)
+            dist.gather(total_scores[module_name], gather_list)
             if state.is_main_process:
                 total_scores[module_name] = torch.cat(gather_list, dim=1)[:, :dataset_size].cpu()
+            else:
+                total_scores[module_name] = total_scores[module_name].cpu()
     state.wait_for_everyone()
 
     return total_scores
@@ -203,7 +206,7 @@ def compute_aggregated_dot_products_with_loader(
                 if factor_args.has_shared_parameters:
                     finalize_iteration(model=model, tracked_module_names=tracked_module_names)
 
-                del batch, loss
+                del loss
                 pbar.update(1)
 
         if state.use_distributed:
@@ -217,26 +220,29 @@ def compute_aggregated_dot_products_with_loader(
     )
     finalize_all_iterations(model=model, tracked_module_names=tracked_module_names)
 
-    if score_args.compute_per_module_scores:
-        for module in model.modules():
-            if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                scores[module.name] = module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME).clone().cpu()
-    else:
-        pairwise_scores = None
-        for module in model.modules():
-            if isinstance(module, TrackedModule) and module.name in tracked_module_names:
-                if pairwise_scores is None:
-                    pairwise_scores = torch.zeros_like(
-                        module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME), requires_grad=False
+    with torch.no_grad():
+        if score_args.compute_per_module_scores:
+            for module in model.modules():
+                if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+                    scores[module.name] = module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME).to(
+                        device="cpu", copy=True
                     )
-                try:
-                    pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
-                except RuntimeError:
-                    if score_args.compute_per_token_scores:
-                        raise RuntimeError(DIMENSION_NOT_MATCH_ERROR_MSG)
-                    raise
-        scores[ALL_MODULE_NAME] = pairwise_scores.cpu()
-    accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
+        else:
+            pairwise_scores = None
+            for module in model.modules():
+                if isinstance(module, TrackedModule) and module.name in tracked_module_names:
+                    if pairwise_scores is None:
+                        pairwise_scores = torch.zeros_like(
+                            module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME), requires_grad=False
+                        )
+                    try:
+                        pairwise_scores.add_(module.get_factor(factor_name=PAIRWISE_SCORE_MATRIX_NAME))
+                    except RuntimeError as exc:
+                        if score_args.compute_per_token_scores:
+                            raise RuntimeError(DIMENSION_NOT_MATCH_ERROR_MSG) from exc
+                        raise
+            scores[ALL_MODULE_NAME] = pairwise_scores.cpu()
+        accumulate_iterations(model=model, tracked_module_names=tracked_module_names)
 
     model.zero_grad(set_to_none=True)
     set_mode(
