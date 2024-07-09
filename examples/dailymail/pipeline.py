@@ -45,7 +45,7 @@ def get_dailymail_dataset(
     split: str,
     indices: List[int] = None,
 ) -> Dataset:
-    raw_datasets = load_dataset("cnn_dailymail", "3.0.0", data_dir="data/")
+    raw_datasets = load_dataset("cnn_dailymail", "3.0.0")
 
     tokenizer = get_tokenizer()
     column_names = raw_datasets["train"].column_names
@@ -92,7 +92,7 @@ def get_dailymail_dataset(
             batched=True,
             num_proc=None,
             remove_columns=column_names,
-            # load_from_cache_file=True,
+            load_from_cache_file=True,
             desc="Running tokenizer on dataset.",
         )
         ds = eval_dataset

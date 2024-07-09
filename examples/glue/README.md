@@ -69,42 +69,32 @@ python analyze.py --dataset_name sst2 \
     --use_half_precision
 ```
 
-This reduces computation time to about 30 minutes on an A100 (80GB) GPU.
+This reduces computation time to about 20 minutes on an A100 (80GB) GPU.
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  1832.0               |  100 %                |
+|  Total                        |  -                    |  11                   |  1222.4               |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  1143.2               |  1                    |  1143.2               |  62.4                 |
-|  Fit Lambda                   |  555.97               |  1                    |  555.97               |  30.348               |
-|  Fit Covariance               |  99.467               |  1                    |  99.467               |  5.4294               |
-|  Perform Eigendecomposition   |  18.566               |  1                    |  18.566               |  1.0134               |
-|  Save Covariance              |  5.4877               |  1                    |  5.4877               |  0.29954              |
-|  Save Eigendecomposition      |  5.3713               |  1                    |  5.3713               |  0.29319              |
-|  Save Lambda                  |  1.5586               |  1                    |  1.5586               |  0.085078             |
-|  Save Pairwise Score          |  1.0651               |  1                    |  1.0651               |  0.05814              |
-|  Load Eigendecomposition      |  0.54052              |  1                    |  0.54052              |  0.029504             |
-|  Load Covariance              |  0.53759              |  1                    |  0.53759              |  0.029345             |
-|  Load All Factors             |  0.26048              |  1                    |  0.26048              |  0.014218             |
+|  Compute Pairwise Score       |  582.08               |  1                    |  582.08               |  47.617               |
+|  Fit Lambda                   |  543.55               |  1                    |  543.55               |  44.465               |
+|  Fit Covariance               |  83.877               |  1                    |  83.877               |  6.8616               |
+|  Perform Eigendecomposition   |  9.4054               |  1                    |  9.4054               |  0.76942              |
+|  Save Eigendecomposition      |  1.516                |  1                    |  1.516                |  0.12401              |
+|  Save Covariance              |  1.434                |  1                    |  1.434                |  0.11731              |
+|  Save Lambda                  |  0.28022              |  1                    |  0.28022              |  0.022924             |
+|  Save Pairwise Score          |  0.24123              |  1                    |  0.24123              |  0.019734             |
+|  Load All Factors             |  0.01241              |  1                    |  0.01241              |  0.0010152            |
+|  Load Covariance              |  0.0080553            |  1                    |  0.0080553            |  0.00065897           |
+|  Load Eigendecomposition      |  0.0077278            |  1                    |  0.0077278            |  0.00063218           |
 ----------------------------------------------------------------------------------------------------------------------------------
-```
-
-```bash
-python analyze.py --dataset_name sst2 \
-    --query_batch_size 175 \
-    --train_batch_size 128 \
-    --checkpoint_dir ./checkpoints \
-    --factor_strategy ekfac \
-    --use_half_precision \
-    --query_gradient_rank 32
 ```
 
 ## Counterfactual Evaluation
 
 Let's evaluate the impact of removing top positively influential training examples on query misclassification. 
-First, compute pairwise influence scores for the `RTE` dataset (the below commands used a single A6000 GPU):
+First, compute pairwise influence scores for the `RTE` dataset (the below commands used a single A100 GPU):
 
 ```bash
 python train.py --dataset_name rte \

@@ -107,7 +107,7 @@ def get_swag_dataset(
         remove_columns=raw_datasets["train"].column_names,
     )
 
-    if split == "train" or split == "eval_train":
+    if split in ["train", "eval_train"]:
         dataset = processed_datasets["train"]
         dataset = dataset.select(list(range(73_536)))
     else:

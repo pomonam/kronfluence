@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict
 
 import torch
 import torch.nn.functional as F
@@ -126,7 +126,7 @@ class TextClassificationTask(Task):
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
 
-    def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
+    def get_attention_mask(self, batch: BATCH_TYPE) -> torch.Tensor:
         return batch["attention_mask"]
 
 

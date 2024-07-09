@@ -67,7 +67,7 @@ def parse_args():
     parser.add_argument(
         "--factor_batch_size",
         type=int,
-        default=2,
+        default=None,
         help="Batch size for computing influence factors.",
     )
     parser.add_argument(
@@ -239,8 +239,7 @@ def main():
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        # per_device_batch_size=args.factor_batch_size,
-        per_device_batch_size=None,
+        per_device_batch_size=args.factor_batch_size,
         factor_args=factor_args,
         overwrite_output_dir=False,
     )
@@ -253,8 +252,8 @@ def main():
         scores_name += "_half"
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     if rank is not None:
-        score_args.query_gradient_rank = rank
-        score_args.num_query_gradient_accumulations = 10
+        score_args.query_gradient_low_rank = rank
+        score_args.query_gradient_accumulation_steps = 10
         scores_name += f"_qlr{rank}"
     if args.use_ddp:
         scores_name += "_ddp"
