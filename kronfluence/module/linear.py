@@ -2,7 +2,7 @@ from typing import Optional, Tuple, Union
 
 import torch
 from einops import rearrange
-from opt_einsum import DynamicProgramming, contract, contract_expression
+from opt_einsum import DynamicProgramming, contract_expression
 from torch import nn
 
 from kronfluence.module.tracked_module import TrackedModule
@@ -79,8 +79,8 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
     def compute_pairwise_score(
         self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
-        input_activation = self._flatten_input_activation(input_activation=input_activation)
         if isinstance(preconditioned_gradient, list):
+            input_activation = self._flatten_input_activation(input_activation=input_activation)
             left_mat, right_mat = preconditioned_gradient
             if self.einsum_expression is None:
                 if self.score_args.compute_per_token_scores and len(input_activation.shape) == 3:
@@ -96,24 +96,15 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                     optimize=DynamicProgramming(search_outer=True, minimize="size"),
                 )
             return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation).contiguous()
-
         if self.score_args.compute_per_token_scores and len(input_activation.shape) == 3:
+            input_activation = self._flatten_input_activation(input_activation=input_activation)
             return torch.einsum("qio,bti,bto->qbt", preconditioned_gradient, output_gradient, input_activation)
-        return torch.einsum("qio,b...i,b...o->qb", preconditioned_gradient, output_gradient, input_activation)
-        # else:
-        #     expr = "qio,b...i,b...o->qb"
-        #     minimize = "flops"
-        # self.einsum_expression = contract_expression(
-        #     expr,
-        #     preconditioned_gradient.shape,
-        #     output_gradient.shape,
-        #     input_activation.shape,
-        #     optimize=DynamicProgramming(search_outer=True, minimize=minimize),
-        # )
-        # return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
+        gradient = self.compute_per_sample_gradient(input_activation=input_activation, output_gradient=output_gradient)
+        # return torch.einsum("qio,b...i,b...o->qb", preconditioned_gradient, output_gradient, input_activation)
+        return torch.matmul(preconditioned_gradient.view(preconditioned_gradient.size(0), -1), gradient.view(gradient.size(0), -1).T)
 
     def compute_self_measurement_score(
         self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
         input_activation = self._flatten_input_activation(input_activation=input_activation)
-        return contract("bio,b...i,b...o->b", preconditioned_gradient, output_gradient, input_activation).contiguous()
+        return torch.einsum("bio,b...i,b...o->b", preconditioned_gradient, output_gradient, input_activation)
