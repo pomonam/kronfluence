@@ -82,6 +82,7 @@ def main():
     factor_args = extreme_reduce_memory_factor_arguments(strategy=args.factor_strategy,
                                                          module_partitions=2,
                                                          dtype=torch.bfloat16)
+    factor_args.covariance_max_examples=4
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
