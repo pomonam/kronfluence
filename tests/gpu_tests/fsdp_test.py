@@ -12,8 +12,9 @@ from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
 from kronfluence.utils.common.score_arguments import pytest_score_arguments
 from kronfluence.utils.constants import (
+    ALL_MODULE_NAME,
     COVARIANCE_FACTOR_NAMES,
-    LAMBDA_FACTOR_NAMES, ALL_MODULE_NAME,
+    LAMBDA_FACTOR_NAMES,
 )
 from kronfluence.utils.model import apply_fsdp
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset

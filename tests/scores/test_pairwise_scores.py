@@ -651,9 +651,7 @@ def test_query_accumulation_steps(
 
 @pytest.mark.parametrize(
     "test_name",
-    [
-        "mlp", "conv"
-    ],
+    ["mlp", "conv"],
 )
 @pytest.mark.parametrize("query_size", [50])
 @pytest.mark.parametrize("train_size", [32])
@@ -739,9 +737,7 @@ def test_query_gradient_aggregation(
 
 @pytest.mark.parametrize(
     "test_name",
-    [
-        "mlp", "conv"
-    ],
+    ["mlp", "conv"],
 )
 @pytest.mark.parametrize("query_size", [64])
 @pytest.mark.parametrize("train_size", [32])

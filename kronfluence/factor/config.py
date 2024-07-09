@@ -248,12 +248,12 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
         return False
 
     def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
-        storage[ACTIVATION_EIGENVECTORS_NAME] = storage[ACTIVATION_EIGENVECTORS_NAME].to(
-            dtype=score_args.precondition_dtype
-        ).contiguous()
-        storage[GRADIENT_EIGENVECTORS_NAME] = storage[GRADIENT_EIGENVECTORS_NAME].to(
-            dtype=score_args.precondition_dtype
-        ).contiguous()
+        storage[ACTIVATION_EIGENVECTORS_NAME] = (
+            storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=score_args.precondition_dtype).contiguous()
+        )
+        storage[GRADIENT_EIGENVECTORS_NAME] = (
+            storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=score_args.precondition_dtype).contiguous()
+        )
         activation_eigenvalues = storage[ACTIVATION_EIGENVALUES_NAME].to(device=device)
         gradient_eigenvalues = storage[GRADIENT_EIGENVALUES_NAME].to(device=device)
         lambda_matrix = torch.kron(activation_eigenvalues.unsqueeze(0), gradient_eigenvalues.unsqueeze(-1)).unsqueeze(0)
@@ -316,12 +316,12 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
         return True
 
     def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
-        storage[ACTIVATION_EIGENVECTORS_NAME] = storage[ACTIVATION_EIGENVECTORS_NAME].to(
-            dtype=score_args.precondition_dtype
-        ).contiguous()
-        storage[GRADIENT_EIGENVECTORS_NAME] = storage[GRADIENT_EIGENVECTORS_NAME].to(
-            dtype=score_args.precondition_dtype
-        ).contiguous()
+        storage[ACTIVATION_EIGENVECTORS_NAME] = (
+            storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=score_args.precondition_dtype).contiguous()
+        )
+        storage[GRADIENT_EIGENVECTORS_NAME] = (
+            storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=score_args.precondition_dtype).contiguous()
+        )
         storage[ACTIVATION_EIGENVALUES_NAME] = None
         storage[GRADIENT_EIGENVALUES_NAME] = None
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=device)

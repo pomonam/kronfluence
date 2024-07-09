@@ -1,9 +1,10 @@
+import time
+
 import opt_einsum
 import pytest
 import torch
 from accelerate.utils import set_seed
 from opt_einsum import DynamicProgramming
-import time
 
 
 def test_query_gradient_svd(
