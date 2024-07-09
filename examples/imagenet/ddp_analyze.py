@@ -106,7 +106,7 @@ def main():
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(
-        num_workers=4, pin_memory=True,
+        num_workers=4,
     )
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 

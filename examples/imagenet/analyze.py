@@ -35,6 +35,12 @@ def parse_args():
         help="Rank for the low-rank query gradient approximation.",
     )
     parser.add_argument(
+        "--factor_batch_size",
+        type=int,
+        default=512,
+        help="Batch size for computing factors.",
+    )
+    parser.add_argument(
         "--query_batch_size",
         type=int,
         default=100,
@@ -85,7 +91,7 @@ def main():
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(
-        num_workers=4, pin_memory=True,
+        num_workers=4,
     )
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
@@ -98,7 +104,7 @@ def main():
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        per_device_batch_size=None,
+        per_device_batch_size=args.factor_batch_size,
         factor_args=factor_args,
         overwrite_output_dir=False,
     )

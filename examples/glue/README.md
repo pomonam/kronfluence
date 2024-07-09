@@ -91,6 +91,16 @@ This reduces computation time to about 30 minutes on an A100 (80GB) GPU.
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
+```bash
+python analyze.py --dataset_name sst2 \
+    --query_batch_size 175 \
+    --train_batch_size 128 \
+    --checkpoint_dir ./checkpoints \
+    --factor_strategy ekfac \
+    --use_half_precision \
+    --query_gradient_rank 32
+```
+
 ## Counterfactual Evaluation
 
 Let's evaluate the impact of removing top positively influential training examples on query misclassification. 
