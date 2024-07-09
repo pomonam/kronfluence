@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument(
         "--factor_batch_size",
         type=int,
-        default=8,
+        default=4,
         help="Batch size for computing influence factors.",
     )
     parser.add_argument(

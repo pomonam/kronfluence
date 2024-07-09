@@ -12,6 +12,5 @@ torchrun --standalone --nnodes=1 --nproc-per-node=2 analyze.py --factor_batch_si
 
 
 ```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=4 fit_factors.py --factor_batch_size 8 \
-    --factor_strategy ekfac
+torchrun --standalone --nnodes=1 --nproc-per-node=4 fit_factors.py --factor_batch_size 4
 ```
