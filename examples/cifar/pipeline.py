@@ -69,7 +69,7 @@ def construct_resnet9() -> nn.Module:
         torch.nn.Linear(128, 10, bias=False),
         Mul(0.2),
     )
-    return model.to(memory_format=torch.channels_last)
+    return model
 
 
 def get_cifar10_dataset(

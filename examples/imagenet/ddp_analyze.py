@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-from typing import Tuple
 
 import torch
 
@@ -107,7 +106,7 @@ def main():
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(
-        num_workers=4,
+        num_workers=4, pin_memory=True,
     )
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
@@ -133,8 +132,8 @@ def main():
         scores_name += "_half"
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     if rank is not None:
-        score_args.query_gradient_rank = rank
-        score_args.num_query_gradient_accumulations = 10
+        score_args.query_gradient_low_rank = rank
+        score_args.query_gradient_accumulation_steps = 10
         scores_name += f"_qlr{rank}"
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
