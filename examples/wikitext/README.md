@@ -34,26 +34,26 @@ python analyze.py --query_batch_size 32 \
     --factor_strategy ekfac
 ```
 
-You can also use `identity`, `diagonal`, and `kfac` for `factor_strategy`. On an A100 (80GB) GPU, this process takes approximately 50 minutes:
+You can also use `identity`, `diagonal`, and `kfac` for `factor_strategy`. On an A100 (80GB) GPU, this process takes approximately 40 minutes:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  2790.6               |  100 %                |
+|  Total                        |  -                    |  11                   |  2357.4               |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  2253.1               |  1                    |  2253.1               |  80.739               |
-|  Fit Lambda                   |  292.74               |  1                    |  292.74               |  10.49                |
-|  Fit Covariance               |  194.38               |  1                    |  194.38               |  6.9654               |
-|  Perform Eigendecomposition   |  22.295               |  1                    |  22.295               |  0.79893              |
-|  Save Covariance              |  12.157               |  1                    |  12.157               |  0.43564              |
-|  Save Eigendecomposition      |  11.641               |  1                    |  11.641               |  0.41716              |
-|  Save Lambda                  |  3.0458               |  1                    |  3.0458               |  0.10915              |
-|  Load Covariance              |  0.48773              |  1                    |  0.48773              |  0.017478             |
-|  Load Eigendecomposition      |  0.45834              |  1                    |  0.45834              |  0.016425             |
-|  Load All Factors             |  0.18377              |  1                    |  0.18377              |  0.0065855            |
-|  Save Pairwise Score          |  0.10407              |  1                    |  0.10407              |  0.0037292            |
-----------------------------------------------------------------------------------------------------------------------------------"
+|  Compute Pairwise Score       |  1888.2               |  1                    |  1888.2               |  80.098               |
+|  Fit Lambda                   |  274.64               |  1                    |  274.64               |  11.651               |
+|  Fit Covariance               |  180.27               |  1                    |  180.27               |  7.6471               |
+|  Perform Eigendecomposition   |  7.7754               |  1                    |  7.7754               |  0.32984              |
+|  Save Eigendecomposition      |  3.0652               |  1                    |  3.0652               |  0.13003              |
+|  Save Covariance              |  2.6799               |  1                    |  2.6799               |  0.11368              |
+|  Save Lambda                  |  0.66036              |  1                    |  0.66036              |  0.028013             |
+|  Load Covariance              |  0.033343             |  1                    |  0.033343             |  0.0014144            |
+|  Save Pairwise Score          |  0.016471             |  1                    |  0.016471             |  0.0006987            |
+|  Load All Factors             |  0.0086084            |  1                    |  0.0086084            |  0.00036517           |
+|  Load Eigendecomposition      |  0.0054964            |  1                    |  0.0054964            |  0.00023316           |
+----------------------------------------------------------------------------------------------------------------------------------
 ```
 
 For more efficient computation, use half precision:
@@ -66,25 +66,25 @@ python analyze.py --query_batch_size 32 \
     --use_half_precision
 ```
 
-This reduces computation time to about 20 minutes on an A100 (80GB) GPU:
+This reduces computation time to about 15 minutes on an A100 (80GB) GPU:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  1211.8               |  100 %                |
+|  Total                        |  -                    |  11                   |  785.92               |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  1034.5               |  1                    |  1034.5               |  85.368               |
-|  Fit Lambda                   |  88.231               |  1                    |  88.231               |  7.2811               |
-|  Fit Covariance               |  59.746               |  1                    |  59.746               |  4.9305               |
-|  Perform Eigendecomposition   |  14.831               |  1                    |  14.831               |  1.2239               |
-|  Save Covariance              |  5.8912               |  1                    |  5.8912               |  0.48617              |
-|  Save Eigendecomposition      |  5.7726               |  1                    |  5.7726               |  0.47638              |
-|  Save Lambda                  |  1.624                |  1                    |  1.624                |  0.13402              |
-|  Load Covariance              |  0.34494              |  1                    |  0.34494              |  0.028465             |
-|  Load Eigendecomposition      |  0.33595              |  1                    |  0.33595              |  0.027724             |
-|  Load All Factors             |  0.26719              |  1                    |  0.26719              |  0.022049             |
-|  Save Pairwise Score          |  0.26006              |  1                    |  0.26006              |  0.021461             |
+|  Compute Pairwise Score       |  654.62               |  1                    |  654.62               |  83.294               |
+|  Fit Lambda                   |  74.662               |  1                    |  74.662               |  9.4999               |
+|  Fit Covariance               |  45.784               |  1                    |  45.784               |  5.8256               |
+|  Perform Eigendecomposition   |  7.5987               |  1                    |  7.5987               |  0.96685              |
+|  Save Eigendecomposition      |  1.4441               |  1                    |  1.4441               |  0.18375              |
+|  Save Covariance              |  1.3445               |  1                    |  1.3445               |  0.17107              |
+|  Save Lambda                  |  0.38279              |  1                    |  0.38279              |  0.048705             |
+|  Load Covariance              |  0.058189             |  1                    |  0.058189             |  0.0074039            |
+|  Save Pairwise Score          |  0.0094807            |  1                    |  0.0094807            |  0.0012063            |
+|  Load All Factors             |  0.0083676            |  1                    |  0.0083676            |  0.0010647            |
+|  Load Eigendecomposition      |  0.0053729            |  1                    |  0.0053729            |  0.00068364           |
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
@@ -94,38 +94,7 @@ The `half_precision_analysis.py` script compares the correlations between `float
 <a href="#"><img width="380" img src="figure/half_precision.png" alt="Half Precision"/></a>
 </p>
 
-The average correlation for 481 data points is `0.96`. Finally, we can try using `torch.compile`:
-
-```bash
-python analyze.py --query_batch_size 32 \
-    --train_batch_size 64 \
-    --checkpoint_dir ./checkpoints \
-    --factor_strategy ekfac \
-    --use_half_precision \
-    --use_compile
-```
-
-This reduces computation time to about 16 minutes on an A100 (80GB) GPU:
-
-```
-----------------------------------------------------------------------------------------------------------------------------------
-|  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
-----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  939.4                |  100 %                |
-----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  735.99               |  1                    |  735.99               |  78.347               |
-|  Fit Covariance               |  103.6                |  1                    |  103.6                |  11.029               |
-|  Fit Lambda                   |  69.442               |  1                    |  69.442               |  7.3922               |
-|  Perform Eigendecomposition   |  16.011               |  1                    |  16.011               |  1.7044               |
-|  Save Covariance              |  5.9458               |  1                    |  5.9458               |  0.63294              |
-|  Save Eigendecomposition      |  5.9252               |  1                    |  5.9252               |  0.63074              |
-|  Save Lambda                  |  1.5185               |  1                    |  1.5185               |  0.16164              |
-|  Load Covariance              |  0.42047              |  1                    |  0.42047              |  0.04476              |
-|  Load Eigendecomposition      |  0.32199              |  1                    |  0.32199              |  0.034276             |
-|  Load All Factors             |  0.16436              |  1                    |  0.16436              |  0.017496             |
-|  Save Pairwise Score          |  0.055834             |  1                    |  0.055834             |  0.0059436            |
-----------------------------------------------------------------------------------------------------------------------------------
-```
+The average correlation for 481 data points is `0.96`.
 
 ## Counterfactual Experiment
 
@@ -139,7 +108,8 @@ This reduces computation time to about 16 minutes on an A100 (80GB) GPU:
 ## Evaluating Linear Datamodeling Score
 
 The `evaluate_lds.py` script computes the [linear datamodeling score (LDS)](https://arxiv.org/abs/2303.14186). It measures the LDS obtained by 
-retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). We obtain `0.43` LDS (`0.41` LDS with the half precision).
+retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). We obtain `0.44` LDS 
+(`0.42` LDS with the half precision and `0.12` LDS with the `identity` strategy).
 
 The script also includes functionality to print out top influential sequences for a given query.
 

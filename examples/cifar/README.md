@@ -26,7 +26,7 @@ This will train the model using the specified hyperparameters and save the train
 
 ## Computing Pairwise Influence Scores
 
-To compute pairwise influence scores on 2000 query data points using the `ekfac` factorization strategy, run the following command:
+To compute pairwise influence scores on 2000 query data points using the `ekfac` strategy, run the following command:
 
 ```bash
 python analyze.py --query_batch_size 1000 \
