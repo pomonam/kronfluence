@@ -95,26 +95,25 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                     input_activation.shape,
                     optimize=DynamicProgramming(search_outer=True, minimize="size"),
                 )
-            return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation)
+            return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation).contiguous()
 
-        if self.einsum_expression is None:
-            if self.score_args.compute_per_token_scores and len(input_activation.shape) == 3:
-                expr = "qio,bti,bto->qbt"
-                minimize = "size"
-            else:
-                expr = "qio,b...i,b...o->qb"
-                minimize = "flops"
-            self.einsum_expression = contract_expression(
-                expr,
-                preconditioned_gradient.shape,
-                output_gradient.shape,
-                input_activation.shape,
-                optimize=DynamicProgramming(search_outer=True, minimize=minimize),
-            )
-        return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
+        if self.score_args.compute_per_token_scores and len(input_activation.shape) == 3:
+            return torch.einsum("qio,bti,bto->qbt", preconditioned_gradient, output_gradient, input_activation)
+        return torch.einsum("qio,b...i,b...o->qb", preconditioned_gradient, output_gradient, input_activation)
+        # else:
+        #     expr = "qio,b...i,b...o->qb"
+        #     minimize = "flops"
+        # self.einsum_expression = contract_expression(
+        #     expr,
+        #     preconditioned_gradient.shape,
+        #     output_gradient.shape,
+        #     input_activation.shape,
+        #     optimize=DynamicProgramming(search_outer=True, minimize=minimize),
+        # )
+        # return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
 
     def compute_self_measurement_score(
         self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
         input_activation = self._flatten_input_activation(input_activation=input_activation)
-        return contract("bio,b...i,b...o->b", preconditioned_gradient, output_gradient, input_activation)
+        return contract("bio,b...i,b...o->b", preconditioned_gradient, output_gradient, input_activation).contiguous()

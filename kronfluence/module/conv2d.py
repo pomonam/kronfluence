@@ -193,17 +193,18 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
                     input_activation.shape,
                     optimize=DynamicProgramming(search_outer=True, minimize="size"),
                 )
-            return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation)
+            return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation).contiguous()
+        return torch.einsum("qio,bti,bto->qb", preconditioned_gradient, output_gradient, input_activation)
 
-        if self.einsum_expression is None:
-            self.einsum_expression = contract_expression(
-                "qio,bti,bto->qb",
-                preconditioned_gradient.shape,
-                output_gradient.shape,
-                input_activation.shape,
-                optimize=DynamicProgramming(search_outer=True, minimize="flops"),
-            )
-        return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
+        # if self.einsum_expression is None:
+        #     self.einsum_expression = contract_expression(
+        #         "qio,bti,bto->qb",
+        #         preconditioned_gradient.shape,
+        #         output_gradient.shape,
+        #         input_activation.shape,
+        #         optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+        #     )
+        # return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
 
     def compute_self_measurement_score(
         self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
@@ -211,4 +212,4 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
         input_activation = self._flatten_input_activation(input_activation=input_activation)
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
-        return contract("bio,bci,bco->b", preconditioned_gradient, output_gradient, input_activation)
+        return contract("bio,bci,bco->b", preconditioned_gradient, output_gradient, input_activation).contiguous()
