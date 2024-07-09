@@ -7,7 +7,6 @@ import torch
 from torch.utils import data
 
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
 from kronfluence.utils.common.score_arguments import pytest_score_arguments
 from kronfluence.utils.constants import (
