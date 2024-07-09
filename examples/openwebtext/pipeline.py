@@ -38,6 +38,10 @@ def get_openwebtext_dataset(
     def tokenize_function(examples):
         results = tokenizer(examples[text_column_name], truncation=True, padding=True, max_length=MAX_LENGTH)
         results["labels"] = results["input_ids"].copy()
+        results["labels"] = [
+            [-100 if token == tokenizer.pad_token_id else token for token in label]
+            for label in results["labels"]
+        ]
         return results
 
     tokenized_datasets = raw_datasets.map(
@@ -99,7 +103,5 @@ def get_custom_dataset(
 if __name__ == "__main__":
     from kronfluence import Analyzer
 
-    # model = construct_llama3()
-    # print(Analyzer.get_module_summary(model))
-
-    get_openwebtext_dataset()
+    model = construct_llama3()
+    print(Analyzer.get_module_summary(model))
