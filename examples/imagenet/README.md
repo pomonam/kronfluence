@@ -16,7 +16,6 @@ To compute pairwise influence scores on 1000 query data points using the `ekfac`
 ```bash
 python analyze.py --dataset_dir PATH_TO_IMAGENET \
     --query_gradient_rank -1 \
-    --factor_batch_size 512 \
     --query_batch_size 100 \
     --train_batch_size 256 \
     --factor_strategy ekfac
