@@ -19,7 +19,7 @@ class LanguageModelingTask(Task):
         logits = model(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-        ).logits.float()
+        ).logits
         logits = logits[..., :-1, :].contiguous()
         logits = logits.view(-1, logits.size(-1))
 

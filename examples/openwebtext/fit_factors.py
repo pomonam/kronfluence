@@ -22,9 +22,7 @@ from kronfluence.utils.dataset import DataLoaderKwargs
 BATCH_TYPE = Dict[str, torch.Tensor]
 
 torch.backends.cudnn.benchmark = True
-
-if torch.cuda.is_available():
-    torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cuda.matmul.allow_tf32 = True
 
 
 def parse_args():
@@ -35,6 +33,12 @@ def parse_args():
         type=str,
         default="ekfac",
         help="Strategy to compute influence factors.",
+    )
+    parser.add_argument(
+        "--factor_batch_size",
+        type=int,
+        default=8,
+        help="Batch size for computing influence factors.",
     )
     parser.add_argument(
         "--profile",
@@ -81,8 +85,8 @@ def main():
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,
-        # per_device_batch_size=args.factor_batch_size,
-        per_device_batch_size=None,
+        per_device_batch_size=args.factor_batch_size,
+        # per_device_batch_size=None,
         factor_args=factor_args,
         overwrite_output_dir=False,
     )
