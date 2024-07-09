@@ -25,7 +25,7 @@ This will fine-tune the model using the specified hyperparameters and save the f
 
 ## Computing Pairwise Influence Scores
 
-To compute pairwise influence scores using the `ekfac` factorization strategy, run the following command:
+To compute pairwise influence scores using the `ekfac` strategy, run the following command:
 
 ```bash
 python analyze.py --query_batch_size 32 \
@@ -91,7 +91,7 @@ This reduces computation time to about 20 minutes on an A100 (80GB) GPU:
 The `half_precision_analysis.py` script compares the correlations between `float32` and `bfloat16` scores.
 
 <p align="center">
-<a href="#"><img width="380" img src="figure/half_precision.png" alt="Query Batching"/></a>
+<a href="#"><img width="380" img src="figure/half_precision.png" alt="Half Precision"/></a>
 </p>
 
 The average correlation for 481 data points is `0.96`. Finally, we can try using `torch.compile`:
