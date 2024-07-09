@@ -236,7 +236,7 @@ class PreconditionTracker(BaseTracker):
                 self.module.storage[ACCUMULATED_PRECONDITIONED_GRADIENT_NAME] = torch.cat(
                     (accumulated_gradient, gradient), dim=0
                 ).contiguous()
-        del gradient, self.module.storage[PRECONDITIONED_GRADIENT_NAME]
+        del self.module.storage[PRECONDITIONED_GRADIENT_NAME], gradient
         self.module.storage[PRECONDITIONED_GRADIENT_NAME] = None
 
     @torch.no_grad()

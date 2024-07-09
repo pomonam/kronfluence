@@ -103,7 +103,7 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                 minimize = "size"
             else:
                 expr = "qio,b...i,b...o->qb"
-                minimize = "flops"
+                minimize = "size"
             self.einsum_expression = contract_expression(
                 expr,
                 preconditioned_gradient.shape,
@@ -117,12 +117,4 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
         self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
         input_activation = self._flatten_input_activation(input_activation=input_activation)
-        if self.einsum_expression is None:
-            self.einsum_expression = contract_expression(
-                "bio,b...i,b...o->b",
-                preconditioned_gradient.shape,
-                output_gradient.shape,
-                input_activation.shape,
-                optimize=DynamicProgramming(search_outer=True, minimize="flops"),
-            )
-        return self.einsum_expression(preconditioned_gradient, output_gradient, input_activation)
+        return contract("bio,b...i,b...o->b", preconditioned_gradient, output_gradient, input_activation)

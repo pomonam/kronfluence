@@ -88,7 +88,7 @@ class PairwiseScoreTracker(BaseTracker):
                     input_activation=cached_activation.to(device=output_gradient.device),
                     output_gradient=output_gradient,
                 )
-                del cached_activation, output_gradient
+                del self.cached_activations, cached_activation, output_gradient
                 self.clear_all_cache()
             else:
                 per_sample_gradient = self.module.compute_per_sample_gradient(
