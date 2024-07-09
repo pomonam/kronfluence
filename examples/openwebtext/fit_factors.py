@@ -76,7 +76,7 @@ def main():
 
     factors_name = args.factor_strategy
     factor_args = extreme_reduce_memory_factor_arguments(strategy=args.factor_strategy,
-                                                         module_partitions=1,
+                                                         module_partitions=2,
                                                          dtype=torch.bfloat16)
     analyzer.fit_all_factors(
         factors_name=factors_name,
