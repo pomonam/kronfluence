@@ -191,7 +191,7 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
                     right_mat.shape,
                     output_gradient.shape,
                     input_activation.shape,
-                    optimize=DynamicProgramming(search_outer=True, minimize="size"),
+                    optimize=DynamicProgramming(search_outer=True, minimize="flops"),
                 )
             return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation)
         return torch.einsum("qio,bti,bto->qb", preconditioned_gradient, output_gradient, input_activation)
