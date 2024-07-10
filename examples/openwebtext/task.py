@@ -53,11 +53,12 @@ class LanguageModelingTask(Task):
     def get_influence_tracked_modules(self) -> List[str]:
         total_modules = []
 
-        for i in range(32):
-            total_modules.append(f"model.layers.{i}.self_attn.q_proj")
-            total_modules.append(f"model.layers.{i}.self_attn.k_proj")
-            total_modules.append(f"model.layers.{i}.self_attn.v_proj")
-            total_modules.append(f"model.layers.{i}.self_attn.o_proj")
+        # You can uncomment the following lines if you would like to compute influence also on attention layers.
+        # for i in range(32):
+        #     total_modules.append(f"model.layers.{i}.self_attn.q_proj")
+        #     total_modules.append(f"model.layers.{i}.self_attn.k_proj")
+        #     total_modules.append(f"model.layers.{i}.self_attn.v_proj")
+        #     total_modules.append(f"model.layers.{i}.self_attn.o_proj")
 
         for i in range(32):
             total_modules.append(f"model.layers.{i}.mlp.gate_proj")
