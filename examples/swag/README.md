@@ -36,7 +36,7 @@ python analyze.py --factor_batch_size 128 \
 ```
 
 Alternative options for `factor_strategy` include `identity`, `diagonal`, and `kfac`. 
-On an A100 (80GB), computing the pairwise scores (including EKFAC factors) takes approximately 3 hours:
+On an A100 (80GB), computing the pairwise scores (including EKFAC factors) takes approximately 10 hours:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------

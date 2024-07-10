@@ -9,7 +9,7 @@ pip install -r requirements.txt
 
 ## Training
 
-To fine-tune BERT on a specific dataset, run the following command (we are using the `SST2` dataset in this example):
+To fine-tune BERT on a specific dataset, run the following command (we are using the SST2 dataset in this example):
 
 ```bash
 python train.py --dataset_name sst2 \
@@ -36,7 +36,7 @@ python analyze.py --dataset_name sst2 \
     --factor_strategy ekfac
 ```
 
-On an A100 (80GB), it takes roughly 95 minutes to compute the pairwise scores for `SST2` (including computing EKFAC factors):
+On an A100 (80GB), it takes roughly 90 minutes to compute the pairwise scores for SST2 (including computing EKFAC factors):
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
