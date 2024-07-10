@@ -30,9 +30,13 @@ To calculate pairwise influence scores on 2000 query data points using `ekfac`, 
 ```bash
 python analyze.py --factor_batch_size 128 \
     --query_batch_size 100 \
-    --train_batch_size 128 \
+    --train_batch_size 64 \
     --checkpoint_dir ./checkpoints \
     --factor_strategy ekfac
+```
+
+```
+python analyze.py --factor_batch_size 128     --query_batch_size 100     --train_batch_size 64     --checkpoint_dir ./checkpoints     --factor_strategy ekfac --profile
 ```
 
 Alternative options for `factor_strategy` include `identity`, `diagonal`, and `kfac`. 
@@ -56,6 +60,15 @@ On an A100 (80GB), computing the pairwise scores (including EKFAC factors) takes
 |  Load Eigendecomposition      |  1.3845               |  1                    |  1.3845               |  0.0089699            |
 |  Load All Factors             |  0.2517               |  1                    |  0.2517               |  0.0016308            |
 ----------------------------------------------------------------------------------------------------------------------------------
+```
+
+```bash
+python analyze.py --factor_batch_size 128 \
+    --query_batch_size 100 \
+    --train_batch_size 128 \
+    --use_half_precision \
+    --checkpoint_dir ./checkpoints \
+    --factor_strategy ekfac
 ```
 
 For more efficient computation, use Distributed Data Parallel (DDP):

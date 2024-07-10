@@ -30,7 +30,6 @@ except (LookupError, OSError):
 
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(DEVICE)
 
 
 def parse_args():
