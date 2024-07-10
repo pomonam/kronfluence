@@ -214,7 +214,6 @@ def main():
         model=model,
         task=task,
         profile=args.profile,
-        cpu=True,
     )
     # Configure parameters for DataLoader.
     label_pad_token_id = -100
@@ -225,7 +224,7 @@ def main():
         pad_to_multiple_of=None,
     )
 
-    dataloader_kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    dataloader_kwargs = DataLoaderKwargs(num_workers=4, collate_fn=data_collator)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     # Compute influence factors.
