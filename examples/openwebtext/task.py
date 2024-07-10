@@ -26,9 +26,7 @@ class LanguageModelingTask(Task):
         if not sample:
             labels = batch["labels"]
             shift_labels = labels[..., 1:].contiguous()
-            summed_loss = F.cross_entropy(
-                logits, shift_labels.view(-1), reduction="sum", ignore_index=-100
-            )
+            summed_loss = F.cross_entropy(logits, shift_labels.view(-1), reduction="sum", ignore_index=-100)
         else:
             with torch.no_grad():
                 probs = torch.nn.functional.softmax(logits.detach(), dim=-1)
@@ -54,6 +52,12 @@ class LanguageModelingTask(Task):
 
     def get_influence_tracked_modules(self) -> List[str]:
         total_modules = []
+
+        for i in range(32):
+            total_modules.append(f"model.layers.{i}.self_attn.q_proj")
+            total_modules.append(f"model.layers.{i}.self_attn.k_proj")
+            total_modules.append(f"model.layers.{i}.self_attn.v_proj")
+            total_modules.append(f"model.layers.{i}.self_attn.o_proj")
 
         for i in range(32):
             total_modules.append(f"model.layers.{i}.mlp.gate_proj")

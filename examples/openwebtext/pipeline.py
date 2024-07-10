@@ -39,8 +39,7 @@ def get_openwebtext_dataset(
         results = tokenizer(examples[text_column_name], truncation=True, padding=True, max_length=MAX_LENGTH)
         results["labels"] = results["input_ids"].copy()
         results["labels"] = [
-            [-100 if token == tokenizer.pad_token_id else token for token in label]
-            for label in results["labels"]
+            [-100 if token == tokenizer.pad_token_id else token for token in label] for label in results["labels"]
         ]
         return results
 
