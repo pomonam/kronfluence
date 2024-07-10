@@ -61,7 +61,6 @@ class BaseTracker:
                 The preprocessed gradient.
         """
         original_dtype = output_gradient.dtype
-        print(output_gradient.dtype)
         output_gradient = output_gradient.to(dtype=target_dtype)
         if self.module.gradient_scale != 1.0:
             if original_dtype != target_dtype:
