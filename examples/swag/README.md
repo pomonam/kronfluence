@@ -1,7 +1,7 @@
 # SWAG & RoBERTa Example
 
-This directory contains scripts for fine-tuning RoBERTa and computing influence scores on the SWAG dataset. The pipeline is motivated from [this HuggingFace Example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/multiple-choice) and demonstrates how to define `post_process_per_sample_gradient`.
-To begin, install the necessary packages:
+This directory demonstrates fine-tuning RoBERTa on the SWAG dataset and computing influence scores. The implementation is inspired by [this HuggingFace example](https://github.com/huggingface/transformers/tree/main/examples/pytorch/multiple-choice) and showcases how to define `post_process_per_sample_gradient`.
+Install the required packages:
 
 ```bash
 pip install -r requirements.txt
@@ -9,7 +9,7 @@ pip install -r requirements.txt
 
 ## Training
 
-To fine-tune RoBERTa on SWAG, run the following command:
+To fine-tune RoBERTa on the SWAG dataset, run the following command:
 
 ```bash
 python train.py --checkpoint_dir ./checkpoints \
@@ -21,7 +21,7 @@ python train.py --checkpoint_dir ./checkpoints \
     --seed 1004
 ```
 
-This will fine-tune the model using the specified hyperparameters and save the final checkpoint in the `./checkpoints` directory.
+The final checkpoint will be saved in the `./checkpoints` directory.
 
 ## Computing Pairwise Influence Scores
 
@@ -35,32 +35,30 @@ python analyze.py --factor_batch_size 128 \
     --factor_strategy ekfac
 ```
 
-```
-python analyze.py --factor_batch_size 128     --query_batch_size 100     --train_batch_size 64     --checkpoint_dir ./checkpoints     --factor_strategy ekfac --profile
-```
-
 Alternative options for `factor_strategy` include `identity`, `diagonal`, and `kfac`. 
-On an A100 (80GB), computing the pairwise scores (including EKFAC factors) takes approximately 4 hours:
+On an A100 (80GB), computing the pairwise scores (including EKFAC factors) takes approximately 3 hours:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  1.5434e+04           |  100 %                |
+|  Total                        |  -                    |  11                   |  3.5124e+04           |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  1.3667e+04           |  1                    |  1.3667e+04           |  88.546               |
-|  Fit Lambda                   |  1241.0               |  1                    |  1241.0               |  8.0407               |
-|  Fit Covariance               |  482.33               |  1                    |  482.33               |  3.125                |
-|  Perform Eigendecomposition   |  22.946               |  1                    |  22.946               |  0.14867              |
-|  Save Eigendecomposition      |  6.8322               |  1                    |  6.8322               |  0.044266             |
-|  Save Covariance              |  6.6378               |  1                    |  6.6378               |  0.043006             |
-|  Save Pairwise Score          |  2.6291               |  1                    |  2.6291               |  0.017034             |
-|  Save Lambda                  |  2.3685               |  1                    |  2.3685               |  0.015346             |
-|  Load Covariance              |  1.4838               |  1                    |  1.4838               |  0.0096133            |
-|  Load Eigendecomposition      |  1.3845               |  1                    |  1.3845               |  0.0089699            |
-|  Load All Factors             |  0.2517               |  1                    |  0.2517               |  0.0016308            |
+|  Compute Pairwise Score       |  2.9384e+04           |  1                    |  2.9384e+04           |  83.656               |
+|  Fit Lambda                   |  3578.7               |  1                    |  3578.7               |  10.189               |
+|  Fit Covariance               |  2143.9               |  1                    |  2143.9               |  6.1036               |
+|  Perform Eigendecomposition   |  10.213               |  1                    |  10.213               |  0.029078             |
+|  Save Eigendecomposition      |  3.4398               |  1                    |  3.4398               |  0.0097933            |
+|  Save Covariance              |  2.5179               |  1                    |  2.5179               |  0.0071684            |
+|  Save Pairwise Score          |  1.2982               |  1                    |  1.2982               |  0.0036959            |
+|  Save Lambda                  |  0.68226              |  1                    |  0.68226              |  0.0019424            |
+|  Load All Factors             |  0.013627             |  1                    |  0.013627             |  3.8797e-05           |
+|  Load Eigendecomposition      |  0.0088496            |  1                    |  0.0088496            |  2.5195e-05           |
+|  Load Covariance              |  0.008222             |  1                    |  0.008222             |  2.3408e-05           |
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
+
+For more efficient computation, use half-precision:
 
 ```bash
 python analyze.py --factor_batch_size 128 \
@@ -71,44 +69,59 @@ python analyze.py --factor_batch_size 128 \
     --factor_strategy ekfac
 ```
 
-For more efficient computation, use Distributed Data Parallel (DDP):
-
-```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=2 analyze.py --factor_batch_size 128 \
-    --query_batch_size 100 \
-    --train_batch_size 128 \
-    --use_half_precision \
-    --checkpoint_dir ./checkpoints \
-    --factor_strategy ekfac \
-    --use_ddp
-```
-
-The overall computation time reduces to 2 hours using 2 A100 GPUs:
+This reduces computation time to about 3 hours on an A100 (80GB) GPU.
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  7737.8               |  100 %                |
+|  Total                        |  -                    |  11                   |  1.0935e+04           |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  6835.5               |  1                    |  6835.5               |  88.339               |
-|  Fit Lambda                   |  629.93               |  1                    |  629.93               |  8.1409               |
-|  Fit Covariance               |  242.46               |  1                    |  242.46               |  3.1334               |
-|  Perform Eigendecomposition   |  12.882               |  1                    |  12.882               |  0.16648              |
-|  Save Covariance              |  5.414                |  1                    |  5.414                |  0.069968             |
-|  Save Eigendecomposition      |  5.3198               |  1                    |  5.3198               |  0.06875              |
-|  Save Pairwise Score          |  2.6157               |  1                    |  2.6157               |  0.033805             |
-|  Save Lambda                  |  1.5766               |  1                    |  1.5766               |  0.020375             |
-|  Load Covariance              |  1.1093               |  1                    |  1.1093               |  0.014336             |
-|  Load Eigendecomposition      |  0.51414              |  1                    |  0.51414              |  0.0066445            |
-|  Load All Factors             |  0.49749              |  1                    |  0.49749              |  0.0064293            |
+|  Compute Pairwise Score       |  9576.4               |  1                    |  9576.4               |  87.578               |
+|  Fit Lambda                   |  932.07               |  1                    |  932.07               |  8.524                |
+|  Fit Covariance               |  411.81               |  1                    |  411.81               |  3.7661               |
+|  Perform Eigendecomposition   |  10.623               |  1                    |  10.623               |  0.097145             |
+|  Save Eigendecomposition      |  1.4735               |  1                    |  1.4735               |  0.013475             |
+|  Save Covariance              |  1.2953               |  1                    |  1.2953               |  0.011846             |
+|  Save Pairwise Score          |  0.66271              |  1                    |  0.66271              |  0.0060606            |
+|  Save Lambda                  |  0.34022              |  1                    |  0.34022              |  0.0031114            |
+|  Load All Factors             |  0.012041             |  1                    |  0.012041             |  0.00011012           |
+|  Load Covariance              |  0.0079526            |  1                    |  0.0079526            |  7.2728e-05           |
+|  Load Eigendecomposition      |  0.0076841            |  1                    |  0.0076841            |  7.0273e-05           |
+----------------------------------------------------------------------------------------------------------------------------------
+```
+
+Query batching (low-rank approximation to the query gradient; see **Section 3.2.2** from the paper) can be used to compute influence scores with a larger query batch size:
+
+```bash
+python analyze.py --factor_batch_size 128 \
+    --query_batch_size 100 \
+    --train_batch_size 128 \
+    --query_gradient_rank 32 \
+    --use_half_precision \
+    --checkpoint_dir ./checkpoints \
+    --factor_strategy ekfac
+```
+
+On an A100 (80GB) GPU, it takes roughly 1 hour to compute the pairwise scores with query batching:
+
+```
+----------------------------------------------------------------------------------------------------------------------------------
+|  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Total                        |  -                    |  3                    |  2007.9               |  100 %                |
+----------------------------------------------------------------------------------------------------------------------------------
+|  Compute Pairwise Score       |  2007.2               |  1                    |  2007.2               |  99.966               |
+|  Save Pairwise Score          |  0.66464              |  1                    |  0.66464              |  0.033102             |
+|  Load All Factors             |  0.012345             |  1                    |  0.012345             |  0.00061484           |
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
 ## Evaluating Linear Datamodeling Score
 
 The `evaluate_lds.py` script computes the [linear datamodeling score (LDS)](https://arxiv.org/abs/2303.14186). It measures the LDS obtained by 
-retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). We obtain `0.30` LDS.
+retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). 
+We obtain `0.33` LDS (`0.30` LDS with half precision and half precision + query batching).
 
 ```
 Query Data Example:

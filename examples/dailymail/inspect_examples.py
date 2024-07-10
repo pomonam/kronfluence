@@ -15,7 +15,7 @@ def main():
         "all_modules"
     ].to(dtype=torch.float32)
 
-    eval_idx = 5
+    eval_idx = 1
     train_dataset = get_dailymail_dataset(
         split="eval_train",
     )

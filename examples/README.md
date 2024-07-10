@@ -21,11 +21,11 @@ Our examples cover the following tasks:
 | Task                 |    Example Datasets	     |
 |----------------------|:------------------------:|
 | Regression           |           UCI            |
-| Image Classification |   CIFAR-10 / ImageNet    |
+| Image Classification |   CIFAR-10 & ImageNet    |
 | Text Classification  |           GLUE           |
 | Multiple-Choice      |           SWAG           |
-| Summarization        |        DailyMail         |
-| Language Modeling    | WikiText-2 / OpenWebText |
+| Summarization        |      DNN/DailyMail       |
+| Language Modeling    | WikiText-2 & OpenWebText |
 
 </div>
 

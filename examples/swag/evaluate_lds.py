@@ -32,12 +32,9 @@ def main():
 
     # You might need to change the path.
     strategy = "ekfac"
-    scores = Analyzer.load_file(f"influence_results/swag/scores_{strategy}_half/pairwise_scores.safetensors")[
+    scores = Analyzer.load_file(f"influence_results/swag/scores_{strategy}/pairwise_scores.safetensors")[
         "all_modules"
     ].to(dtype=torch.float32)
-    # scores = Analyzer.load_file(f"influence_results/swag/scores_{strategy}_half_ddp/pairwise_scores.safetensors")[
-    #     "all_modules"
-    # ].to(dtype=torch.float32)
 
     corr_mean = evaluate_correlations(scores)
     logging.info(f"LDS: {np.mean(corr_mean)}")
