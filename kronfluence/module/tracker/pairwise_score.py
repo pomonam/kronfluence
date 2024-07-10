@@ -1,7 +1,7 @@
 from typing import Tuple
 
 import torch
-from opt_einsum import DynamicProgramming, contract, contract_expression
+from opt_einsum import DynamicProgramming, contract_expression
 from torch import nn
 
 from kronfluence.module.tracker.base import BaseTracker
@@ -36,7 +36,7 @@ class PairwiseScoreTracker(BaseTracker):
                 )
             scores = self.module.einsum_expression(right_mat, per_sample_gradient, left_mat)
         else:
-            scores = contract(
+            scores = torch.einsum(
                 "qio,tio->qt",
                 self.module.storage[precondition_name],
                 per_sample_gradient,
