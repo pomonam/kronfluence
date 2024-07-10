@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 import torch
 from accelerate.utils.dataclasses import BaseEnum
@@ -120,8 +120,7 @@ class TrackedModule(nn.Module):
         self.attention_mask: Optional[torch.Tensor] = None
         self.gradient_scale: float = 1.0
         self.storage: Dict[str, Optional[Union[torch.Tensor, PRECONDITIONED_GRADIENT_TYPE]]] = {}
-        self.einsum_expression: Optional[Callable] = None
-
+        self.einsum_path: Optional[List[int]] = None
         self._initialize_storage()
 
     def _initialize_storage(self) -> None:
@@ -252,7 +251,7 @@ class TrackedModule(nn.Module):
                 Whether to release memory for all trackers.
         """
         self._trackers[self.current_mode].release_hooks()
-        self.einsum_expression = None
+        self.einsum_path = None
         self.current_mode = mode
 
         if release_memory:

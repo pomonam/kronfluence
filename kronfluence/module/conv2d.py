@@ -4,8 +4,8 @@ import torch
 import torch.nn.functional as F
 from einconv.utils import get_conv_paddings
 from einops import rearrange, reduce
-from opt_einsum import DynamicProgramming, contract_expression
-from torch import nn
+from opt_einsum import DynamicProgramming, contract_path
+from torch import _VF, nn
 from torch.nn.modules.utils import _pair
 
 from kronfluence.module.tracked_module import TrackedModule
@@ -184,17 +184,18 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
         if isinstance(preconditioned_gradient, list):
             left_mat, right_mat = preconditioned_gradient
-            return torch.einsum("qik,qko,bci,bco->qb", left_mat, right_mat, output_gradient, input_activation)
-            # if self.einsum_expression is None:
-            #     self.einsum_expression = contract_expression(
-            #         "qik,qko,bci,bco->qb",
-            #         left_mat.shape,
-            #         right_mat.shape,
-            #         output_gradient.shape,
-            #         input_activation.shape,
-            #         optimize=DynamicProgramming(search_outer=True, minimize="flops"),
-            #     )
-            # return self.einsum_expression(left_mat, right_mat, output_gradient, input_activation)
+            expr = "qik,qko,b...i,b...o->qb"
+            if self.einsum_path is None:
+                path = contract_path(
+                    expr,
+                    left_mat,
+                    right_mat,
+                    output_gradient,
+                    input_activation,
+                    optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+                )[0]
+                self.einsum_path = [item for pair in path for item in pair]
+            return _VF.einsum(expr, (left_mat, right_mat, output_gradient, input_activation), path=self.einsum_path)  # pylint: disable=no-member
         return torch.einsum("qio,bti,bto->qb", preconditioned_gradient, output_gradient, input_activation)
 
     def compute_self_measurement_score(

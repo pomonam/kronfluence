@@ -1,8 +1,8 @@
 from typing import Tuple
 
 import torch
-from opt_einsum import DynamicProgramming, contract_expression
-from torch import nn
+from opt_einsum import DynamicProgramming, contract_path
+from torch import _VF, nn
 
 from kronfluence.module.tracker.base import BaseTracker
 from kronfluence.utils.constants import (
@@ -26,15 +26,17 @@ class PairwiseScoreTracker(BaseTracker):
         precondition_name = ACCUMULATED_PRECONDITIONED_GRADIENT_NAME
         if isinstance(self.module.storage[precondition_name], list):
             left_mat, right_mat = self.module.storage[precondition_name]
-            if self.module.einsum_expression is None:
-                self.module.einsum_expression = contract_expression(
-                    "qki,toi,qok->qt",
-                    right_mat.shape,
-                    per_sample_gradient.shape,
-                    left_mat.shape,
-                    optimize=DynamicProgramming(search_outer=True, minimize="size"),
-                )
-            scores = self.module.einsum_expression(right_mat, per_sample_gradient, left_mat)
+            expr = "qki,toi,qok->qt"
+            if self.module.einsum_path is None:
+                path = contract_path(
+                    expr,
+                    right_mat,
+                    per_sample_gradient,
+                    left_mat,
+                    optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+                )[0]
+                self.module.einsum_path = [item for pair in path for item in pair]
+            scores = _VF.einsum(expr, (right_mat, per_sample_gradient, left_mat), path=self.module.einsum_path)  # pylint: disable=no-member
         else:
             scores = torch.einsum(
                 "qio,tio->qt",
