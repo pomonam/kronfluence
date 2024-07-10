@@ -31,7 +31,7 @@ except KeyError:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on CNN DailyMail dataset.")
+    parser = argparse.ArgumentParser(description="Influence analysis on CNN/DailyMail dataset.")
 
     parser.add_argument(
         "--checkpoint_dir",
