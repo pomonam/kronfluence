@@ -60,13 +60,18 @@ class BaseTracker:
             torch.Tensor:
                 The preprocessed gradient.
         """
-        original_dtype = output_gradient.dtype
+        # original_dtype = output_gradient.dtype
+        # output_gradient = output_gradient.to(dtype=target_dtype)
+        # if self.module.gradient_scale != 1.0:
+        #     if original_dtype != target_dtype:
+        #         output_gradient.mul_(self.module.gradient_scale)
+        #     else:
+        #         output_gradient = output_gradient * self.module.gradient_scale
+        # return output_gradient
         output_gradient = output_gradient.to(dtype=target_dtype)
         if self.module.gradient_scale != 1.0:
-            if original_dtype != target_dtype:
-                output_gradient.mul_(self.module.gradient_scale)
-            else:
-                output_gradient = output_gradient * self.module.gradient_scale
+            output_gradient = output_gradient * self.module.gradient_scale
+        output_gradient = output_gradient.to(dtype=target_dtype)
         return output_gradient
 
     def register_hooks(self) -> None:
