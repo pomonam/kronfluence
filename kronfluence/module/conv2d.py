@@ -196,7 +196,17 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
                 )[0]
                 self.einsum_path = [item for pair in path for item in pair]
             return _VF.einsum(expr, (left_mat, right_mat, output_gradient, input_activation), path=self.einsum_path)  # pylint: disable=no-member
-        return torch.einsum("qio,bti,bto->qb", preconditioned_gradient, output_gradient, input_activation)
+        expr = "qio,bti,bto->qb"
+        if self.einsum_path is None:
+            path = contract_path(
+                expr,
+                preconditioned_gradient,
+                output_gradient,
+                input_activation,
+                optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+            )[0]
+            self.einsum_path = [item for pair in path for item in pair]
+        return _VF.einsum(expr, (preconditioned_gradient, output_gradient, input_activation), path=self.einsum_path)  # pylint: disable=no-member
 
     def compute_self_measurement_score(
         self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
@@ -204,4 +214,14 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
         input_activation = self._flatten_input_activation(input_activation=input_activation)
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
-        return torch.einsum("bio,bci,bco->b", preconditioned_gradient, output_gradient, input_activation)
+        expr = "bio,bci,bco->b"
+        if self.einsum_path is None:
+            path = contract_path(
+                expr,
+                preconditioned_gradient,
+                output_gradient,
+                input_activation,
+                optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+            )[0]
+            self.einsum_path = [item for pair in path for item in pair]
+        return _VF.einsum(expr, (preconditioned_gradient, output_gradient, input_activation), path=self.einsum_path)  # pylint: disable=no-member

@@ -98,11 +98,41 @@ class TrackedLinear(TrackedModule, module_type=nn.Linear):
                 self.einsum_path = [item for pair in path for item in pair]
             return _VF.einsum(expr, (left_mat, right_mat, output_gradient, input_activation), path=self.einsum_path)  # pylint: disable=no-member
         if self.score_args.compute_per_token_scores and len(input_activation.shape) == 3:
-            return torch.einsum("qio,bti,bto->qbt", preconditioned_gradient, output_gradient, input_activation)
-        return torch.einsum("qio,b...i,b...o->qb", preconditioned_gradient, output_gradient, input_activation)
+            expr = "qio,bti,bto->qbt"
+            if self.einsum_path is None:
+                path = contract_path(
+                    expr,
+                    preconditioned_gradient,
+                    output_gradient,
+                    input_activation,
+                    optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+                )[0]
+                self.einsum_path = [item for pair in path for item in pair]
+            return _VF.einsum(expr, (preconditioned_gradient, output_gradient, input_activation), path=self.einsum_path)  # pylint: disable=no-member
+        expr = "qio,b...i,b...o->qb"
+        if self.einsum_path is None:
+            path = contract_path(
+                expr,
+                preconditioned_gradient,
+                output_gradient,
+                input_activation,
+                optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+            )[0]
+            self.einsum_path = [item for pair in path for item in pair]
+        return _VF.einsum(expr, (preconditioned_gradient, output_gradient, input_activation), path=self.einsum_path)  # pylint: disable=no-member
 
     def compute_self_measurement_score(
         self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
         input_activation = self._flatten_input_activation(input_activation=input_activation)
-        return torch.einsum("bio,b...i,b...o->b", preconditioned_gradient, output_gradient, input_activation)
+        expr = "bio,b...i,b...o->b"
+        if self.einsum_path is None:
+            path = contract_path(
+                expr,
+                preconditioned_gradient,
+                output_gradient,
+                input_activation,
+                optimize=DynamicProgramming(search_outer=True, minimize="flops"),
+            )[0]
+            self.einsum_path = [item for pair in path for item in pair]
+        return _VF.einsum(expr, (preconditioned_gradient, output_gradient, input_activation), path=self.einsum_path)  # pylint: disable=no-member
