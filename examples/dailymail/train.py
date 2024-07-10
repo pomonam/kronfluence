@@ -33,7 +33,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train seq2seq models on DailyMail dataset.")
+    parser = argparse.ArgumentParser(description="Train seq2seq models on CNN DailyMail dataset.")
 
     parser.add_argument(
         "--train_batch_size",

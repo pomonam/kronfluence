@@ -81,7 +81,7 @@ def get_dailymail_dataset(
             batched=True,
             num_proc=None,
             remove_columns=column_names,
-            # load_from_cache_file=True,
+            load_from_cache_file=True,
             desc="Running tokenizer on dataset.",
         )
         ds = train_dataset

@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import torch
 import torch.nn.functional as F
@@ -31,7 +31,7 @@ except KeyError:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Influence analysis on DailyMail dataset.")
+    parser = argparse.ArgumentParser(description="Influence analysis on CNN DailyMail dataset.")
 
     parser.add_argument(
         "--checkpoint_dir",
@@ -43,7 +43,7 @@ def parse_args():
     parser.add_argument(
         "--factor_strategy",
         type=str,
-        default="identity",
+        default="ekfac",
         help="Strategy to compute influence factors.",
     )
     parser.add_argument(
@@ -67,19 +67,19 @@ def parse_args():
     parser.add_argument(
         "--factor_batch_size",
         type=int,
-        default=None,
+        default=64,
         help="Batch size for computing influence factors.",
     )
     parser.add_argument(
         "--query_batch_size",
         type=int,
-        default=2,
+        default=10,
         help="Batch size for computing query gradients.",
     )
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=1,
+        default=128,
         help="Batch size for computing training gradients.",
     )
     parser.add_argument(
@@ -147,7 +147,7 @@ class SummarizationTask(Task):
         masks = batch["labels"].view(-1) != -100
         return -margins[masks].sum()
 
-    def tracked_modules(self) -> List[str]:
+    def get_influence_tracked_modules(self) -> List[str]:
         total_modules = []
 
         # Add attention layers:
@@ -177,7 +177,7 @@ class SummarizationTask(Task):
 
         return total_modules
 
-    def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
+    def get_attention_mask(self, batch: BATCH_TYPE) -> torch.Tensor:
         return batch["attention_mask"]
 
 
