@@ -1,10 +1,11 @@
 import argparse
 import logging
+from datetime import timedelta
 from typing import Dict, List, Optional
 
 import torch
 import torch.nn.functional as F
-from accelerate import Accelerator
+from accelerate import Accelerator, InitProcessGroupKwargs
 from torch import nn
 from transformers import default_data_collator
 
@@ -62,7 +63,8 @@ def main():
     task = LanguageModelingTask()
     model = prepare_model(model, task)
 
-    accelerator = Accelerator()
+    kwargs = InitProcessGroupKwargs(timeout=timedelta(seconds=5400))  # 1.5 hours.
+    accelerator = Accelerator(kwargs_handlers=[kwargs])
     model = accelerator.prepare_model(model)
 
     analyzer = Analyzer(
