@@ -20,8 +20,10 @@ from kronfluence.task import Task
 from kronfluence.utils.common.factor_arguments import (
     extreme_reduce_memory_factor_arguments,
 )
-from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments, \
-    extreme_reduce_memory_score_arguments
+from kronfluence.utils.common.score_arguments import (
+    all_low_precision_score_arguments,
+    extreme_reduce_memory_score_arguments,
+)
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 BATCH_TYPE = Dict[str, torch.Tensor]
