@@ -92,8 +92,9 @@ def main():
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     scores_name = args.factor_strategy
+    rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     score_args = extreme_reduce_memory_score_arguments(
-        damping_factor=None, module_partitions=1, query_gradient_low_rank=args.query_gradient_rank, dtype=torch.bfloat16
+        damping_factor=None, module_partitions=1, query_gradient_low_rank=rank, dtype=torch.bfloat16
     )
     score_args.module_partitions = 2
     score_args.num_query_gradient_accumulations = 10
