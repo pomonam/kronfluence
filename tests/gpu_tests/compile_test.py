@@ -7,7 +7,8 @@ import torch
 from torch.utils import data
 
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
+from kronfluence.utils.common.score_arguments import pytest_score_arguments
 from kronfluence.utils.constants import (
     ALL_MODULE_NAME,
     COVARIANCE_FACTOR_NAMES,
@@ -15,7 +16,7 @@ from kronfluence.utils.constants import (
 )
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
-from tests.utils import check_tensor_dict_equivalence
+from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence
 
 logging.basicConfig(level=logging.DEBUG)
 OLD_FACTOR_NAME = "single_gpu"
@@ -41,6 +42,9 @@ class CompileTest(unittest.TestCase):
         cls.model = cls.model.cuda()
         cls.model = torch.compile(cls.model)
 
+        print(cls.model)
+        print(list(cls.model.named_modules()))
+
         cls.analyzer = Analyzer(
             analysis_name="gpu_test",
             model=cls.model,
@@ -49,12 +53,7 @@ class CompileTest(unittest.TestCase):
 
     def test_covariance_matrices(self) -> None:
         covariance_factors = self.analyzer.load_covariance_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = FactorArguments(
-            use_empirical_fisher=True,
-            activation_covariance_dtype=torch.float64,
-            gradient_covariance_dtype=torch.float64,
-            lambda_dtype=torch.float64,
-        )
+        factor_args = pytest_factor_arguments()
         self.analyzer.fit_covariance_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -69,15 +68,16 @@ class CompileTest(unittest.TestCase):
                 print(f"Name: {name, module_name}")
                 print(f"Previous factor: {covariance_factors[name][module_name]}")
                 print(f"New factor: {new_covariance_factors[name][module_name]}")
+            assert check_tensor_dict_equivalence(
+                covariance_factors[name],
+                new_covariance_factors[name],
+                atol=ATOL,
+                rtol=RTOL,
+            )
 
-    def test_lambda_matrices(self):
+    def test_lambda_matrices(self) -> None:
         lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = FactorArguments(
-            use_empirical_fisher=True,
-            activation_covariance_dtype=torch.float64,
-            gradient_covariance_dtype=torch.float64,
-            lambda_dtype=torch.float64,
-        )
+        factor_args = pytest_factor_arguments()
         self.analyzer.fit_lambda_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -96,18 +96,38 @@ class CompileTest(unittest.TestCase):
             assert check_tensor_dict_equivalence(
                 lambda_factors[name],
                 new_lambda_factors[name],
-                atol=1e-3,
-                rtol=1e-1,
+                atol=ATOL,
+                rtol=RTOL,
+            )
+
+    def test_lambda_shared_matrices(self) -> None:
+        lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
+        factor_args = pytest_factor_arguments()
+        factor_args.has_shared_parameters = True
+        self.analyzer.fit_lambda_matrices(
+            factors_name=NEW_FACTOR_NAME,
+            dataset=self.train_dataset,
+            factor_args=factor_args,
+            per_device_batch_size=512,
+            overwrite_output_dir=True,
+            load_from_factors_name=OLD_FACTOR_NAME,
+        )
+        new_lambda_factors = self.analyzer.load_lambda_matrices(factors_name=NEW_FACTOR_NAME)
+
+        for name in LAMBDA_FACTOR_NAMES:
+            for module_name in lambda_factors[name]:
+                print(f"Name: {name, module_name}")
+                print(f"Previous factor: {lambda_factors[name][module_name]}")
+                print(f"New factor: {new_lambda_factors[name][module_name]}")
+            assert check_tensor_dict_equivalence(
+                lambda_factors[name],
+                new_lambda_factors[name],
+                atol=ATOL,
+                rtol=RTOL,
             )
 
     def test_pairwise_scores(self) -> None:
-        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
-
-        score_args = ScoreArguments(
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-        )
+        score_args = pytest_score_arguments()
         self.analyzer.compute_pairwise_scores(
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,
@@ -121,6 +141,7 @@ class CompileTest(unittest.TestCase):
             overwrite_output_dir=True,
         )
         new_pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=NEW_SCORE_NAME)
+        pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
 
         print(f"Previous score: {pairwise_scores[ALL_MODULE_NAME][10]}")
         print(f"Previous shape: {pairwise_scores[ALL_MODULE_NAME].shape}")
@@ -129,16 +150,12 @@ class CompileTest(unittest.TestCase):
         assert check_tensor_dict_equivalence(
             pairwise_scores,
             new_pairwise_scores,
-            atol=1e-5,
-            rtol=1e-3,
+            atol=ATOL,
+            rtol=RTOL,
         )
 
     def test_self_scores(self) -> None:
-        score_args = ScoreArguments(
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-        )
+        score_args = pytest_score_arguments()
         self.analyzer.compute_self_scores(
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,
@@ -149,8 +166,8 @@ class CompileTest(unittest.TestCase):
             overwrite_output_dir=True,
         )
         new_self_scores = self.analyzer.load_self_scores(scores_name=NEW_SCORE_NAME)
-
         self_scores = self.analyzer.load_self_scores(scores_name=OLD_SCORE_NAME)
+
         print(f"Previous score: {self_scores[ALL_MODULE_NAME]}")
         print(f"Previous shape: {self_scores[ALL_MODULE_NAME].shape}")
         print(f"New score: {new_self_scores[ALL_MODULE_NAME]}")
@@ -158,8 +175,8 @@ class CompileTest(unittest.TestCase):
         assert check_tensor_dict_equivalence(
             self_scores,
             new_self_scores,
-            atol=1e-5,
-            rtol=1e-3,
+            atol=ATOL,
+            rtol=RTOL,
         )
 
 

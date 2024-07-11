@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict
 
 import torch
 import torch.nn.functional as F
@@ -93,6 +93,8 @@ def parse_args():
 
 
 class MultipleChoiceTask(Task):
+    enable_post_process_per_sample_gradient = True
+
     def compute_train_loss(
         self,
         batch: BATCH_TYPE,
@@ -135,8 +137,14 @@ class MultipleChoiceTask(Task):
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
 
-    def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
+    def get_attention_mask(self, batch: BATCH_TYPE) -> torch.Tensor:
         return batch["attention_mask"]
+
+    def post_process_per_sample_gradient(self, module_name: str, gradient: torch.Tensor) -> torch.Tensor:
+        del module_name
+        total_batch_size = gradient.size(0)
+        true_batch_size = int(total_batch_size / 4)
+        return gradient.reshape(true_batch_size, 4, *gradient.size()[1:]).sum(dim=1)
 
 
 def main():
@@ -169,7 +177,6 @@ def main():
             rank=WORLD_RANK,
             world_size=WORLD_SIZE,
         )
-        print(model)
 
     analyzer = Analyzer(
         analysis_name="swag",
@@ -184,7 +191,6 @@ def main():
     # Compute influence factors.
     factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
-    # factor_args.lambda_iterative_aggregate = True
     if args.use_half_precision:
         factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
         factors_name += "_half"
@@ -206,8 +212,8 @@ def main():
         scores_name += "_half"
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     if rank is not None:
-        score_args.query_gradient_rank = rank
-        score_args.num_query_gradient_accumulations = 10
+        score_args.query_gradient_low_rank = rank
+        score_args.query_gradient_accumulation_steps = 10
         scores_name += f"_qlr{rank}"
     if args.use_ddp:
         scores_name += "_ddp"

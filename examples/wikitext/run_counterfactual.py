@@ -34,10 +34,9 @@ def main():
 
     valid_dataset = get_wikitext_dataset(split="valid", indices=list(range(50)))
 
-    def train_and_evaluate(indices):
-        train_dataset = get_wikitext_dataset(split="train", indices=indices)
+    def train_and_evaluate(indices) -> float:
         model = train(
-            dataset=train_dataset,
+            dataset=get_wikitext_dataset(split="train", indices=indices),
             batch_size=8,
             num_train_epochs=3,
             learning_rate=3e-05,

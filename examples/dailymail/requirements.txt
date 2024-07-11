@@ -1,0 +1,7 @@
+sentencepiece!=0.1.92
+nltk
+py7zr
+rouge-score
+transformers
+evaluate
+datasets

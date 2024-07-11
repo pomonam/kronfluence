@@ -17,18 +17,18 @@ python cpu_test.py
 
 ### DDP Tests
 
-To test if running with Distributed Data Parallel (DDP) with 3 GPUs obtains the same result, run:
+To test if running with Distributed Data Parallel (DDP) with 4 GPUs obtains the same result, run:
 
 ```bash
-torchrun --nnodes=1 --nproc_per_node=3 ddp_test.py
+torchrun --nnodes=1 --nproc_per_node=4 ddp_test.py
 ```
 
 ### FSDP Tests
 
-To test if running with Fully Sharded Data Parallel (FSDP) with 3 GPUs obtains the same result, run:
+To test if running with Fully Sharded Data Parallel (FSDP) with 4 GPUs obtains the same result, run:
 
 ```bash
-torchrun --nnodes=1 --nproc_per_node=3 fsdp_test.py
+torchrun --nnodes=1 --nproc_per_node=4 fsdp_test.py
 ```
 
 ### torch.compile Tests
@@ -49,7 +49,7 @@ python amp_test.py
 
 ### CPU Offload Test
 
-To test if `cached_activation_cpu_offload` option is properly implemented, run:
+To test if `offload_activations_to_cpu` option is properly implemented, run:
 
 ```bash
 pytest test_offload_cpu.py

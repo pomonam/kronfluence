@@ -23,11 +23,23 @@ from kronfluence.factor.eigen import (
     load_eigendecomposition,
     load_lambda_matrices,
 )
-from kronfluence.module.utils import get_tracked_module_names, make_modules_partition
+from kronfluence.module.tracked_module import ModuleMode
+from kronfluence.module.utils import (
+    get_tracked_module_names,
+    make_modules_partition,
+    set_mode,
+)
 from kronfluence.score.pairwise import load_pairwise_scores, pairwise_scores_exist
 from kronfluence.score.self import load_self_scores, self_scores_exist
 from kronfluence.task import Task
-from kronfluence.utils.constants import FACTOR_TYPE, SCORE_TYPE
+from kronfluence.utils.constants import (
+    FACTOR_ARGUMENTS_NAME,
+    FACTOR_SAVE_PREFIX,
+    FACTOR_TYPE,
+    SCORE_ARGUMENTS_NAME,
+    SCORE_SAVE_PREFIX,
+    SCORE_TYPE,
+)
 from kronfluence.utils.dataset import (
     DataLoaderKwargs,
     DistributedEvalSampler,
@@ -39,16 +51,8 @@ from kronfluence.utils.exceptions import (
     TrackedModuleNotFoundError,
 )
 from kronfluence.utils.logger import PassThroughProfiler, Profiler, get_logger
-from kronfluence.utils.model import apply_ddp
-from kronfluence.utils.save import (
-    FACTOR_ARGUMENTS_NAME,
-    FACTOR_SAVE_PREFIX,
-    SCORE_ARGUMENTS_NAME,
-    SCORE_SAVE_PREFIX,
-    load_json,
-    save_json,
-)
-from kronfluence.utils.state import State
+from kronfluence.utils.save import load_json, save_json
+from kronfluence.utils.state import State, release_memory
 
 
 class Computer(ABC):
@@ -66,10 +70,10 @@ class Computer(ABC):
         profile: bool = False,
         disable_tqdm: bool = False,
     ) -> None:
-        """Initializes an instance of the Computer class."""
+        """Initializes an instance of the `Computer` class. See `Analyzer` for more information."""
         self.state = State(cpu=cpu)
 
-        # Creates and configures logger.
+        # Create and configure logger.
         disable_log = log_main_process_only and self.state.process_index != 0
         self.logger = get_logger(name=__name__, log_level=log_level, disable_log=disable_log)
 
@@ -80,47 +84,44 @@ class Computer(ABC):
         if len(tracked_module_names) == 0:
             error_msg = (
                 f"No tracked modules found in the provided model: {self.model}. "
-                f"Please make sure to run `prepare_model` before passing it in to the "
-                f"Analyzer."
+                f"Please ensure you've run `prepare_model` before passing it to the Analyzer."
             )
             self.logger.error(error_msg)
             raise TrackedModuleNotFoundError(error_msg)
         self.logger.info(f"Tracking modules with names: {tracked_module_names}.")
 
         if self.state.use_distributed and not isinstance(model, (DDP, FSDP)):
-            warning_msg = (
-                "Creating a DDP module. If specific configuration needs to be used "
-                "for DDP, please pass in the model after the manual DDP wrapping."
+            self.logger.warning(
+                "Creating a DDP module. For custom DDP configuration, "
+                "please manually wrap the model with DDP before passing it in."
             )
-            self.logger.warning(warning_msg)
             self.model.to(self.state.device)
-            self.model = apply_ddp(
-                model=self.model,
-                local_rank=self.state.local_process_index,
-                rank=self.state.process_index,
-                world_size=self.state.num_processes,
+            self.model = DDP(
+                self.model,
+                device_ids=[self.state.local_process_index],
+                output_device=self.state.local_process_index,
             )
 
         if cpu and isinstance(model, (DataParallel, DDP, FSDP)):
-            error_msg = "To enforce CPU, the model should not be wrapped with DP, DDP, or FSDP."
+            error_msg = (
+                "CPU enforcement is incompatible with DP, DDP, or FSDP wrapped models. "
+                "Please provide an unwrapped model when using `cpu=True`."
+            )
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
         if not self.state.use_distributed:
             self.model.to(self.state.device)
 
-        # Creates and configures output directory.
+        # Create and configure output directory.
         self.output_dir = Path(output_dir).joinpath(name).resolve()
         os.makedirs(name=self.output_dir, exist_ok=True)
 
-        # Creates and configures profiler.
+        # Create and configure profiler.
         self.profiler = Profiler(state=self.state) if profile else PassThroughProfiler(state=self.state)
-        # Creates directory to save profiler output.
-        self.profiler_dir = (self.output_dir / "profiler_output").resolve()
-        os.makedirs(name=self.profiler_dir, exist_ok=True)
         self.disable_tqdm = disable_tqdm
 
-        # Sets PyTorch DataLoader arguments.
+        # Set PyTorch DataLoader arguments.
         self._dataloader_params = DataLoaderKwargs()
 
     def factors_output_dir(self, factors_name: str) -> Path:
@@ -145,11 +146,11 @@ class Computer(ABC):
             loaded_arguments = load_json(arguments_save_path)
             if loaded_arguments != arguments.to_dict():
                 error_msg = (
-                    "Attempting to use the arguments that differs from the one already saved. "
-                    "Please set `overwrite_output_dir=True` to overwrite existing experiment."
+                    f"New arguments differ from saved arguments at `{arguments_save_path}`. "
+                    "Set `overwrite_output_dir=True` to overwrite existing experiment.\n"
+                    f"New arguments: {arguments.to_dict()}\n"
+                    f"Saved arguments: {loaded_arguments}"
                 )
-                error_msg += f"\nNew arguments: {arguments.to_dict()}."
-                error_msg += f"\nSaved arguments: {loaded_arguments}."
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
         else:
@@ -198,13 +199,13 @@ class Computer(ABC):
         allow_duplicates: bool = False,
         stack: bool = False,
     ) -> data.DataLoader:
-        """Returns the DataLoader for the given dataset, per_device_batch_size, and additional parameters."""
+        """Returns the DataLoader with the provided configuration."""
         if indices is not None:
             dataset = data.Subset(dataset=dataset, indices=indices)
 
         if self.state.use_distributed and not allow_duplicates:
             if stack:
-                error_msg = "DistributedEvalSampler is not currently supported with `stack=True`."
+                error_msg = "DistributedEvalSampler is incompatible with `stack=True`."
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
             sampler = DistributedEvalSampler(
@@ -249,35 +250,31 @@ class Computer(ABC):
     def _get_data_partition(
         self,
         total_data_examples: int,
-        data_partition_size: int,
+        data_partitions: int,
         target_data_partitions: Optional[Union[int, List[int]]],
     ) -> Tuple[List[Tuple[int, int]], List[int]]:
         """Partitions the dataset into several chunks."""
-        if total_data_examples < data_partition_size:
+        if total_data_examples < data_partitions:
             error_msg = (
-                f"Data partition size ({data_partition_size}) cannot be greater than the "
-                f"total data points ({total_data_examples}). Please reduce the data partition "
-                f"size in the argument."
+                f"Data partition size ({data_partitions}) exceeds total data points ({total_data_examples}). "
+                "Please reduce the data partition size."
             )
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
         indices_partitions = make_indices_partition(
-            total_data_examples=total_data_examples, partition_size=data_partition_size
+            total_data_examples=total_data_examples, partition_size=data_partitions
         )
 
         if target_data_partitions is None:
-            target_data_partitions = list(range(data_partition_size))
+            target_data_partitions = list(range(data_partitions))
 
         if isinstance(target_data_partitions, int):
             target_data_partitions = [target_data_partitions]
 
         for data_partition in target_data_partitions:
-            if data_partition < 0 or data_partition > data_partition_size:
-                error_msg = (
-                    f"Invalid data partition {data_partition} encountered. "
-                    f"The module partition needs to be in between [0, {data_partition_size})."
-                )
+            if data_partition < 0 or data_partition > data_partitions:
+                error_msg = f"Invalid data partition {data_partition}. Must be in range [0, {data_partitions})."
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
 
@@ -285,49 +282,53 @@ class Computer(ABC):
 
     def _get_module_partition(
         self,
-        module_partition_size: int,
+        module_partitions: int,
         target_module_partitions: Optional[Union[int, List[int]]],
     ) -> Tuple[List[List[str]], List[int]]:
         """Partitions the modules into several chunks."""
         tracked_module_names = get_tracked_module_names(self.model)
 
-        if len(tracked_module_names) < module_partition_size:
+        if len(tracked_module_names) < module_partitions:
             error_msg = (
-                f"Module partition size ({module_partition_size}) cannot be greater than the "
-                f"total tracked modules ({len(tracked_module_names)}). Please reduce the module partition "
-                f"size in the argument."
+                f"Module partition size ({module_partitions}) exceeds total tracked modules "
+                f"({len(tracked_module_names)}). Please reduce the module partition size."
             )
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
         modules_partition_list = make_modules_partition(
             total_module_names=tracked_module_names,
-            partition_size=module_partition_size,
+            partition_size=module_partitions,
         )
 
         if target_module_partitions is None:
-            target_module_partitions = list(range(module_partition_size))
+            target_module_partitions = list(range(module_partitions))
 
         if isinstance(target_module_partitions, int):
             target_module_partitions = [target_module_partitions]
 
         for module_partition in target_module_partitions:
-            if module_partition < 0 or module_partition > module_partition_size:
-                error_msg = (
-                    f"Invalid module partition {module_partition} encountered. "
-                    f"The module partition needs to be in between [0, {module_partition_size})."
-                )
+            if module_partition < 0 or module_partition > module_partitions:
+                error_msg = f"Invalid module partition {module_partition}. Must be in range [0, {module_partitions})."
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
 
         return modules_partition_list, target_module_partitions
 
-    def _log_profile_summary(self) -> None:
+    def _reset_memory(self) -> None:
+        """Clears all cached memory."""
+        self.model.zero_grad(set_to_none=True)
+        set_mode(model=self.model, mode=ModuleMode.DEFAULT, release_memory=True)
+        release_memory()
+
+    def _log_profile_summary(self, name: str) -> None:
         """Saves the summary of the profiling results."""
         profile_summary = self.profiler.summary()
         time_str = time.strftime("%Y%m%d_%H%M%S")
-        profile_save_path = (self.profiler_dir / f"summary_rank_{self.state.process_index}_{time_str}.txt").resolve()
+        profiler_dir = (self.output_dir / "profiler_output").resolve()
+        profile_save_path = (profiler_dir / f"{name}_summary_rank_{self.state.process_index}_{time_str}.txt").resolve()
         if profile_summary != "":
+            os.makedirs(name=profiler_dir, exist_ok=True)
             self.logger.info(profile_summary)
             with open(profile_save_path, "a", encoding="utf-8") as f:
                 f.write(profile_summary)
@@ -394,7 +395,7 @@ class Computer(ABC):
         if factor_args is None:
             error_msg = f"Factors with name `{factors_name}` was not found at `{factors_output_dir}`."
             self.logger.error(error_msg)
-            raise ValueError(error_msg)
+            raise FileNotFoundError(error_msg)
 
         loaded_factors: FACTOR_TYPE = {}
         factor_config = FactorConfig.CONFIGS[factor_args.strategy]

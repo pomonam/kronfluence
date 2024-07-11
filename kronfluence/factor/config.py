@@ -40,32 +40,32 @@ class FactorConfig(metaclass=ABCMeta):
     @property
     @abstractmethod
     def requires_covariance_matrices(self) -> bool:
-        """Returns True if the strategy requires computing covariance matrices."""
+        """Returns `True` if the strategy requires computing covariance matrices."""
         raise NotImplementedError("Subclasses must implement the `requires_covariance_matrices` property.")
 
     @property
     @abstractmethod
     def requires_eigendecomposition(self) -> bool:
-        """Returns True if the strategy requires performing Eigendecomposition."""
+        """Returns `True` if the strategy requires performing Eigendecomposition."""
         raise NotImplementedError("Subclasses must implement the `requires_eigendecomposition` property.")
 
     @property
     @abstractmethod
     def requires_lambda_matrices(self) -> bool:
-        """Returns True if the strategy requires computing Lambda matrices."""
+        """Returns `True` if the strategy requires computing Lambda matrices."""
         raise NotImplementedError("Subclasses must implement the `requires_lambda_matrices` property.")
 
     @property
     @abstractmethod
     def requires_eigendecomposition_for_lambda(self) -> bool:
-        """Returns True if the strategy requires loading Eigendecomposition results, before computing
+        """Returns `True` if the strategy requires loading Eigendecomposition results, before computing
         Lambda matrices."""
         raise NotImplementedError("Subclasses must implement the `requires_eigendecomposition_for_lambda` property.")
 
     @property
     @abstractmethod
     def requires_covariance_matrices_for_precondition(self) -> bool:
-        """Returns True if the strategy requires loading covariance matrices, before computing
+        """Returns `True` if the strategy requires loading covariance matrices, before computing
         preconditioned gradient."""
         raise NotImplementedError(
             "Subclasses must implement the `requires_covariance_matrices_for_precondition` property."
@@ -74,7 +74,7 @@ class FactorConfig(metaclass=ABCMeta):
     @property
     @abstractmethod
     def requires_eigendecomposition_for_precondition(self) -> bool:
-        """Returns True if the strategy requires loading Eigendecomposition results, before computing
+        """Returns `True` if the strategy requires loading Eigendecomposition results, before computing
         preconditioned gradient."""
         raise NotImplementedError(
             "Subclasses must implement the `requires_eigendecomposition_for_precondition` property."
@@ -83,34 +83,42 @@ class FactorConfig(metaclass=ABCMeta):
     @property
     @abstractmethod
     def requires_lambda_matrices_for_precondition(self) -> bool:
-        """Returns True if the strategy requires loading Lambda matrices, before computing
+        """Returns `True` if the strategy requires loading Lambda matrices, before computing
         the preconditioned gradient."""
         raise NotImplementedError("Subclasses must implement the `requires_lambda_matrices_for_precondition` property.")
+
+    def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
+        """Performs necessary operations before computing the preconditioned gradient.
+
+        Args:
+            storage (STORAGE_TYPE):
+                A dictionary containing various factors required to compute the preconditioned gradient.
+                See `.storage` in `TrackedModule` for details.
+            score_args (ScoreArguments):
+                Arguments for computing the preconditioned gradient.
+            device (torch.device):
+                Device used for computing the preconditioned gradient.
+        """
 
     @abstractmethod
     def precondition_gradient(
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float] = None,
     ) -> torch.Tensor:
-        """Preconditions the per-sample-gradient. The per-sample-gradient is a 3-dimensional
-        tensor with the shape `batch_size x output_dim x input_dim`.
+        """Preconditions the per-sample gradient. The per-sample gradient is a 3-dimensional
+        tensor with shape `batch_size x output_dim x input_dim`.
 
         Args:
             gradient (torch.Tensor):
-                The per-sample-gradient tensor.
+                The per-sample gradient tensor.
             storage (STORAGE_TYPE):
                 A dictionary containing various factors required to compute the preconditioned gradient.
                 See `.storage` in `TrackedModule` for details.
-            damping (float, optional):
-                The damping factor when computing the preconditioned gradient. If not provided, sets
-                the damping term with some heuristic.
 
         Returns:
             torch.Tensor:
-                The preconditioned per-sample-gradient tensor. The dimension should be the same as the original
-                per-sample-gradient.
+                The preconditioned per-sample gradient tensor.
         """
         raise NotImplementedError("Subclasses must implement the `precondition_gradient` method.")
 
@@ -150,9 +158,8 @@ class Identity(FactorConfig, factor_strategy=FactorStrategy.IDENTITY):
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float] = None,
     ) -> torch.Tensor:
-        del storage, damping
+        del storage
         return gradient
 
 
@@ -187,18 +194,23 @@ class Diagonal(FactorConfig, factor_strategy=FactorStrategy.DIAGONAL):
     def requires_lambda_matrices_for_precondition(self) -> bool:
         return True
 
+    def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
+        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=device)
+        lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED].to(device=device))
+        damping_factor = score_args.damping_factor
+        if damping_factor is None:
+            damping_factor = 0.1 * torch.mean(lambda_matrix)
+        lambda_matrix.add_(damping_factor)
+        storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
+        storage[NUM_LAMBDA_PROCESSED] = None
+
     def precondition_gradient(
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float] = None,
     ) -> torch.Tensor:
-        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=gradient.dtype, device=gradient.device)
-        num_lambda_processed = storage[NUM_LAMBDA_PROCESSED].to(device=gradient.device)
-        lambda_matrix = lambda_matrix / num_lambda_processed
-        if damping is None:
-            damping = 0.1 * torch.mean(lambda_matrix)
-        return gradient / (lambda_matrix + damping)
+        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=gradient.device)
+        return gradient / lambda_matrix
 
 
 class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
@@ -235,27 +247,38 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
     def requires_lambda_matrices_for_precondition(self) -> bool:
         return False
 
+    def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
+        storage[ACTIVATION_EIGENVECTORS_NAME] = (
+            storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=score_args.precondition_dtype).contiguous()
+        )
+        storage[GRADIENT_EIGENVECTORS_NAME] = (
+            storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=score_args.precondition_dtype).contiguous()
+        )
+        activation_eigenvalues = storage[ACTIVATION_EIGENVALUES_NAME].to(device=device)
+        gradient_eigenvalues = storage[GRADIENT_EIGENVALUES_NAME].to(device=device)
+        lambda_matrix = torch.kron(activation_eigenvalues.unsqueeze(0), gradient_eigenvalues.unsqueeze(-1)).unsqueeze(0)
+        damping_factor = score_args.damping_factor
+        if damping_factor is None:
+            damping_factor = 0.1 * torch.mean(lambda_matrix)
+        lambda_matrix.add_(damping_factor)
+        storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
+        storage[NUM_LAMBDA_PROCESSED] = None
+        storage[ACTIVATION_EIGENVALUES_NAME] = None
+        storage[GRADIENT_EIGENVALUES_NAME] = None
+
     @torch.no_grad()
     def precondition_gradient(
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float] = None,
     ) -> torch.Tensor:
-        activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
-        gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
-        activation_eigenvalues = storage[ACTIVATION_EIGENVALUES_NAME].to(dtype=gradient.dtype, device=gradient.device)
-        gradient_eigenvalues = storage[GRADIENT_EIGENVALUES_NAME].to(dtype=gradient.dtype, device=gradient.device)
-        # The eigenvalues have the Kronecker structure for KFAC.
-        lambda_matrix = torch.kron(activation_eigenvalues.unsqueeze(0), gradient_eigenvalues.unsqueeze(-1)).unsqueeze(0)
-
+        activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(device=gradient.device)
+        gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(device=gradient.device)
+        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=gradient.device)
         gradient = torch.matmul(gradient_eigenvectors.t(), torch.matmul(gradient, activation_eigenvectors))
-
-        if damping is None:
-            damping = 0.1 * torch.mean(lambda_matrix)
-
-        gradient.div_(lambda_matrix + damping)
-        return torch.matmul(gradient_eigenvectors, torch.matmul(gradient, activation_eigenvectors.t()))
+        gradient.div_(lambda_matrix)
+        gradient = torch.matmul(gradient_eigenvectors, torch.matmul(gradient, activation_eigenvectors.t()))
+        return gradient
 
 
 class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
@@ -292,23 +315,34 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
     def requires_lambda_matrices_for_precondition(self) -> bool:
         return True
 
+    def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
+        storage[ACTIVATION_EIGENVECTORS_NAME] = (
+            storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=score_args.precondition_dtype).contiguous()
+        )
+        storage[GRADIENT_EIGENVECTORS_NAME] = (
+            storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=score_args.precondition_dtype).contiguous()
+        )
+        storage[ACTIVATION_EIGENVALUES_NAME] = None
+        storage[GRADIENT_EIGENVALUES_NAME] = None
+        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=device)
+        lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED].to(device=device))
+        damping_factor = score_args.damping_factor
+        if damping_factor is None:
+            damping_factor = 0.1 * torch.mean(lambda_matrix)
+        lambda_matrix.add_(damping_factor)
+        storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
+        storage[NUM_LAMBDA_PROCESSED] = None
+
     @torch.no_grad()
     def precondition_gradient(
         self,
         gradient: torch.Tensor,
         storage: STORAGE_TYPE,
-        damping: Optional[float] = None,
     ) -> torch.Tensor:
-        activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
-        gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=gradient.dtype, device=gradient.device)
-        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=gradient.dtype, device=gradient.device)
-        num_lambda_processed = storage[NUM_LAMBDA_PROCESSED].to(device=gradient.device)
-        lambda_matrix = lambda_matrix / num_lambda_processed
+        activation_eigenvectors = storage[ACTIVATION_EIGENVECTORS_NAME].to(device=gradient.device)
+        gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(device=gradient.device)
+        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=gradient.device)
         gradient = torch.matmul(gradient_eigenvectors.t(), torch.matmul(gradient, activation_eigenvectors))
-
-        if damping is None:
-            damping = 0.1 * torch.mean(lambda_matrix)
-
-        gradient.div_(lambda_matrix + damping)
+        gradient.div_(lambda_matrix)
         gradient = torch.matmul(gradient_eigenvectors, torch.matmul(gradient, activation_eigenvectors.t()))
         return gradient

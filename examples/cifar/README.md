@@ -26,7 +26,7 @@ This will train the model using the specified hyperparameters and save the train
 
 ## Computing Pairwise Influence Scores
 
-To compute pairwise influence scores on 2000 query data points using the `ekfac` factorization strategy, run the following command:
+To compute pairwise influence scores on 2000 query data points using the `ekfac` strategy, run the following command:
 
 ```bash
 python analyze.py --query_batch_size 1000 \
@@ -41,23 +41,23 @@ In addition to `ekfac`, you can also use `identity`, `diagonal`, and `kfac` as t
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  112.83               |  100 %                |
+|  Total                        |  -                    |  11                   |  106.38               |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  47.989               |  1                    |  47.989               |  42.532               |
-|  Fit Lambda                   |  34.639               |  1                    |  34.639               |  30.7                 |
-|  Fit Covariance               |  21.841               |  1                    |  21.841               |  19.357               |
-|  Save Pairwise Score          |  3.5998               |  1                    |  3.5998               |  3.1905               |
-|  Perform Eigendecomposition   |  2.7724               |  1                    |  2.7724               |  2.4572               |
-|  Save Covariance              |  0.85695              |  1                    |  0.85695              |  0.75951              |
-|  Save Eigendecomposition      |  0.85628              |  1                    |  0.85628              |  0.75892              |
-|  Save Lambda                  |  0.12327              |  1                    |  0.12327              |  0.10925              |
-|  Load Eigendecomposition      |  0.056494             |  1                    |  0.056494             |  0.05007              |
-|  Load All Factors             |  0.048981             |  1                    |  0.048981             |  0.043412             |
-|  Load Covariance              |  0.046798             |  1                    |  0.046798             |  0.041476             |
+|  Compute Pairwise Score       |  46.745               |  1                    |  46.745               |  43.941               |
+|  Fit Lambda                   |  34.885               |  1                    |  34.885               |  32.793               |
+|  Fit Covariance               |  22.538               |  1                    |  22.538               |  21.187               |
+|  Perform Eigendecomposition   |  0.91424              |  1                    |  0.91424              |  0.85941              |
+|  Save Pairwise Score          |  0.81219              |  1                    |  0.81219              |  0.76348              |
+|  Save Covariance              |  0.22351              |  1                    |  0.22351              |  0.21011              |
+|  Save Eigendecomposition      |  0.21617              |  1                    |  0.21617              |  0.20321              |
+|  Save Lambda                  |  0.031038             |  1                    |  0.031038             |  0.029177             |
+|  Load Eigendecomposition      |  0.010442             |  1                    |  0.010442             |  0.0098156            |
+|  Load All Factors             |  0.0026517            |  1                    |  0.0026517            |  0.0024927            |
+|  Load Covariance              |  0.0016419            |  1                    |  0.0016419            |  0.0015435            |
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
-To use AMP when computing influence scores (in addition to half precision when computing influence factors and scores), run:
+To use AMP when computing influence scores, run:
 
 ```bash
 python analyze.py --query_batch_size 1000 \
@@ -73,19 +73,19 @@ This reduces computation time to about 40 seconds on an A100 (80GB) GPU:
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  42.316               |  100 %                |
+|  Total                        |  -                    |  11                   |  35.965               |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  19.565               |  1                    |  19.565               |  46.235               |
-|  Fit Lambda                   |  9.173                |  1                    |  9.173                |  21.677               |
-|  Fit Covariance               |  7.3723               |  1                    |  7.3723               |  17.422               |
-|  Perform Eigendecomposition   |  2.6613               |  1                    |  2.6613               |  6.2891               |
-|  Save Pairwise Score          |  2.0156               |  1                    |  2.0156               |  4.7633               |
-|  Save Covariance              |  0.71699              |  1                    |  0.71699              |  1.6944               |
-|  Save Eigendecomposition      |  0.52561              |  1                    |  0.52561              |  1.2421               |
-|  Load Covariance              |  0.15732              |  1                    |  0.15732              |  0.37177              |
-|  Save Lambda                  |  0.063394             |  1                    |  0.063394             |  0.14981              |
-|  Load Eigendecomposition      |  0.051395             |  1                    |  0.051395             |  0.12146              |
-|  Load All Factors             |  0.014144             |  1                    |  0.014144             |  0.033425             |
+|  Compute Pairwise Score       |  18.012               |  1                    |  18.012               |  50.082               |
+|  Fit Lambda                   |  9.2271               |  1                    |  9.2271               |  25.656               |
+|  Fit Covariance               |  7.134                |  1                    |  7.134                |  19.836               |
+|  Perform Eigendecomposition   |  0.87962              |  1                    |  0.87962              |  2.4457               |
+|  Save Pairwise Score          |  0.45432              |  1                    |  0.45432              |  1.2632               |
+|  Save Covariance              |  0.12861              |  1                    |  0.12861              |  0.35759              |
+|  Save Eigendecomposition      |  0.11296              |  1                    |  0.11296              |  0.31407              |
+|  Save Lambda                  |  0.010712             |  1                    |  0.010712             |  0.029784             |
+|  Load All Factors             |  0.002736             |  1                    |  0.002736             |  0.0076074            |
+|  Load Covariance              |  0.0016696            |  1                    |  0.0016696            |  0.0046421            |
+|  Load Eigendecomposition      |  0.0014892            |  1                    |  0.0014892            |  0.0041406            |
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
@@ -131,19 +131,19 @@ On an A100 (80GB) GPU, it takes roughly 2 minutes to compute the self-influence 
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  122.28               |  100 %                |
+|  Total                        |  -                    |  11                   |  121.85               |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Self-Influence Score |  61.999               |  1                    |  61.999               |  50.701               |
-|  Fit Lambda                   |  34.629               |  1                    |  34.629               |  28.319               |
-|  Fit Covariance               |  21.807               |  1                    |  21.807               |  17.833               |
-|  Perform Eigendecomposition   |  1.8041               |  1                    |  1.8041               |  1.4754               |
-|  Save Covariance              |  0.86378              |  1                    |  0.86378              |  0.70638              |
-|  Save Eigendecomposition      |  0.84935              |  1                    |  0.84935              |  0.69458              |
-|  Save Lambda                  |  0.18367              |  1                    |  0.18367              |  0.1502               |
-|  Load Eigendecomposition      |  0.052867             |  1                    |  0.052867             |  0.043233             |
-|  Load Covariance              |  0.051723             |  1                    |  0.051723             |  0.042298             |
-|  Load All Factors             |  0.031986             |  1                    |  0.031986             |  0.026158             |
-|  Save Self-Influence Score    |  0.010352             |  1                    |  0.010352             |  0.0084653            |
+|  Compute Self-Influence Score |  62.778               |  1                    |  62.778               |  51.519               |
+|  Fit Lambda                   |  35.174               |  1                    |  35.174               |  28.866               |
+|  Fit Covariance               |  22.582               |  1                    |  22.582               |  18.532               |
+|  Perform Eigendecomposition   |  0.82656              |  1                    |  0.82656              |  0.67832              |
+|  Save Covariance              |  0.2478               |  1                    |  0.2478               |  0.20336              |
+|  Save Eigendecomposition      |  0.22042              |  1                    |  0.22042              |  0.18088              |
+|  Save Lambda                  |  0.018463             |  1                    |  0.018463             |  0.015152             |
+|  Load All Factors             |  0.0027554            |  1                    |  0.0027554            |  0.0022612            |
+|  Load Covariance              |  0.0016607            |  1                    |  0.0016607            |  0.0013628            |
+|  Load Eigendecomposition      |  0.0015408            |  1                    |  0.0015408            |  0.0012645            |
+|  Save Self-Influence Score    |  0.0010841            |  1                    |  0.0010841            |  0.00088966           |
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 

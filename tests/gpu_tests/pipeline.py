@@ -25,12 +25,12 @@ class GpuTestTask(Task):
         if not sample:
             return F.cross_entropy(logits, labels, reduction="sum")
         with torch.no_grad():
-            probs = torch.nn.functional.softmax(logits, dim=-1)
+            probs = torch.nn.functional.softmax(logits.detach(), dim=-1)
             sampled_labels = torch.multinomial(
                 probs,
                 num_samples=1,
             ).flatten()
-        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
+        return F.cross_entropy(logits, sampled_labels, reduction="sum")
 
     def compute_measurement(
         self,

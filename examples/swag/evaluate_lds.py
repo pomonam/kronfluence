@@ -4,8 +4,9 @@ import numpy as np
 import torch
 import tqdm
 from scipy.stats import spearmanr
+from transformers import AutoTokenizer
 
-from examples.glue.pipeline import get_glue_dataset
+from examples.swag.pipeline import get_swag_dataset
 from kronfluence.analyzer import Analyzer
 
 
@@ -13,7 +14,7 @@ def evaluate_correlations(scores: torch.Tensor) -> float:
     margins = torch.from_numpy(torch.load(open("files/margins.pt", "rb")))
     masks = torch.from_numpy(torch.load(open("files/masks.pt", "rb"))).float()
 
-    val_indices = np.arange(277)
+    val_indices = np.arange(2000)
     preds = masks @ scores.T
 
     rs = []
@@ -39,25 +40,28 @@ def main():
     logging.info(f"LDS: {np.mean(corr_mean)}")
 
     # We can also visualize the top influential sequences.
-    eval_idx = 79
-    train_dataset = get_glue_dataset(
-        data_name="rte",
+    eval_idx = 1004
+    tokenizer = AutoTokenizer.from_pretrained("FacebookAI/roberta-base", use_fast=True, trust_remote_code=True)
+
+    train_dataset = get_swag_dataset(
         split="eval_train",
     )
-    eval_dataset = get_glue_dataset(
-        data_name="rte",
+    eval_dataset = get_swag_dataset(
         split="valid",
     )
+
     print("Query Data Example:")
-    print(f"Sentence1: {eval_dataset[eval_idx]['sentence1']}")
-    print(f"Sentence2: {eval_dataset[eval_idx]['sentence2']}")
-    print(f"Label: {eval_dataset[eval_idx]['label']}")
+    for i in range(4):
+        text = tokenizer.decode(eval_dataset[eval_idx]["input_ids"][i])
+        print(f"Option {i}: {text}")
+    print(f"Label: {eval_dataset[eval_idx]['labels']}")
 
     top_idx = int(torch.argsort(scores[eval_idx], descending=True)[0])
     print("Top Influential Example:")
-    print(f"Sentence1: {train_dataset[top_idx]['sentence1']}")
-    print(f"Sentence2: {train_dataset[top_idx]['sentence2']}")
-    print(f"Label: {train_dataset[top_idx]['label']}")
+    for i in range(4):
+        text = tokenizer.decode(train_dataset[top_idx]["input_ids"][i])
+        print(f"Option {i}: {text}")
+    print(f"Label: {train_dataset[top_idx]['labels']}")
 
 
 if __name__ == "__main__":

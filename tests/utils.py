@@ -15,12 +15,18 @@ from tests.testable_tasks.classification import (
     WrongClassificationTask,
     make_classification_dataset,
     make_conv_bn_model,
+    make_conv_inplace_model,
     make_conv_model,
 )
 from tests.testable_tasks.language_modeling import (
     LanguageModelingTask,
     make_gpt_dataset,
     make_tiny_gpt,
+)
+from tests.testable_tasks.multiple_choice import (
+    MultipleChoiceTask,
+    make_roberta_dataset,
+    make_tiny_roberta,
 )
 from tests.testable_tasks.regression import (
     GradientCheckpointRegressionTask,
@@ -39,15 +45,25 @@ from tests.testable_tasks.text_classification import (
 RTOL = 1.3e-6
 ATOL = 1e-5
 
+DEFAULT_FACTORS_NAME = "pytest"
+DEFAULT_SCORES_NAME = "pytest"
+
+
+def custom_factors_name(name: str) -> str:
+    return f"{DEFAULT_FACTORS_NAME}_{name}"
+
+
+def custom_scores_name(name: str) -> str:
+    return f"{DEFAULT_FACTORS_NAME}_{name}"
+
 
 def prepare_model_and_analyzer(model: nn.Module, task: Task) -> Tuple[nn.Module, Analyzer]:
     model = prepare_model(model=model, task=task)
     analyzer = Analyzer(
-        analysis_name=f"pytest_{__name__}",
+        analysis_name="pytest",
         model=model,
         task=task,
         disable_model_save=True,
-        cpu=True,
         disable_tqdm=True,
     )
     return model, analyzer
@@ -84,6 +100,12 @@ def prepare_test(
         query_dataset = make_classification_dataset(num_data=query_size, seed=seed + 1)
         task = ClassificationTask()
         data_collator = None
+    elif test_name == "conv_inplace":
+        model = make_conv_inplace_model(seed=seed)
+        train_dataset = make_classification_dataset(num_data=train_size, seed=seed)
+        query_dataset = make_classification_dataset(num_data=query_size, seed=seed + 1)
+        task = ClassificationTask()
+        data_collator = None
     elif test_name == "wrong_conv":
         model = make_conv_model(seed=seed)
         train_dataset = make_classification_dataset(num_data=train_size, seed=seed)
@@ -108,8 +130,21 @@ def prepare_test(
         query_dataset = make_bert_dataset(num_data=query_size, seed=seed + 1, do_not_pad=do_not_pad)
         task = WrongTextClassificationTask()
         data_collator = default_data_collator
+    elif test_name == "roberta":
+        model = make_tiny_roberta(seed=seed)
+        train_dataset = make_roberta_dataset(num_data=train_size, seed=seed)
+        query_dataset = make_roberta_dataset(num_data=query_size, seed=seed + 1)
+        task = MultipleChoiceTask()
+        data_collator = default_data_collator
     elif test_name == "gpt":
         model = make_tiny_gpt(seed=seed)
+        train_dataset = make_gpt_dataset(num_data=train_size, seed=seed)
+        query_dataset = make_gpt_dataset(num_data=query_size, seed=seed + 1)
+        task = LanguageModelingTask()
+        data_collator = default_data_collator
+    elif test_name == "gpt_checkpoint":
+        model = make_tiny_gpt(seed=seed)
+        model.gradient_checkpointing_enable()
         train_dataset = make_gpt_dataset(num_data=train_size, seed=seed)
         query_dataset = make_gpt_dataset(num_data=query_size, seed=seed + 1)
         task = LanguageModelingTask()
@@ -172,6 +207,6 @@ def reshape_parameter_gradient_to_module_matrix(
             if remove_gradient:
                 del gradient_dict[module_name + ".bias"]
     else:
-        error_msg = f"Unsupported module type: {type(module)}. Only nn.Linear or nn.Conv2d are supported."
+        error_msg = f"Unsupported module type: {type(module)}. Only `nn.Linear` or `nn.Conv2d` are supported."
         raise UnsupportableModuleError(error_msg)
     return gradient_matrix

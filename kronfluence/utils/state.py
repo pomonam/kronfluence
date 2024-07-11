@@ -1,13 +1,12 @@
 import contextlib
 import gc
 import os
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List
 
 import torch
 import torch.distributed as dist
 from accelerate.state import SharedDict
 from torch import nn
-from torch.distributed.fsdp import FullyShardedDataParallel
 
 
 class State:
@@ -23,12 +22,11 @@ class State:
     _shared_state: Dict[str, Any] = SharedDict()
 
     def __init__(self, cpu: bool = False) -> None:
-        """Initializes an instance of the State class.
+        """Initializes an instance of the `State` class.
 
         Args:
             cpu (bool):
-                Specifies whether the analysis should be explicitly performed using the CPU.
-                Defaults to False, utilizing GPU resources if available.
+                If `True`, forces the use of CPU even if GPUs are available. Defaults to `False`.
         """
         self.__dict__ = self._shared_state
 
@@ -51,6 +49,12 @@ class State:
                 self.device = torch.device("cpu") if self.cpu else self.default_device
 
     def __repr__(self) -> str:
+        """Provides a string representation of the `State` instance.
+
+        Returns:
+            str:
+                A formatted string containing process and device information.
+        """
         return (
             f"Num processes: {self.num_processes}\n"
             f"Process index: {self.process_index}\n"
@@ -60,64 +64,101 @@ class State:
 
     @staticmethod
     def _reset_state() -> None:
-        """Resets `_shared_state`, is used internally and should not be called."""
+        """Resets the shared state. For internal use only."""
         State._shared_state.clear()
 
     @property
     def initialized(self) -> bool:
-        """Returns whether the `PartialState` has been initialized."""
+        """Checks if the `State` has been initialized."""
         return self._shared_state != {}
 
     @property
     def use_distributed(self) -> bool:
-        """Whether the State is configured for distributed training."""
+        """Checks if the setup is configured for distributed setting."""
         return self.num_processes > 1
 
     @property
     def is_main_process(self) -> bool:
-        """Returns whether the current process is the main process."""
+        """Checks if the current process is the main process."""
         return self.process_index == 0
 
     @property
     def is_local_main_process(self) -> bool:
-        """Returns whether the current process is the main process on the local node."""
+        """Checks if the current process is the main process on the local node."""
         return self.local_process_index == 0
 
     @property
     def is_last_process(self) -> bool:
-        """Returns whether the current process is the last one."""
+        """Checks if the current process is the last one."""
         return self.process_index == self.num_processes - 1
 
     def wait_for_everyone(self) -> None:
-        """Will stop the execution of the current process until every other process has reached that point
-        (so this does nothing when the script is only run in one process)."""
+        """Synchronizes all processes.
+
+        This method will pause the execution of the current process until all other processes
+        reach this point. It has no effect in single-process execution.
+        """
         if self.use_distributed:
             dist.barrier()
 
     @property
     def default_device(self) -> torch.device:
-        """Finds the default device currently available."""
+        """Determines the default device (CUDA if available, otherwise CPU).
+
+        Returns:
+            torch.device:
+                The default device.
+        """
         if torch.cuda.is_available():
             return torch.device("cuda")
         return torch.device("cpu")
 
 
 def release_memory() -> None:
-    """Releases the memory by calling `gc.collect()` and `torch.cuda.empty_cache()`."""
+    """Releases unused memory.
+
+    This function calls Python's garbage collector and empties CUDA cache if CUDA is available.
+    """
     gc.collect()
+    torch.compiler.reset()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
 
+def get_active_tensors() -> List[torch.Tensor]:
+    """Gets a list of active tensors in memory.
+
+    Returns:
+        List[torch.Tensor]:
+            A list of tuples containing tensor type and size.
+    """
+    tensor_lst = []
+    for obj in gc.get_objects():
+        if torch.is_tensor(obj) or (hasattr(obj, "data") and torch.is_tensor(obj.data)):
+            tensor_lst.append(type(obj), obj.size())
+    return tensor_lst
+
+
 @contextlib.contextmanager
 def no_sync(model: nn.Module, state: State) -> Callable:
-    """A context manager to avoid DDP synchronization. The code is adapted from
-    https://github.com/huggingface/accelerate/blob/v0.27.2/src/accelerate/accelerator.py#L852."""
+    """A context manager to temporarily disable gradient synchronization in distributed setting.
+
+    Args:
+        model (nn.Module):
+            The PyTorch model.
+        state (State):
+            The current process state.
+
+    Yields:
+        A context where gradient synchronization is disabled (if applicable).
+
+    Note:
+        For FullyShardedDataParallel (FSDP) models, this may result in higher memory usage.
+        See: https://pytorch.org/docs/stable/fsdp.html.
+    """
     context = contextlib.nullcontext
 
-    # `no_sync()` for FSDP instance can result in higher memory usage, detailed in:
-    # https://pytorch.org/docs/stable/fsdp.html.
-    if state.use_distributed and not isinstance(model, FullyShardedDataParallel):
+    if state.use_distributed:
         context = getattr(model, "no_sync", context)
 
     with context():

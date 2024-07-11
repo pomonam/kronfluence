@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import torch
 import torch.nn.functional as F
@@ -90,23 +90,21 @@ class LanguageModelingTask(Task):
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
         ).logits
-
-        shift_logits = logits[..., :-1, :].contiguous()
+        logits = logits[..., :-1, :].contiguous()
+        logits = logits.view(-1, logits.size(-1))
 
         if not sample:
             labels = batch["labels"]
-            shift_labels = labels[..., 1:].contiguous()
-            reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
-            summed_loss = F.cross_entropy(reshaped_shift_logits, shift_labels.view(-1), reduction="sum")
+            labels = labels[..., 1:].contiguous()
+            summed_loss = F.cross_entropy(logits, labels.view(-1), reduction="sum")
         else:
-            reshaped_shift_logits = shift_logits.view(-1, shift_logits.size(-1))
             with torch.no_grad():
-                probs = torch.nn.functional.softmax(reshaped_shift_logits.detach(), dim=-1)
+                probs = torch.nn.functional.softmax(logits.detach(), dim=-1)
                 sampled_labels = torch.multinomial(
                     probs,
                     num_samples=1,
                 ).flatten()
-            summed_loss = F.cross_entropy(reshaped_shift_logits, sampled_labels, reduction="sum")
+            summed_loss = F.cross_entropy(logits, sampled_labels, reduction="sum")
         return summed_loss
 
     def compute_measurement(
@@ -117,7 +115,7 @@ class LanguageModelingTask(Task):
         # We could also compute the log-likelihood or averaged margin.
         return self.compute_train_loss(batch, model)
 
-    def tracked_modules(self) -> List[str]:
+    def get_influence_tracked_modules(self) -> List[str]:
         total_modules = []
 
         for i in range(12):
@@ -130,7 +128,7 @@ class LanguageModelingTask(Task):
 
         return total_modules
 
-    def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
+    def get_attention_mask(self, batch: BATCH_TYPE) -> torch.Tensor:
         return batch["attention_mask"]
 
 
@@ -183,8 +181,8 @@ def main():
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
-        overwrite_output_dir=False,
         initial_per_device_batch_size_attempt=64,
+        overwrite_output_dir=False,
     )
 
     # Compute pairwise scores.
@@ -197,15 +195,14 @@ def main():
         scores_name += "_compile"
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     if rank is not None:
-        score_args.query_gradient_rank = rank
-        score_args.num_query_gradient_accumulations = 10
+        score_args.query_gradient_low_rank = rank
+        score_args.query_gradient_accumulation_steps = 10
         scores_name += f"_qlr{rank}"
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         score_args=score_args,
         factors_name=factors_name,
         query_dataset=eval_dataset,
-        query_indices=list(range(min([len(eval_dataset), 2000]))),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,

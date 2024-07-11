@@ -17,7 +17,7 @@ To compute pairwise influence scores on 1000 query data points using the `ekfac`
 python analyze.py --dataset_dir PATH_TO_IMAGENET \
     --query_gradient_rank -1 \
     --query_batch_size 100 \
-    --train_batch_size 300 \
+    --train_batch_size 256 \
     --factor_strategy ekfac
 ```
 
@@ -53,17 +53,17 @@ python analyze.py --dataset_dir PATH_TO_IMAGENET \
     --factor_strategy ekfac
 ```
 
-On an A100 (80GB) GPU, it takes roughly 3.5 hours to compute the pairwise scores with query batching (including computing EKFAC factors):
+On an A100 (80GB) GPU, it takes roughly 3 hours to compute the pairwise scores with query batching:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  3                    |  9896.8               |  100 %                |
+|  Total                        |  -                    |  3                    |  7352.8               |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  9849.7               |  1                    |  9849.7               |  99.524               |
-|  Save Pairwise Score          |  47.075               |  1                    |  47.075               |  0.47566              |
-|  Load All Factors             |  0.014463             |  1                    |  0.014463             |  0.00014614           |
+|  Compute Pairwise Score       |  7340.8               |  1                    |  7340.8               |  99.836               |
+|  Save Pairwise Score          |  12.026               |  1                    |  12.026               |  0.16355              |
+|  Load All Factors             |  0.0099941            |  1                    |  0.0099941            |  0.00013592           |
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
@@ -91,19 +91,19 @@ This reduces computation time to about 85 minutes on an A100 (80GB) GPU:
 ----------------------------------------------------------------------------------------------------------------------------------
 |  Action                       |  Mean duration (s)    |  Num calls            |  Total time (s)       |  Percentage %         |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Total                        |  -                    |  11                   |  4926.3               |  100 %                |
+|  Total                        |  -                    |  11                   |  3023.7               |  100 %                |
 ----------------------------------------------------------------------------------------------------------------------------------
-|  Compute Pairwise Score       |  4446.0               |  1                    |  4446.0               |  90.249               |
-|  Fit Lambda                   |  255.45               |  1                    |  255.45               |  5.1853               |
-|  Fit Covariance               |  186.86               |  1                    |  186.86               |  3.7931               |
-|  Save Pairwise Score          |  23.205               |  1                    |  23.205               |  0.47104              |
-|  Perform Eigendecomposition   |  7.1356               |  1                    |  7.1356               |  0.14485              |
-|  Save Eigendecomposition      |  3.3045               |  1                    |  3.3045               |  0.067079             |
-|  Save Covariance              |  2.993                |  1                    |  2.993                |  0.060756             |
-|  Save Lambda                  |  0.58278              |  1                    |  0.58278              |  0.01183              |
-|  Load Eigendecomposition      |  0.39114              |  1                    |  0.39114              |  0.0079398            |
-|  Load Covariance              |  0.27701              |  1                    |  0.27701              |  0.005623             |
-|  Load All Factors             |  0.1699               |  1                    |  0.1699               |  0.0034489            |
+|  Compute Pairwise Score       |  2621.2               |  1                    |  2621.2               |  86.688               |
+|  Fit Lambda                   |  232.3                |  1                    |  232.3                |  7.6825               |
+|  Fit Covariance               |  157.36               |  1                    |  157.36               |  5.204                |
+|  Perform Eigendecomposition   |  5.745                |  1                    |  5.745                |  0.19                 |
+|  Save Pairwise Score          |  5.6676               |  1                    |  5.6676               |  0.18744              |
+|  Save Covariance              |  0.70454              |  1                    |  0.70454              |  0.0233               |
+|  Save Eigendecomposition      |  0.61539              |  1                    |  0.61539              |  0.020352             |
+|  Save Lambda                  |  0.092784             |  1                    |  0.092784             |  0.0030685            |
+|  Load Covariance              |  0.013714             |  1                    |  0.013714             |  0.00045354           |
+|  Load All Factors             |  0.0088742            |  1                    |  0.0088742            |  0.00029348           |
+|  Load Eigendecomposition      |  0.0056237            |  1                    |  0.0056237            |  0.00018599           |
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 

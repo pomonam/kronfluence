@@ -18,9 +18,6 @@ def main():
     half_scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac_half/pairwise_scores.safetensors")[
         "all_modules"
     ].float()
-    # half_scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac_half_compile/pairwise_scores.safetensors")[
-    #     "all_modules"
-    # ].float()
 
     # Only plot first 1000 points to avoid clutter.
     index = 5

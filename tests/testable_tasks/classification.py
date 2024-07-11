@@ -26,6 +26,18 @@ def make_conv_model(bias: bool = True, seed: int = 0) -> nn.Module:
     )
 
 
+def make_conv_inplace_model(bias: bool = True, seed: int = 0) -> nn.Module:
+    set_seed(seed)
+    return nn.Sequential(
+        nn.Conv2d(3, 4, 3, 1, bias=bias),
+        nn.ReLU(inplace=True),
+        nn.Conv2d(4, 8, 3, 1, bias=bias),
+        nn.ReLU(inplace=True),
+        nn.Flatten(),
+        nn.Linear(1152, 5, bias=bias),
+    )
+
+
 def make_conv_bn_model(bias: bool = True, seed: int = 0) -> nn.Module:
     set_seed(seed)
     return nn.Sequential(
