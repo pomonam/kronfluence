@@ -149,6 +149,7 @@ def main():
     factor_args = FactorArguments(strategy=args.factor_strategy)
     if args.use_half_precision:
         factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.float16)
+        factor_args.amp_scale = 2.0 ** 20.
         factors_name += "_half"
     analyzer.fit_all_factors(
         factors_name=factors_name,
