@@ -196,8 +196,9 @@ def fit_covariance_matrices_with_loader(
     total_steps = 0
     num_data_processed = torch.zeros((1,), dtype=torch.int64, requires_grad=False)
     enable_amp = factor_args.amp_dtype is not None
-    scaler = GradScaler(enabled=enable_amp)
-    if enable_amp:
+    enable_grad_scaler = enable_amp and factor_args.amp_dtype == torch.float16
+    scaler = GradScaler(init_scale=factor_args.amp_scale, enabled=enable_grad_scaler)
+    if enable_grad_scaler:
         gradient_scale = 1.0 / scaler.get_scale()
         set_gradient_scale(model=model, gradient_scale=gradient_scale)
 
@@ -257,7 +258,7 @@ def fit_covariance_matrices_with_loader(
 
     model.zero_grad(set_to_none=True)
     set_attention_mask(model=model, attention_mask=None)
-    if enable_amp:
+    if enable_grad_scaler:
         set_gradient_scale(model=model, gradient_scale=1.0)
     set_mode(model=model, mode=ModuleMode.DEFAULT, release_memory=True)
     state.wait_for_everyone()

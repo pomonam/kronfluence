@@ -47,7 +47,7 @@ class AMPTest(unittest.TestCase):
     def test_covariance_matrices(self) -> None:
         covariance_factors = self.analyzer.load_covariance_matrices(factors_name=OLD_FACTOR_NAME)
         factor_args = pytest_factor_arguments()
-        factor_args.amp_dtype = torch.bfloat16
+        factor_args.amp_dtype = torch.float16
         self.analyzer.fit_covariance_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -72,7 +72,7 @@ class AMPTest(unittest.TestCase):
     def test_lambda_matrices(self) -> None:
         lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
         factor_args = pytest_factor_arguments()
-        factor_args.amp_dtype = torch.bfloat16
+        factor_args.amp_dtype = torch.float16
         self.analyzer.fit_lambda_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -99,7 +99,7 @@ class AMPTest(unittest.TestCase):
         pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
 
         score_args = pytest_score_arguments()
-        score_args.amp_dtype = torch.bfloat16
+        score_args.amp_dtype = torch.float16
         self.analyzer.compute_pairwise_scores(
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,
@@ -127,7 +127,7 @@ class AMPTest(unittest.TestCase):
 
     def test_self_scores(self) -> None:
         score_args = pytest_score_arguments()
-        score_args.amp_dtype = torch.bfloat16
+        score_args.amp_dtype = torch.float16
         self.analyzer.compute_self_scores(
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,

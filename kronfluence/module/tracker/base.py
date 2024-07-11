@@ -47,28 +47,6 @@ class BaseTracker:
             f"For case 2, set 'has_shared_parameters=True' to enable parameter sharing."
         )
 
-    def _preprocess_gradient(self, output_gradient: torch.Tensor, target_dtype: torch.dtype) -> torch.Tensor:
-        """Preprocesses the output gradient.
-
-        Args:
-            output_gradient (torch.Tensor):
-                The original output gradient.
-            target_dtype (torch.dtype):
-                The desired data type for the gradient tensor.
-
-        Returns:
-            torch.Tensor:
-                The preprocessed gradient.
-        """
-        original_dtype = output_gradient.dtype
-        output_gradient = output_gradient.to(dtype=target_dtype)
-        if self.module.gradient_scale != 1.0:
-            if original_dtype != target_dtype:
-                output_gradient.mul_(self.module.gradient_scale)
-            else:
-                output_gradient = output_gradient * self.module.gradient_scale
-        return output_gradient
-
     def register_hooks(self) -> None:
         """Registers hooks for the module."""
 

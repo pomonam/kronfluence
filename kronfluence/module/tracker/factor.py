@@ -87,7 +87,10 @@ class CovarianceTracker(BaseTracker):
             )
             self._gradient_covariance_initialized = True
         self.module.storage[NUM_GRADIENT_COVARIANCE_PROCESSED].add_(count)
-        self.module.storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(output_gradient.t(), output_gradient)
+        alpha = 1
+        if self.module.gradient_scale != 1.0:
+            alpha = self.module.gradient_scale**2.0
+        self.module.storage[GRADIENT_COVARIANCE_MATRIX_NAME].addmm_(output_gradient.t(), output_gradient, alpha=alpha)
 
     def register_hooks(self) -> None:
         """Sets up hooks to compute activation and gradient covariance matrices."""
@@ -112,9 +115,7 @@ class CovarianceTracker(BaseTracker):
         def backward_hook(output_gradient: torch.Tensor) -> None:
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient.detach(), target_dtype=self.module.factor_args.gradient_covariance_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.factor_args.gradient_covariance_dtype)
             # Computes and updates pseudo-gradient covariance during backward pass.
             output_gradient, count = self.module.get_flattened_gradient(output_gradient=output_gradient)
             self._update_gradient_covariance_matrix(output_gradient=output_gradient, count=count)
@@ -259,15 +260,15 @@ class LambdaTracker(BaseTracker):
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient=output_gradient.detach(), target_dtype=self.module.factor_args.per_sample_gradient_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.factor_args.per_sample_gradient_dtype)
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=self.cached_activations.to(device=output_gradient.device),
                 output_gradient=output_gradient,
             ).to(dtype=self.module.factor_args.lambda_dtype)
             self.clear_all_cache()
             del output_gradient
+            if self.module.gradient_scale != 1.0:
+                per_sample_gradient.mul_(self.module.gradient_scale)
             # Computes and updates lambda matrix during backward pass.
             self._update_lambda_matrix(per_sample_gradient=per_sample_gradient)
 
@@ -275,9 +276,7 @@ class LambdaTracker(BaseTracker):
         def shared_backward_hook(output_gradient: torch.Tensor) -> None:
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient=output_gradient.detach(), target_dtype=self.module.factor_args.per_sample_gradient_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.factor_args.per_sample_gradient_dtype)
             cached_activation = self.cached_activations.pop()
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=cached_activation.to(device=output_gradient.device),
@@ -297,6 +296,8 @@ class LambdaTracker(BaseTracker):
             self.cached_per_sample_gradient = self.cached_per_sample_gradient.to(
                 dtype=self.module.factor_args.lambda_dtype
             )
+            if self.module.gradient_scale != 1.0:
+                self.cached_per_sample_gradient.mul_(self.module.gradient_scale)
             self._update_lambda_matrix(per_sample_gradient=self.cached_per_sample_gradient)
         self.clear_all_cache()
 

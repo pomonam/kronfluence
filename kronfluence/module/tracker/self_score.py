@@ -91,24 +91,22 @@ class SelfScoreTracker(BaseTracker):
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient.detach(), target_dtype=self.module.score_args.per_sample_gradient_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.score_args.per_sample_gradient_dtype)
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=self.cached_activations.to(device=output_gradient.device),
                 output_gradient=output_gradient,
             ).to(dtype=self.module.score_args.precondition_dtype)
             self.clear_all_cache()
             del output_gradient
+            if self.module.gradient_scale != 1.0:
+                per_sample_gradient.mul_(self.module.gradient_scale)
             self._compute_self_score(per_sample_gradient=per_sample_gradient)
 
         @torch.no_grad()
         def shared_backward_hook(output_gradient: torch.Tensor) -> None:
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient.detach(), target_dtype=self.module.score_args.per_sample_gradient_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.score_args.per_sample_gradient_dtype)
             cached_activation = self.cached_activations.pop()
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=cached_activation.to(device=output_gradient.device),
@@ -127,6 +125,8 @@ class SelfScoreTracker(BaseTracker):
             self.cached_per_sample_gradient = self.cached_per_sample_gradient.to(
                 dtype=self.module.score_args.precondition_dtype
             )
+            if self.module.gradient_scale != 1.0:
+                self.cached_per_sample_gradient.mul_(self.module.gradient_scale)
             self._compute_self_score(per_sample_gradient=self.cached_per_sample_gradient)
         self.clear_all_cache()
 
@@ -202,9 +202,7 @@ class SelfScoreWithMeasurementTracker(BaseTracker):
 
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient.detach(), target_dtype=self.module.score_args.score_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.score_args.score_dtype)
             if isinstance(self.cached_activations, list):
                 cached_activation = self.cached_activations.pop()
             else:
@@ -217,6 +215,8 @@ class SelfScoreWithMeasurementTracker(BaseTracker):
                 )
                 self.module.storage[PRECONDITIONED_GRADIENT_NAME] = None
                 self.clear_all_cache()
+                if self.module.gradient_scale != 1.0:
+                    scores.mul_(self.module.gradient_scale)
                 if self.module.storage[SELF_SCORE_VECTOR_NAME] is None:
                     self.module.storage[SELF_SCORE_VECTOR_NAME] = scores
                 else:
@@ -227,6 +227,8 @@ class SelfScoreWithMeasurementTracker(BaseTracker):
                     output_gradient=output_gradient,
                 )
                 del cached_activation, output_gradient
+                if self.module.gradient_scale != 1.0:
+                    per_sample_gradient.mul_(self.module.gradient_scale)
                 self._compute_self_measurement_score_with_gradient(per_sample_gradient=per_sample_gradient)
 
         self.registered_hooks.append(self.module.register_forward_hook(forward_hook))

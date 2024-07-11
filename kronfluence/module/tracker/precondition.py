@@ -105,9 +105,7 @@ class PreconditionTracker(BaseTracker):
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient=output_gradient.detach(), target_dtype=self.module.score_args.per_sample_gradient_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.score_args.per_sample_gradient_dtype)
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=self.cached_activations.to(device=output_gradient.device),
                 output_gradient=output_gradient,
@@ -119,6 +117,8 @@ class PreconditionTracker(BaseTracker):
                 gradient=per_sample_gradient,
                 storage=self.module.storage,
             )
+            if self.module.gradient_scale != 1.0:
+                preconditioned_gradient.mul_(self.module.gradient_scale)
             del per_sample_gradient
             self._process_preconditioned_gradient(preconditioned_gradient=preconditioned_gradient)
 
@@ -126,9 +126,7 @@ class PreconditionTracker(BaseTracker):
         def shared_backward_hook(output_gradient: torch.Tensor) -> None:
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient=output_gradient.detach(), target_dtype=self.module.score_args.per_sample_gradient_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.score_args.per_sample_gradient_dtype)
             cached_activation = self.cached_activations.pop()
             per_sample_gradient = self.module.compute_per_sample_gradient(
                 input_activation=cached_activation.to(device=output_gradient.device),
@@ -153,6 +151,8 @@ class PreconditionTracker(BaseTracker):
                 storage=self.module.storage,
             )
             self.cached_per_sample_gradient = None
+            if self.module.gradient_scale != 1.0:
+                preconditioned_gradient.mul_(self.module.gradient_scale)
             self._process_preconditioned_gradient(preconditioned_gradient=preconditioned_gradient)
         self.clear_all_cache()
 

@@ -55,6 +55,10 @@ class FactorArguments(Arguments):
         default=None,
         metadata={"help": "Data type for automatic mixed precision (AMP). If `None`, AMP is disabled."},
     )
+    amp_scale: float = field(
+        default=2.0**16,
+        metadata={"help": "Scale factor for AMP (only applicable when `amp_dtype=torch.float16`)."},
+    )
     has_shared_parameters: bool = field(
         default=False,
         metadata={"help": "Indicates whether shared parameters are present in the model's forward pass."},
