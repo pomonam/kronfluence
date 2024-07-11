@@ -14,7 +14,7 @@ We will use the pre-trained Meta-Llama-3-8B model [from HuggingFace](https://hug
 To compute factors using the `ekfac` factorization strategy, run the following command which uses 4 A100 (80GB) GPUs:
 
 ```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=4 fit_factors.py --factor_batch_size 4
+torchrun --standalone --nnodes=1 --nproc-per-node=4 fit_factors.py --factors_name jul_11_2024 --factor_batch_size 4
 ```
 
 ## Computing Influence Scores
@@ -25,5 +25,5 @@ I saved some prompt and completition pair to the directory `data/data.json`.
 To compute influence scores on the generated prompt and compleition pair, run the following command:
 
 ```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=4 compute_scores.py --train_batch_size 8
+torchrun --standalone --nnodes=1 --nproc-per-node=4 compute_scores.py --train_batch_size 8 --query_gradient_rank 32
 ```

@@ -27,6 +27,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Influence factor computation on Openwebtext dataset.")
 
     parser.add_argument(
+        "--factors_name",
+        type=str,
+        default="july_11",
+        help="Strategy to compute influence factors.",
+    )
+    parser.add_argument(
         "--factor_strategy",
         type=str,
         default="ekfac",
@@ -77,7 +83,7 @@ def main():
     dataloader_kwargs = DataLoaderKwargs(num_workers=4, collate_fn=default_data_collator, pin_memory=True)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
-    factors_name = args.factor_strategy
+    factors_name = args.factors_name
     factor_args = extreme_reduce_memory_factor_arguments(
         strategy=args.factor_strategy, module_partitions=1, dtype=torch.bfloat16
     )
