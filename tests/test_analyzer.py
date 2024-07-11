@@ -104,6 +104,7 @@ def test_default_factor_arguments() -> None:
     assert factor_args.strategy == "ekfac"
     assert factor_args.use_empirical_fisher is False
     assert factor_args.amp_dtype is None
+    assert factor_args.amp_scale == 2.0**16
     assert factor_args.has_shared_parameters is False
 
     assert factor_args.covariance_max_examples == 100_000
