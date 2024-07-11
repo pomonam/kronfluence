@@ -96,8 +96,8 @@ def main():
     score_args = extreme_reduce_memory_score_arguments(
         damping_factor=None, module_partitions=1, query_gradient_low_rank=rank, dtype=torch.bfloat16
     )
-    score_args.module_partitions = 2
-    score_args.num_query_gradient_accumulations = 10
+    # score_args.module_partitions = 2
+    score_args.query_gradient_accumulation_steps = 10
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         score_args=score_args,

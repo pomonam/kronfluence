@@ -25,5 +25,5 @@ I saved some prompt and completition pair to the directory `data/data.json`.
 To compute influence scores on the generated prompt and compleition pair, run the following command:
 
 ```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=4 compute_scores.py --train_batch_size 4
+torchrun --standalone --nnodes=1 --nproc-per-node=4 compute_scores.py --train_batch_size 8
 ```
