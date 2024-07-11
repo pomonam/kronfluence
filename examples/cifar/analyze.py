@@ -148,8 +148,7 @@ def main():
     factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
     if args.use_half_precision:
-        factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.float16)
-        factor_args.amp_scale = 2.0 ** 20.
+        factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
         factors_name += "_half"
     analyzer.fit_all_factors(
         factors_name=factors_name,
@@ -163,7 +162,7 @@ def main():
     score_args = ScoreArguments()
     scores_name = factor_args.strategy
     if args.use_half_precision:
-        score_args = all_low_precision_score_arguments(dtype=torch.float16)
+        score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
         scores_name += "_half"
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,

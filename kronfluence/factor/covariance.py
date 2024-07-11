@@ -223,7 +223,6 @@ def fit_covariance_matrices_with_loader(
                         model=model,
                         sample=not factor_args.use_empirical_fisher,
                     )
-                print(loss)
                 scaler.scale(loss).backward()
 
             if (
