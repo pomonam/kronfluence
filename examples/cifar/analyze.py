@@ -162,7 +162,7 @@ def main():
     score_args = ScoreArguments()
     scores_name = factor_args.strategy
     if args.use_half_precision:
-        score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
+        score_args = all_low_precision_score_arguments(dtype=torch.float16)
         scores_name += "_half"
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
