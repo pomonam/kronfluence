@@ -205,6 +205,7 @@ factor_args = FactorArguments(
     strategy="ekfac",  # Choose from "identity", "diagonal", "kfac", or "ekfac".
     use_empirical_fisher=False,
     amp_dtype=None,
+    amp_scale=2.0**16,
     has_shared_parameters=False,
 
     # Settings for covariance matrix fitting.
@@ -236,6 +237,7 @@ You can change:
 - `use_empirical_fisher`: Determines whether to use the [empirical Fisher](https://arxiv.org/abs/1905.12558) (using actual labels from batch) 
 instead of the true Fisher (using sampled labels from model's predictions). It is recommended to be `False`.
 - `amp_dtype`: Selects the dtype for [automatic mixed precision (AMP)](https://pytorch.org/docs/stable/amp.html). Disables AMP if set to `None`.
+- `amp_scale`: Sets the scale factor for [automatic mixed precision (AMP)](https://pytorch.org/docs/stable/amp.html).
 - `has_shared_parameters`: Specifies whether the shared parameters exist in the forward pass.
 
 ### Fitting Covariance Matrices

@@ -76,9 +76,7 @@ class PairwiseScoreTracker(BaseTracker):
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient.detach(), target_dtype=self.module.score_args.score_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.score_args.score_dtype)
             if isinstance(self.cached_activations, list):
                 cached_activation = self.cached_activations.pop()
             else:
@@ -90,6 +88,8 @@ class PairwiseScoreTracker(BaseTracker):
                     input_activation=cached_activation.to(device=output_gradient.device),
                     output_gradient=output_gradient,
                 )
+                if self.module.gradient_scale != 1.0:
+                    self.module.storage[PAIRWISE_SCORE_MATRIX_NAME].mul_(self.module.gradient_scale)
                 del cached_activation, output_gradient
                 self.clear_all_cache()
             else:
@@ -98,6 +98,8 @@ class PairwiseScoreTracker(BaseTracker):
                     output_gradient=output_gradient,
                 )
                 del cached_activation, output_gradient
+                if self.module.gradient_scale != 1.0:
+                    per_sample_gradient.mul_(self.module.gradient_scale)
                 self._compute_pairwise_score_with_gradient(per_sample_gradient=per_sample_gradient)
 
         self.registered_hooks.append(self.module.register_forward_hook(forward_hook))

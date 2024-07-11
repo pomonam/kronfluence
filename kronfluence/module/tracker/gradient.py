@@ -38,9 +38,7 @@ class GradientTracker(BaseTracker):
                 self._raise_cache_not_found_exception()
             handle = self.cached_hooks.pop()
             handle.remove()
-            output_gradient = self._preprocess_gradient(
-                output_gradient.detach(), target_dtype=self.module.score_args.per_sample_gradient_dtype
-            )
+            output_gradient = output_gradient.detach().to(dtype=self.module.score_args.per_sample_gradient_dtype)
             if isinstance(self.cached_activations, list):
                 cached_activation = self.cached_activations.pop()
             else:
@@ -56,6 +54,8 @@ class GradientTracker(BaseTracker):
                     input_activation=cached_activation.to(device=output_gradient.device),
                     output_gradient=output_gradient,
                 ).sum(dim=0, keepdim=True)
+            if self.module.gradient_scale != 1.0:
+                summed_gradient.mul_(self.module.gradient_scale)
             if self.module.storage[AGGREGATED_GRADIENT_NAME] is None:
                 self.module.storage[AGGREGATED_GRADIENT_NAME] = torch.zeros_like(summed_gradient, requires_grad=False)
             self.module.storage[AGGREGATED_GRADIENT_NAME].add_(summed_gradient)

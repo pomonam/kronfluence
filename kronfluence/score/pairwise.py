@@ -202,8 +202,9 @@ def compute_pairwise_scores_with_loaders(
     query_iter = iter(query_loader)
     num_accumulations = 0
     enable_amp = score_args.amp_dtype is not None
-    scaler = GradScaler(enabled=enable_amp)
-    if enable_amp:
+    enable_grad_scaler = enable_amp and factor_args.amp_dtype == torch.float16
+    scaler = GradScaler(init_scale=factor_args.amp_scale, enabled=enable_grad_scaler)
+    if enable_grad_scaler:
         gradient_scale = 1.0 / scaler.get_scale()
         set_gradient_scale(model=model, gradient_scale=gradient_scale)
 
@@ -283,7 +284,7 @@ def compute_pairwise_scores_with_loaders(
             total_scores_chunks[module_name] = torch.cat(total_scores_chunks[module_name], dim=0)
 
     model.zero_grad(set_to_none=True)
-    if enable_amp:
+    if enable_grad_scaler:
         set_gradient_scale(model=model, gradient_scale=1.0)
     finalize_all_iterations(model=model, tracked_module_names=tracked_module_names)
     set_mode(model=model, mode=ModuleMode.DEFAULT, release_memory=True)
@@ -324,8 +325,9 @@ def compute_pairwise_query_aggregated_scores_with_loaders(
     prepare_modules(model=model, tracked_module_names=tracked_module_names, device=state.device)
 
     enable_amp = score_args.amp_dtype is not None
-    scaler = GradScaler(enabled=enable_amp)
-    if enable_amp:
+    enable_grad_scaler = enable_amp and factor_args.amp_dtype == torch.float16
+    scaler = GradScaler(init_scale=factor_args.amp_scale, enabled=enable_grad_scaler)
+    if enable_grad_scaler:
         gradient_scale = 1.0 / scaler.get_scale()
         set_gradient_scale(model=model, gradient_scale=gradient_scale)
 
@@ -383,7 +385,7 @@ def compute_pairwise_query_aggregated_scores_with_loaders(
     )
 
     model.zero_grad(set_to_none=True)
-    if enable_amp:
+    if enable_grad_scaler:
         set_gradient_scale(model=model, gradient_scale=1.0)
     set_mode(model=model, mode=ModuleMode.DEFAULT, release_memory=True)
     state.wait_for_everyone()
