@@ -148,7 +148,7 @@ def main():
     factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
     if args.use_half_precision:
-        factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
+        factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.float16)
         factors_name += "_half"
     analyzer.fit_all_factors(
         factors_name=factors_name,
