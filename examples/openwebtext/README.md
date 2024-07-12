@@ -15,7 +15,9 @@ We will use the pre-trained Meta-Llama-3-8B model [from HuggingFace](https://hug
 To compute factors using the `ekfac` strategy, run the following command (e.g., 4 A100 80GB GPUs):
 
 ```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=4 fit_factors.py --factors_name jul_11_2024 --factor_batch_size 4
+torchrun --standalone --nnodes=1 --nproc-per-node=4 fit_factors.py \
+    --factors_name jul_11_2024 \
+    --factor_batch_size 4
 ```
 
 You can visualize the fitted factors using the `inspect_factors.py` script.
@@ -31,12 +33,16 @@ Some prompt-completion pairs are saved in `data/data.json`.
 To compute influence scores on the generated prompt-completion pairs using the fitted factors, run:
 
 ```bash
-torchrun --standalone --nnodes=1 --nproc-per-node=4 compute_scores.py --factors_name jul_11_2024 --train_batch_size 8 --query_gradient_rank 64
+torchrun --standalone --nnodes=1 --nproc-per-node=4 compute_scores.py \
+    --factors_name jul_11_2024 \
+    --scores_name raw_scores \
+    --train_batch_size 8 \
+    --query_gradient_rank 64
 ```
 
 You can experiment with various configurations. For example, after identifying the top 100 influential sequences using query batching, you can use the full query gradient (or without half precision) to re-compute influence scores on these queries. This approach can yield a more accurate ranking. (We followed this approach for the EKFAC IF paper, and it can be effective in removing outliers.)
 
-The `/folder` directory contains some results without any refinement process. Examples are available in this folder.
+The `/files` directory contains some results without any refinement process. Examples are available in this folder.
 
 ```
 Query Sequence:

@@ -24,8 +24,7 @@ def parse_args():
     parser.add_argument(
         "--factors_name",
         type=str,
-        default="july_11",
-        help="Strategy to compute influence factors.",
+        help="Name of the factor.",
     )
     parser.add_argument(
         "--factor_strategy",

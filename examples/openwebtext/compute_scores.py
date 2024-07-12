@@ -28,8 +28,12 @@ def parse_args():
     parser.add_argument(
         "--factors_name",
         type=str,
-        default="july_11",
-        help="Strategy to compute influence factors.",
+        help="Name of the factor.",
+    )
+    parser.add_argument(
+        "--scores_name",
+        type=str,
+        help="Name of the score.",
     )
     parser.add_argument(
         "--query_gradient_rank",
@@ -83,7 +87,6 @@ def main():
     dataloader_kwargs = DataLoaderKwargs(num_workers=4, collate_fn=default_data_collator, pin_memory=True)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
-    scores_name = args.factors_name
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     # We set the damping term used for LLMs.
     score_args = extreme_reduce_memory_score_arguments(
@@ -93,7 +96,7 @@ def main():
     # We can invest some time in getting more accurate SVD results.
     score_args.use_full_svd = True
     analyzer.compute_pairwise_scores(
-        scores_name=scores_name,
+        scores_name=args.scores_name,
         score_args=score_args,
         factors_name=args.factors_name,
         query_dataset=eval_dataset,
@@ -102,7 +105,7 @@ def main():
         per_device_train_batch_size=args.train_batch_size,
         overwrite_output_dir=True,
     )
-    scores = analyzer.load_pairwise_scores(scores_name)["all_modules"]
+    scores = analyzer.load_pairwise_scores(args.scores_name)["all_modules"]
     logging.info(f"Scores shape: {scores.shape}")
 
 
