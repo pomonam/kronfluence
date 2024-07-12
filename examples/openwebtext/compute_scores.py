@@ -43,7 +43,7 @@ def parse_args():
     parser.add_argument(
         "--train_batch_size",
         type=int,
-        default=4,
+        default=8,
         help="Batch size for computing query gradients.",
     )
     parser.add_argument(
@@ -88,10 +88,13 @@ def main():
 
     scores_name = args.factors_name
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
+    # We set the damping term used for LLMs.
     score_args = extreme_reduce_memory_score_arguments(
         damping_factor=None, module_partitions=1, query_gradient_low_rank=rank, dtype=torch.bfloat16
     )
     score_args.query_gradient_accumulation_steps = 10
+    # We can invest some time in getting more accurate SVD results.
+    score_args.use_full_svd = True
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
         score_args=score_args,
