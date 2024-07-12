@@ -18,6 +18,8 @@ SCORE_ARGUMENTS_NAME = "score"
 # The total iteration step to synchronize the process when using distributed setting.
 DISTRIBUTED_SYNC_INTERVAL = 1_000
 
+HEURISTIC_DAMPING_SCALE = 0.1
+
 # Activation covariance matrix.
 ACTIVATION_COVARIANCE_MATRIX_NAME = "activation_covariance"
 # Pseudo-gradient covariance matrix.

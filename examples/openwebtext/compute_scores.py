@@ -1,7 +1,6 @@
 import argparse
 import logging
 from datetime import timedelta
-from typing import Dict
 
 import torch
 from accelerate import Accelerator, InitProcessGroupKwargs
@@ -18,8 +17,6 @@ from kronfluence.utils.common.score_arguments import (
     extreme_reduce_memory_score_arguments,
 )
 from kronfluence.utils.dataset import DataLoaderKwargs
-
-BATCH_TYPE = Dict[str, torch.Tensor]
 
 torch.backends.cudnn.benchmark = True
 torch.backends.cuda.matmul.allow_tf32 = True
