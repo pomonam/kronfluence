@@ -151,6 +151,10 @@ class FactorArguments(Arguments):
         ):
             raise ValueError("All data and module partitions must be positive.")
 
+        # For backward compatibility:
+        if not hasattr(self, "amp_scale"):
+            self.amp_scale = 2.0**16
+
 
 @dataclass
 class ScoreArguments(Arguments):

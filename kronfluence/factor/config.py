@@ -9,6 +9,7 @@ from kronfluence.utils.constants import (
     ACTIVATION_EIGENVECTORS_NAME,
     GRADIENT_EIGENVALUES_NAME,
     GRADIENT_EIGENVECTORS_NAME,
+    HEURISTIC_DAMPING_SCALE,
     LAMBDA_MATRIX_NAME,
     NUM_LAMBDA_PROCESSED,
 )
@@ -199,7 +200,7 @@ class Diagonal(FactorConfig, factor_strategy=FactorStrategy.DIAGONAL):
         lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED].to(device=device))
         damping_factor = score_args.damping_factor
         if damping_factor is None:
-            damping_factor = 0.1 * torch.mean(lambda_matrix)
+            damping_factor = HEURISTIC_DAMPING_SCALE * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
         storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
         storage[NUM_LAMBDA_PROCESSED] = None
@@ -259,7 +260,7 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
         lambda_matrix = torch.kron(activation_eigenvalues.unsqueeze(0), gradient_eigenvalues.unsqueeze(-1)).unsqueeze(0)
         damping_factor = score_args.damping_factor
         if damping_factor is None:
-            damping_factor = 0.1 * torch.mean(lambda_matrix)
+            damping_factor = HEURISTIC_DAMPING_SCALE * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
         storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
         storage[NUM_LAMBDA_PROCESSED] = None
@@ -328,7 +329,7 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
         lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED].to(device=device))
         damping_factor = score_args.damping_factor
         if damping_factor is None:
-            damping_factor = 0.1 * torch.mean(lambda_matrix)
+            damping_factor = HEURISTIC_DAMPING_SCALE * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
         storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
         storage[NUM_LAMBDA_PROCESSED] = None

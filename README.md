@@ -27,9 +27,6 @@ For detailed description of the methodology, see the [**paper**](https://arxiv.o
 
 ---
 
-> [!WARNING]
-> This repository is under development and has not reached its first stable release.
-
 ## Installation
 
 > [!IMPORTANT]
