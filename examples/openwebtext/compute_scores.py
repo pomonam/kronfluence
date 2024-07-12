@@ -1,12 +1,10 @@
 import argparse
 import logging
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Dict
 
 import torch
-import torch.nn.functional as F
 from accelerate import Accelerator, InitProcessGroupKwargs
-from torch import nn
 from transformers import default_data_collator
 
 from examples.openwebtext.pipeline import (
@@ -16,12 +14,7 @@ from examples.openwebtext.pipeline import (
 )
 from examples.openwebtext.task import LanguageModelingTask
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.task import Task
-from kronfluence.utils.common.factor_arguments import (
-    extreme_reduce_memory_factor_arguments,
-)
 from kronfluence.utils.common.score_arguments import (
-    all_low_precision_score_arguments,
     extreme_reduce_memory_score_arguments,
 )
 from kronfluence.utils.dataset import DataLoaderKwargs
@@ -36,9 +29,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Influence score computation on Openwebtext dataset.")
 
     parser.add_argument(
-        "--factor_strategy",
+        "--factors_name",
         type=str,
-        default="ekfac",
+        default="july_11",
         help="Strategy to compute influence factors.",
     )
     parser.add_argument(
@@ -98,7 +91,6 @@ def main():
     score_args = extreme_reduce_memory_score_arguments(
         damping_factor=None, module_partitions=1, query_gradient_low_rank=rank, dtype=torch.bfloat16
     )
-    # score_args.module_partitions = 2
     score_args.query_gradient_accumulation_steps = 10
     analyzer.compute_pairwise_scores(
         scores_name=scores_name,
@@ -108,7 +100,7 @@ def main():
         train_dataset=train_dataset,
         per_device_query_batch_size=1,
         per_device_train_batch_size=args.train_batch_size,
-        overwrite_output_dir=False,
+        overwrite_output_dir=True,
     )
     scores = analyzer.load_pairwise_scores(scores_name)["all_modules"]
     logging.info(f"Scores shape: {scores.shape}")

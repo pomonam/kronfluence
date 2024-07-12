@@ -1,6 +1,7 @@
 # OpenWebText & Llama-3-8B Example
 
-This repository contains scripts for computing influence scores on the subset of OpenWebText dataset. The pipeline is motivated from [LoggIX repository](https://github.com/logix-project/logix/tree/main/examples/language_modeling).
+This repository contains scripts for computing influence scores on the subset of OpenWebText dataset. 
+The pipeline is motivated from [LoggIX repository](https://github.com/logix-project/logix/tree/main/examples/language_modeling) and serve as an example code how to use Kronfluence on large-scale models.
 Install the necessary packages:
 
 ```bash
@@ -27,3 +28,4 @@ To compute influence scores on the generated prompt and compleition pair, run th
 ```bash
 torchrun --standalone --nnodes=1 --nproc-per-node=4 compute_scores.py --train_batch_size 8 --query_gradient_rank 32
 ```
+

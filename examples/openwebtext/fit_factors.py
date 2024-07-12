@@ -1,12 +1,10 @@
 import argparse
 import logging
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Dict
 
 import torch
-import torch.nn.functional as F
 from accelerate import Accelerator, InitProcessGroupKwargs
-from torch import nn
 from transformers import default_data_collator
 
 from examples.openwebtext.pipeline import construct_llama3, get_openwebtext_dataset
