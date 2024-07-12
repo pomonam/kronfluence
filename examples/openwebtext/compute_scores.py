@@ -86,7 +86,7 @@ def main():
     dataloader_kwargs = DataLoaderKwargs(num_workers=4, collate_fn=default_data_collator, pin_memory=True)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
-    scores_name = args.factor_strategy
+    scores_name = args.factors_name
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     score_args = extreme_reduce_memory_score_arguments(
         damping_factor=None, module_partitions=1, query_gradient_low_rank=rank, dtype=torch.bfloat16
