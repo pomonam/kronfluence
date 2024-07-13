@@ -14,8 +14,8 @@ def main():
     layer_num = 18
     module_name = f"model.layers.{layer_num}.mlp.down_proj"
     # module_name = f"model.layers.{layer_num}.mlp.up_proj"
-    lambda_processed = Analyzer.load_file("num_lambda_processed.safetensors")[module_name]
-    lambda_matrix = Analyzer.load_file("lambda_matrix.safetensors")[module_name]
+    lambda_processed = Analyzer.load_file("influence_results/num_lambda_processed.safetensors")[module_name]
+    lambda_matrix = Analyzer.load_file("influence_results/lambda_matrix.safetensors")[module_name]
     lambda_matrix.div_(lambda_processed)
     lambda_matrix = lambda_matrix.float()
     plt.matshow(lambda_matrix, cmap="PuBu", norm=LogNorm())
