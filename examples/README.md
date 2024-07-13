@@ -24,7 +24,7 @@ Our examples cover the following tasks:
 | Image Classification |   CIFAR-10 & ImageNet    |
 | Text Classification  |           GLUE           |
 | Multiple-Choice      |           SWAG           |
-| Summarization        |      DNN/DailyMail       |
+| Summarization        |      CNN/DailyMail       |
 | Language Modeling    | WikiText-2 & OpenWebText |
 
 </div>
