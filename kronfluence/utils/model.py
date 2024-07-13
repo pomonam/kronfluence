@@ -15,22 +15,30 @@ from torch.nn.parallel.distributed import DistributedDataParallel
 
 
 def apply_ddp(
-    model: torch.nn.Module,
+    model: nn.Module,
     local_rank: int,
     rank: int,
     world_size: int,
 ) -> DistributedDataParallel:
-    """
-    Applies DistributedDataParallel (DDP) to the given model.
+    """Applies DistributedDataParallel (DDP) to the given PyTorch model.
 
     Args:
-        model (torch.nn.Module): The model to apply DDP to.
-        local_rank (int): The local rank of the current process.
-        rank (int): The rank of the current process.
-        world_size (int): The total number of processes.
+        model (nn.Module):
+            The PyTorch model to be parallelized.
+        local_rank (int):
+            The local rank of the current process within its node.
+        rank (int):
+            The global rank of the current process across all nodes.
+        world_size (int):
+            The total number of processes in the distributed setup.
 
     Returns:
-        DistributedDataParallel: The model wrapped with DDP.
+        DistributedDataParallel:
+            The input model wrapped with DDP.
+
+    Raises:
+        RuntimeError:
+            If the distributed initialization fails.
     """
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
     device = torch.device(f"cuda:{local_rank}")
@@ -48,7 +56,7 @@ def apply_ddp(
 
 
 def apply_fsdp(
-    model: torch.nn.Module,
+    model: nn.Module,
     local_rank: int,
     rank: int,
     world_size: int,
@@ -57,27 +65,35 @@ def apply_fsdp(
     is_transformer: bool = False,
     layer_to_wrap: Optional[nn.Module] = None,
 ) -> FSDP:
-    """
-    Applies FullyShardedDataParallel (FSDP) to the given model.
+    """Applies FullyShardedDataParallel (FSDP) to the given PyTorch model.
 
     Args:
-        model (torch.nn.Module): The model to apply FSDP to.
-        local_rank (int): The local rank of the current process.
-        rank (int): The rank of the current process.
-        world_size (int): The total number of processes.
-        sharding_strategy (str): The sharding strategy to use.
-            Defaults to "FULL_SHARD".
-        cpu_offload (bool): Whether to offload parameters to CPU. Check
-            https://pytorch.org/docs/2.2/fsdp.html#torch.distributed.fsdp.CPUOffload.
-            Defaults to True.
-        is_transformer (bool): Whether the model is a transformer model.
-            Defaults to False.
-        layer_to_wrap (nn.Module, optional): The specific layer to wrap
-            for transformer models. Required if `is_transformer` is True.
-            Defaults to None.
+        model (nn.Module):
+            The PyTorch model to be parallelized.
+        local_rank (int):
+            The local rank of the current process within its node.
+        rank (int):
+            The global rank of the current process across all nodes.
+        world_size (int):
+            The total number of processes in the distributed setup.
+        sharding_strategy (str):
+            The FSDP sharding strategy to use. Defaults to "FULL_SHARD".
+        cpu_offload (bool):
+            Whether to offload parameters to CPU. Defaults to `True`.
+        is_transformer (bool):
+            Whether the model is a transformer. Defaults to `False`.
+        layer_to_wrap (nn.Module, optional):
+            The specific layer to wrap for transformer models. Required if `is_transformer` is `True`.
 
     Returns:
-        FSDP: The model wrapped with FSDP.
+        FullyShardedDataParallel:
+            The input model wrapped with FSDP.
+
+    Raises:
+        ValueError:
+            If an invalid sharding strategy is provided or if `layer_to_wrap` is not provided for transformer models.
+        RuntimeError:
+            If the distributed initialization fails.
     """
     dist.init_process_group("nccl", rank=rank, world_size=world_size)
     device = torch.device(f"cuda:{local_rank}")

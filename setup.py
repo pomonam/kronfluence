@@ -37,14 +37,11 @@ if __name__ == "__main__":
         },
         packages=find_packages(),
         keywords=[
-            "PyTorch",
             "Training Data Attribution",
             "Influence Functions",
-            "KFAC",
-            "EKFAC",
         ],
         classifiers=[
-            "Development Status :: 3 - Alpha",
+            "Development Status :: 4 - Beta",
             "Intended Audience :: Developers",
             "Intended Audience :: Science/Research",
             "License :: OSI Approved :: Apache Software License",

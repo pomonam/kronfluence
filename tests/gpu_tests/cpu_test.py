@@ -7,7 +7,8 @@ import torch
 from torch.utils import data
 
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
+from kronfluence.utils.common.score_arguments import pytest_score_arguments
 from kronfluence.utils.constants import (
     ALL_MODULE_NAME,
     COVARIANCE_FACTOR_NAMES,
@@ -15,7 +16,7 @@ from kronfluence.utils.constants import (
 )
 from tests.gpu_tests.pipeline import GpuTestTask, construct_test_mlp, get_mnist_dataset
 from tests.gpu_tests.prepare_tests import QUERY_INDICES, TRAIN_INDICES
-from tests.utils import check_tensor_dict_equivalence
+from tests.utils import ATOL, RTOL, check_tensor_dict_equivalence
 
 logging.basicConfig(level=logging.DEBUG)
 OLD_FACTOR_NAME = "single_gpu"
@@ -43,12 +44,7 @@ class CPUTest(unittest.TestCase):
 
     def test_covariance_matrices(self) -> None:
         covariance_factors = self.analyzer.load_covariance_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = FactorArguments(
-            use_empirical_fisher=True,
-            activation_covariance_dtype=torch.float64,
-            gradient_covariance_dtype=torch.float64,
-            lambda_dtype=torch.float64,
-        )
+        factor_args = pytest_factor_arguments()
         self.analyzer.fit_covariance_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -66,18 +62,13 @@ class CPUTest(unittest.TestCase):
             assert check_tensor_dict_equivalence(
                 covariance_factors[name],
                 new_covariance_factors[name],
-                atol=1e-5,
-                rtol=1e-3,
+                atol=ATOL,
+                rtol=RTOL,
             )
 
-    def test_lambda_matrices(self):
+    def test_lambda_matrices(self) -> None:
         lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = FactorArguments(
-            use_empirical_fisher=True,
-            activation_covariance_dtype=torch.float64,
-            gradient_covariance_dtype=torch.float64,
-            lambda_dtype=torch.float64,
-        )
+        factor_args = pytest_factor_arguments()
         self.analyzer.fit_lambda_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -96,18 +87,14 @@ class CPUTest(unittest.TestCase):
             assert check_tensor_dict_equivalence(
                 lambda_factors[name],
                 new_lambda_factors[name],
-                atol=1e-3,
-                rtol=1e-1,
+                atol=ATOL,
+                rtol=RTOL,
             )
 
     def test_pairwise_scores(self) -> None:
         pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
 
-        score_args = ScoreArguments(
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-        )
+        score_args = pytest_score_arguments()
         self.analyzer.compute_pairwise_scores(
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,
@@ -129,16 +116,12 @@ class CPUTest(unittest.TestCase):
         assert check_tensor_dict_equivalence(
             pairwise_scores,
             new_pairwise_scores,
-            atol=1e-5,
-            rtol=1e-3,
+            atol=ATOL,
+            rtol=RTOL,
         )
 
     def test_self_scores(self) -> None:
-        score_args = ScoreArguments(
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-        )
+        score_args = pytest_score_arguments()
         self.analyzer.compute_self_scores(
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,
@@ -158,8 +141,34 @@ class CPUTest(unittest.TestCase):
         assert check_tensor_dict_equivalence(
             self_scores,
             new_self_scores,
-            atol=1e-5,
-            rtol=1e-3,
+            atol=ATOL,
+            rtol=RTOL,
+        )
+
+    def test_self_scores_with_measurement(self) -> None:
+        score_args = pytest_score_arguments()
+        score_args.use_measurement_for_self_influence = True
+        self.analyzer.compute_self_scores(
+            scores_name=NEW_SCORE_NAME + "_measurement",
+            factors_name=OLD_FACTOR_NAME,
+            train_dataset=self.train_dataset,
+            train_indices=list(range(TRAIN_INDICES)),
+            per_device_train_batch_size=512,
+            score_args=score_args,
+            overwrite_output_dir=True,
+        )
+        new_self_scores = self.analyzer.load_self_scores(scores_name=NEW_SCORE_NAME + "_measurement")
+
+        self_scores = self.analyzer.load_self_scores(scores_name=OLD_SCORE_NAME + "_measurement")
+        print(f"Previous score: {self_scores[ALL_MODULE_NAME]}")
+        print(f"Previous shape: {self_scores[ALL_MODULE_NAME].shape}")
+        print(f"New score: {new_self_scores[ALL_MODULE_NAME]}")
+        print(f"New shape: {new_self_scores[ALL_MODULE_NAME].shape}")
+        assert check_tensor_dict_equivalence(
+            self_scores,
+            new_self_scores,
+            atol=ATOL,
+            rtol=RTOL,
         )
 
 

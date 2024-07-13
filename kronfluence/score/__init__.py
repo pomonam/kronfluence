@@ -1,5 +1,5 @@
 from .pairwise import (
-    _compute_dot_products_with_loader,
+    compute_dot_products_with_loader,
     compute_pairwise_scores_with_loaders,
     load_pairwise_scores,
     pairwise_scores_exist,

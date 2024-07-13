@@ -13,9 +13,11 @@ from tests.utils import prepare_test
     "test_name",
     [
         "mlp",
-        "conv",
+        "mlp_checkpoint",
+        "repeated_mlp",
         "conv_bn",
         "bert",
+        "roberta",
         "gpt",
     ],
 )
@@ -47,11 +49,15 @@ def test_analyzer(
         analysis_name=f"pytest_{test_name}",
         model=model,
         task=task,
+        disable_tqdm=True,
         disable_model_save=True,
         cpu=True,
     )
     kwargs = DataLoaderKwargs(collate_fn=data_collator)
+
     factor_args = FactorArguments(strategy=strategy)
+    if test_name == "repeated_mlp":
+        factor_args.has_shared_parameters = True
     analyzer.fit_all_factors(
         factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
         dataset=train_dataset,
@@ -70,12 +76,24 @@ def test_analyzer(
         dataloader_kwargs=kwargs,
         overwrite_output_dir=True,
     )
+    score_args = ScoreArguments()
     analyzer.compute_self_scores(
         scores_name="self",
         factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
         train_dataset=train_dataset,
         per_device_train_batch_size=8,
         dataloader_kwargs=kwargs,
+        score_args=score_args,
+        overwrite_output_dir=True,
+    )
+    score_args.use_measurement_for_self_influence = True
+    analyzer.compute_self_scores(
+        scores_name="self",
+        factors_name=f"pytest_{test_analyzer.__name__}_{test_name}",
+        train_dataset=train_dataset,
+        per_device_train_batch_size=6,
+        dataloader_kwargs=kwargs,
+        score_args=score_args,
         overwrite_output_dir=True,
     )
 
@@ -85,41 +103,49 @@ def test_default_factor_arguments() -> None:
 
     assert factor_args.strategy == "ekfac"
     assert factor_args.use_empirical_fisher is False
-    assert factor_args.distributed_sync_steps == 1000
     assert factor_args.amp_dtype is None
+    assert factor_args.amp_scale == 2.0**16
+    assert factor_args.has_shared_parameters is False
 
     assert factor_args.covariance_max_examples == 100_000
-    assert factor_args.covariance_data_partition_size == 1
-    assert factor_args.covariance_module_partition_size == 1
+    assert factor_args.covariance_data_partitions == 1
+    assert factor_args.covariance_module_partitions == 1
     assert factor_args.activation_covariance_dtype == torch.float32
     assert factor_args.gradient_covariance_dtype == torch.float32
+
     assert factor_args.eigendecomposition_dtype == torch.float64
 
     assert factor_args.lambda_max_examples == 100_000
-    assert factor_args.lambda_data_partition_size == 1
-    assert factor_args.lambda_module_partition_size == 1
-    assert factor_args.lambda_iterative_aggregate is False
-    assert factor_args.cached_activation_cpu_offload is False
+    assert factor_args.lambda_data_partitions == 1
+    assert factor_args.lambda_module_partitions == 1
+    assert factor_args.use_iterative_lambda_aggregation is False
+    assert factor_args.offload_activations_to_cpu is False
+    assert factor_args.per_sample_gradient_dtype == torch.float32
     assert factor_args.lambda_dtype == torch.float32
 
 
 def test_default_score_arguments() -> None:
     score_args = ScoreArguments()
 
-    assert score_args.damping == 1e-08
-    assert score_args.cached_activation_cpu_offload is False
-    assert score_args.distributed_sync_steps == 1000
+    assert score_args.damping_factor == 1e-08
     assert score_args.amp_dtype is None
+    assert score_args.offload_activations_to_cpu is False
 
-    assert score_args.data_partition_size == 1
-    assert score_args.module_partition_size == 1
-    assert score_args.per_module_score is False
+    assert score_args.data_partitions == 1
+    assert score_args.module_partitions == 1
 
-    assert score_args.query_gradient_rank is None
-    assert score_args.num_query_gradient_aggregations == 1
-    assert score_args.query_gradient_svd_dtype == torch.float32
+    assert score_args.compute_per_module_scores is False
+    assert score_args.compute_per_token_scores is False
+
+    assert score_args.query_gradient_accumulation_steps == 1
+    assert score_args.query_gradient_low_rank is None
+    assert score_args.use_full_svd is False
+    assert score_args.aggregate_query_gradients is False
+    assert score_args.aggregate_train_gradients is False
+
     assert score_args.use_measurement_for_self_influence is False
 
-    assert score_args.score_dtype == torch.float32
+    assert score_args.query_gradient_svd_dtype == torch.float32
     assert score_args.per_sample_gradient_dtype == torch.float32
     assert score_args.precondition_dtype == torch.float32
+    assert score_args.score_dtype == torch.float32

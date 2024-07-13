@@ -17,10 +17,10 @@ def main():
 
     train_dataset = get_wikitext_dataset(split="train")
     # You might need to change the path.
-    identity_scores = Analyzer.load_file("analyses/wikitext/scores_identity_pairwise/pairwise_scores.safetensors")[
+    identity_scores = Analyzer.load_file("influence_results/wikitext/scores_identity/pairwise_scores.safetensors")[
         "all_modules"
     ][:50].sum(dim=0)
-    ekfac_scores = Analyzer.load_file("analyses/wikitext/scores_ekfac_pairwise/pairwise_scores.safetensors")[
+    ekfac_scores = Analyzer.load_file("influence_results/wikitext/scores_ekfac/pairwise_scores.safetensors")[
         "all_modules"
     ][:50].sum(dim=0)
 
@@ -32,19 +32,19 @@ def main():
         remove_indices = [tensor.item() for tensor in remove_indices]
         return list(set(list(range(len(train_dataset)))) - set(remove_indices))
 
-    eval_train_dataset = get_wikitext_dataset(split="valid", indices=list(range(50)))
+    valid_dataset = get_wikitext_dataset(split="valid", indices=list(range(50)))
 
-    def train_and_evaluate(indices):
-        train_dataset = get_wikitext_dataset(split="train", indices=indices)
+    def train_and_evaluate(indices) -> float:
         model = train(
-            dataset=train_dataset,
+            dataset=get_wikitext_dataset(split="train", indices=indices),
             batch_size=8,
             num_train_epochs=3,
             learning_rate=3e-05,
             weight_decay=0.01,
         )
-        return evaluate_model(model, eval_train_dataset, batch_size=16)
+        return evaluate_model(model, valid_dataset, batch_size=16)
 
+    # We do this to make the experiment faster; set `num_iter = 5` for proper experiment.
     num_iter = 1
     topk_lst = [0, 50, 100, 150, 200]
 

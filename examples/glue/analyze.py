@@ -1,7 +1,7 @@
 import argparse
 import logging
 import os
-from typing import Dict, Optional
+from typing import Dict
 
 import torch
 import torch.nn.functional as F
@@ -12,6 +12,8 @@ from examples.glue.pipeline import construct_bert, get_glue_dataset
 from kronfluence.analyzer import Analyzer, prepare_model
 from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.task import Task
+from kronfluence.utils.common.factor_arguments import all_low_precision_factor_arguments
+from kronfluence.utils.common.score_arguments import all_low_precision_score_arguments
 from kronfluence.utils.dataset import DataLoaderKwargs
 
 BATCH_TYPE = Dict[str, torch.Tensor]
@@ -34,10 +36,22 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--factor_strategy",
+        type=str,
+        default="ekfac",
+        help="Strategy to compute influence factors.",
+    )
+    parser.add_argument(
         "--query_gradient_rank",
         type=int,
         default=-1,
         help="Rank for the low-rank query gradient approximation.",
+    )
+    parser.add_argument(
+        "--use_half_precision",
+        action="store_true",
+        default=False,
+        help="Whether to use half precision for computing factors and scores.",
     )
     parser.add_argument(
         "--query_batch_size",
@@ -52,12 +66,11 @@ def parse_args():
         help="Batch size for computing training gradients.",
     )
     parser.add_argument(
-        "--factor_strategy",
-        type=str,
-        default="ekfac",
-        help="Strategy to compute influence factors.",
+        "--profile",
+        action="store_true",
+        default=False,
+        help="Boolean flag to profile computations.",
     )
-
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -84,12 +97,12 @@ class TextClassificationTask(Task):
         if not sample:
             return F.cross_entropy(logits, batch["labels"], reduction="sum")
         with torch.no_grad():
-            probs = torch.nn.functional.softmax(logits, dim=-1)
+            probs = torch.nn.functional.softmax(logits.detach(), dim=-1)
             sampled_labels = torch.multinomial(
                 probs,
                 num_samples=1,
             ).flatten()
-        return F.cross_entropy(logits, sampled_labels.detach(), reduction="sum")
+        return F.cross_entropy(logits, sampled_labels, reduction="sum")
 
     def compute_measurement(
         self,
@@ -113,7 +126,7 @@ class TextClassificationTask(Task):
         margins = logits_correct - cloned_logits.logsumexp(dim=-1)
         return -margins.sum()
 
-    def get_attention_mask(self, batch: BATCH_TYPE) -> Optional[torch.Tensor]:
+    def get_attention_mask(self, batch: BATCH_TYPE) -> torch.Tensor:
         return batch["attention_mask"]
 
 
@@ -146,38 +159,48 @@ def main():
         analysis_name=args.dataset_name,
         model=model,
         task=task,
-        cpu=False,
+        profile=args.profile,
     )
     # Configure parameters for DataLoader.
     dataloader_kwargs = DataLoaderKwargs(collate_fn=default_data_collator)
     analyzer.set_dataloader_kwargs(dataloader_kwargs)
 
     # Compute influence factors.
+    factors_name = args.factor_strategy
     factor_args = FactorArguments(strategy=args.factor_strategy)
+    if args.use_half_precision:
+        factor_args = all_low_precision_factor_arguments(strategy=args.factor_strategy, dtype=torch.bfloat16)
+        factors_name += "_half"
     analyzer.fit_all_factors(
-        factors_name=args.factor_strategy,
+        factors_name=factors_name,
         dataset=train_dataset,
         per_device_batch_size=None,
         factor_args=factor_args,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
         initial_per_device_batch_size_attempt=512,
     )
+
     # Compute pairwise scores.
+    score_args = ScoreArguments()
+    scores_name = factor_args.strategy
+    if args.use_half_precision:
+        score_args = all_low_precision_score_arguments(dtype=torch.bfloat16)
+        scores_name += "_half"
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
-    score_args = ScoreArguments(query_gradient_rank=rank, query_gradient_svd_dtype=torch.float32)
-    scores_name = args.factor_strategy
     if rank is not None:
+        score_args.query_gradient_low_rank = rank
+        score_args.query_gradient_accumulation_steps = 10
         scores_name += f"_qlr{rank}"
     analyzer.compute_pairwise_scores(
         score_args=score_args,
         scores_name=scores_name,
-        factors_name=args.factor_strategy,
+        factors_name=factors_name,
         query_dataset=eval_dataset,
         query_indices=list(range(min([len(eval_dataset), 2000]))),
         train_dataset=train_dataset,
         per_device_query_batch_size=args.query_batch_size,
         per_device_train_batch_size=args.train_batch_size,
-        overwrite_output_dir=True,
+        overwrite_output_dir=False,
     )
     scores = analyzer.load_pairwise_scores(scores_name)["all_modules"]
     logging.info(f"Scores shape: {scores.shape}")

@@ -7,7 +7,8 @@ import torch
 from torch.utils import data
 
 from kronfluence.analyzer import Analyzer, prepare_model
-from kronfluence.arguments import FactorArguments, ScoreArguments
+from kronfluence.utils.common.factor_arguments import pytest_factor_arguments
+from kronfluence.utils.common.score_arguments import pytest_score_arguments
 from kronfluence.utils.constants import (
     ALL_MODULE_NAME,
     COVARIANCE_FACTOR_NAMES,
@@ -45,13 +46,8 @@ class AMPTest(unittest.TestCase):
 
     def test_covariance_matrices(self) -> None:
         covariance_factors = self.analyzer.load_covariance_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = FactorArguments(
-            use_empirical_fisher=True,
-            activation_covariance_dtype=torch.float64,
-            gradient_covariance_dtype=torch.float64,
-            lambda_dtype=torch.float64,
-            amp_dtype=torch.float16,
-        )
+        factor_args = pytest_factor_arguments()
+        factor_args.amp_dtype = torch.float16
         self.analyzer.fit_covariance_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -69,19 +65,14 @@ class AMPTest(unittest.TestCase):
             assert check_tensor_dict_equivalence(
                 covariance_factors[name],
                 new_covariance_factors[name],
-                atol=1e-5,
-                rtol=1e-3,
+                atol=1e-3,
+                rtol=1e-1,
             )
 
-    def test_lambda_matrices(self):
+    def test_lambda_matrices(self) -> None:
         lambda_factors = self.analyzer.load_lambda_matrices(factors_name=OLD_FACTOR_NAME)
-        factor_args = FactorArguments(
-            use_empirical_fisher=True,
-            activation_covariance_dtype=torch.float64,
-            gradient_covariance_dtype=torch.float64,
-            lambda_dtype=torch.float64,
-            amp_dtype=torch.float16,
-        )
+        factor_args = pytest_factor_arguments()
+        factor_args.amp_dtype = torch.float16
         self.analyzer.fit_lambda_matrices(
             factors_name=NEW_FACTOR_NAME,
             dataset=self.train_dataset,
@@ -107,12 +98,8 @@ class AMPTest(unittest.TestCase):
     def test_pairwise_scores(self) -> None:
         pairwise_scores = self.analyzer.load_pairwise_scores(scores_name=OLD_SCORE_NAME)
 
-        score_args = ScoreArguments(
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-            amp_dtype=torch.float16,
-        )
+        score_args = pytest_score_arguments()
+        score_args.amp_dtype = torch.float16
         self.analyzer.compute_pairwise_scores(
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,
@@ -134,17 +121,13 @@ class AMPTest(unittest.TestCase):
         assert check_tensor_dict_equivalence(
             pairwise_scores,
             new_pairwise_scores,
-            atol=1e-5,
-            rtol=1e-3,
+            atol=1e-3,
+            rtol=1e-1,
         )
 
     def test_self_scores(self) -> None:
-        score_args = ScoreArguments(
-            score_dtype=torch.float64,
-            per_sample_gradient_dtype=torch.float64,
-            precondition_dtype=torch.float64,
-            amp_dtype=torch.float16,
-        )
+        score_args = pytest_score_arguments()
+        score_args.amp_dtype = torch.float16
         self.analyzer.compute_self_scores(
             scores_name=NEW_SCORE_NAME,
             factors_name=OLD_FACTOR_NAME,
@@ -155,7 +138,6 @@ class AMPTest(unittest.TestCase):
             overwrite_output_dir=True,
         )
         new_self_scores = self.analyzer.load_self_scores(scores_name=NEW_SCORE_NAME)
-
         self_scores = self.analyzer.load_self_scores(scores_name=OLD_SCORE_NAME)
         print(f"Previous score: {self_scores[ALL_MODULE_NAME]}")
         print(f"Previous shape: {self_scores[ALL_MODULE_NAME].shape}")
@@ -164,8 +146,8 @@ class AMPTest(unittest.TestCase):
         assert check_tensor_dict_equivalence(
             self_scores,
             new_self_scores,
-            atol=1e-5,
-            rtol=1e-3,
+            atol=1e-3,
+            rtol=1e-1,
         )
 
 

@@ -50,7 +50,7 @@ def parse_args():
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=1e-5,
+        default=1e-05,
         help="Weight decay to train the model.",
     )
     parser.add_argument(
@@ -72,7 +72,6 @@ def parse_args():
         default="./checkpoints",
         help="A path to store the final checkpoint.",
     )
-
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -96,6 +95,7 @@ def train(
         batch_size=batch_size,
         shuffle=True,
         drop_last=True,
+        num_workers=0,
     )
     model = construct_regression_mlp()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -106,7 +106,7 @@ def train(
         with tqdm(train_dataloader, unit="batch", disable=disable_tqdm) as tepoch:
             for batch in tepoch:
                 tepoch.set_description(f"Epoch {epoch}")
-                model.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
                 inputs, targets = batch
                 outputs = model(inputs)
                 loss = F.mse_loss(outputs, targets)
@@ -123,6 +123,7 @@ def evaluate(model: nn.Module, dataset: data.Dataset, batch_size: int) -> float:
         batch_size=batch_size,
         shuffle=False,
         drop_last=False,
+        num_workers=0,
     )
 
     model.eval()

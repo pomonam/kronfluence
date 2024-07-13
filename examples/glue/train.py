@@ -71,7 +71,6 @@ def parse_args():
         default="./checkpoints",
         help="A path to store the final checkpoint.",
     )
-
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -105,13 +104,13 @@ def train(
     for epoch in range(num_train_epochs):
         total_loss = 0.0
         for batch in train_dataloader:
+            optimizer.zero_grad(set_to_none=True)
             loss = model(
                 input_ids=batch["input_ids"].to(device=DEVICE),
                 attention_mask=batch["attention_mask"].to(device=DEVICE),
                 token_type_ids=batch["token_type_ids"].to(device=DEVICE),
                 labels=batch["labels"].to(device=DEVICE),
             ).loss
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             total_loss += loss.detach().float()

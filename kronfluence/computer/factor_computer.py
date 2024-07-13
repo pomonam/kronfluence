@@ -25,14 +25,10 @@ from kronfluence.factor.eigen import (
     save_eigendecomposition,
     save_lambda_matrices,
 )
-from kronfluence.module.tracked_module import ModuleMode
-from kronfluence.module.utils import set_mode
-from kronfluence.utils.constants import FACTOR_TYPE
+from kronfluence.utils.constants import FACTOR_ARGUMENTS_NAME, FACTOR_TYPE
 from kronfluence.utils.dataset import DataLoaderKwargs, find_executable_batch_size
 from kronfluence.utils.exceptions import FactorsNotFoundError
 from kronfluence.utils.logger import get_time
-from kronfluence.utils.save import FACTOR_ARGUMENTS_NAME
-from kronfluence.utils.state import release_memory
 
 
 class FactorComputer(Computer):
@@ -41,7 +37,7 @@ class FactorComputer(Computer):
     def _configure_and_save_factor_args(
         self, factor_args: Optional[FactorArguments], factors_output_dir: Path, overwrite_output_dir: bool
     ) -> FactorArguments:
-        """Configure the provided factor arguments and save it in disk."""
+        """Configures and saves factor arguments to disk."""
         if factor_args is None:
             factor_args = FactorArguments()
             self.logger.info(f"Factor arguments not provided. Using the default configuration: {factor_args}.")
@@ -62,31 +58,31 @@ class FactorComputer(Computer):
     def _aggregate_factors(
         self,
         factors_name: str,
-        data_partition_size: int,
-        module_partition_size: int,
-        exists_fnc: Callable,
+        data_partitions: int,
+        module_partitions: int,
+        exist_fnc: Callable,
         load_fnc: Callable,
         save_fnc: Callable,
     ) -> Optional[FACTOR_TYPE]:
         """Aggregates factors computed for all data and module partitions."""
         factors_output_dir = self.factors_output_dir(factors_name=factors_name)
         if not factors_output_dir.exists():
-            error_msg = f"Factors directory `{factors_output_dir}` is not found when trying to aggregate factors."
+            error_msg = f"Factors directory `{factors_output_dir}` not found when trying to aggregate factors."
             self.logger.error(error_msg)
             raise FileNotFoundError(error_msg)
 
-        all_required_partitions = [(i, j) for i in range(data_partition_size) for j in range(module_partition_size)]
+        all_required_partitions = [(i, j) for i in range(data_partitions) for j in range(module_partitions)]
         all_partition_exists = all(
-            exists_fnc(output_dir=factors_output_dir, partition=partition) for partition in all_required_partitions
+            exist_fnc(output_dir=factors_output_dir, partition=partition) for partition in all_required_partitions
         )
         if not all_partition_exists:
-            self.logger.warning("Factors are not aggregated as factors for some partitions are not yet computed.")
+            self.logger.info("Factors are not aggregated as factors for some partitions are not yet computed.")
             return
 
         start_time = time.time()
         aggregated_factors: FACTOR_TYPE = {}
-        for data_partition in range(data_partition_size):
-            for module_partition in range(module_partition_size):
+        for data_partition in range(data_partitions):
+            for module_partition in range(module_partitions):
                 loaded_factors = load_fnc(
                     output_dir=factors_output_dir,
                     partition=(data_partition, module_partition),
@@ -97,9 +93,11 @@ class FactorComputer(Computer):
 
                     for module_name in factors:
                         if module_name not in aggregated_factors[factor_name]:
-                            aggregated_factors[factor_name][module_name] = factors[module_name]
-                        else:
-                            aggregated_factors[factor_name][module_name].add_(factors[module_name])
+                            aggregated_factors[factor_name][module_name] = torch.zeros_like(
+                                factors[module_name],
+                                requires_grad=False,
+                            )
+                        aggregated_factors[factor_name][module_name].add_(factors[module_name])
                 del loaded_factors
         save_fnc(
             output_dir=factors_output_dir,
@@ -121,7 +119,7 @@ class FactorComputer(Computer):
         """Automatically finds executable batch size for performing `func`."""
         if self.state.use_distributed:
             error_msg = (
-                "Automatic batch size search is currently not supported for multi-GPU training. "
+                "Automatic batch size search is not supported for multi-GPU setting. "
                 "Please manually configure the batch size by passing in `per_device_batch_size`."
             )
             self.logger.error(error_msg)
@@ -139,10 +137,8 @@ class FactorComputer(Computer):
 
         def executable_batch_size_func(batch_size: int) -> None:
             self.logger.info(f"Attempting to set per-device batch size to {batch_size}.")
-            # Release all memory that could be caused by the previous OOM.
-            set_mode(model=self.model, mode=ModuleMode.DEFAULT, keep_factors=False)
-            self.model.zero_grad(set_to_none=True)
-            release_memory()
+            # Releases all memory that could be caused by the previous OOM.
+            self._reset_memory()
             total_batch_size = batch_size * self.state.num_processes
             loader = self._get_dataloader(
                 dataset=dataset,
@@ -178,7 +174,7 @@ class FactorComputer(Computer):
             factors_name (str):
                 The unique identifier for the factor, used to organize and retrieve the results.
             dataset (data.Dataset):
-                The dataset that will be used to fit covariance matrices.
+                The dataset that will be used for fitting covariance matrices.
             per_device_batch_size (int, optional):
                 The per-device batch size used to fit the factors. If not specified, executable
                 batch size is automatically determined.
@@ -187,8 +183,7 @@ class FactorComputer(Computer):
             dataloader_kwargs (DataLoaderKwargs, optional):
                 Controls additional arguments for PyTorch's DataLoader.
             factor_args (FactorArguments, optional):
-                Arguments related to computing the factors. If not specified, the default values of
-                `FactorArguments` will be used.
+                Arguments for factor computation.
             target_data_partitions(Sequence[int], int, optional):
                 The list of data partition to fit covariance matrices. By default, covariance
                 matrices will be computed for all partitions.
@@ -196,7 +191,7 @@ class FactorComputer(Computer):
                 The list of module partition to fit covariance matrices. By default, covariance
                 matrices will be computed for all partitions.
             overwrite_output_dir (bool, optional):
-                If True, the existing factors with the same `factors_name` will be overwritten.
+                Whether to overwrite existing output.
         """
         self.logger.debug(f"Fitting covariance matrices with parameters: {locals()}")
 
@@ -231,9 +226,7 @@ class FactorComputer(Computer):
             total_data_examples = min([factor_args.covariance_max_examples, len(dataset)])
         self.logger.info(f"Total data examples to fit covariance matrices: {total_data_examples}.")
 
-        no_partition = (
-            factor_args.covariance_data_partition_size == 1 and factor_args.covariance_module_partition_size == 1
-        )
+        no_partition = factor_args.covariance_data_partitions == 1 and factor_args.covariance_module_partitions == 1
         partition_provided = target_data_partitions is not None or target_module_partitions is not None
         if no_partition and partition_provided:
             error_msg = (
@@ -245,17 +238,17 @@ class FactorComputer(Computer):
 
         data_partition_indices, target_data_partitions = self._get_data_partition(
             total_data_examples=total_data_examples,
-            data_partition_size=factor_args.covariance_data_partition_size,
+            data_partitions=factor_args.covariance_data_partitions,
             target_data_partitions=target_data_partitions,
         )
-        max_partition_examples = total_data_examples // factor_args.covariance_data_partition_size
+        max_partition_examples = total_data_examples // factor_args.covariance_data_partitions
         module_partition_names, target_module_partitions = self._get_module_partition(
-            module_partition_size=factor_args.covariance_module_partition_size,
+            module_partitions=factor_args.covariance_module_partitions,
             target_module_partitions=target_module_partitions,
         )
 
         if max_partition_examples < self.state.num_processes:
-            error_msg = "The number of processes are more than the data examples. Try reducing the number of processes."
+            error_msg = "The number of processes are larger than total data examples. Try reducing number of processes."
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -293,6 +286,7 @@ class FactorComputer(Computer):
                         "task": self.task,
                         "factor_args": factor_args,
                         "tracked_module_names": module_partition_names[module_partition],
+                        "disable_tqdm": True,
                     }
                     per_device_batch_size = self._find_executable_factors_batch_size(
                         func=fit_covariance_matrices_with_loader,
@@ -303,7 +297,7 @@ class FactorComputer(Computer):
                         total_data_examples=max_partition_examples,
                     )
 
-                release_memory()
+                self._reset_memory()
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Fit Covariance"):
                     loader = self._get_dataloader(
@@ -320,6 +314,7 @@ class FactorComputer(Computer):
                         loader=loader,
                         factor_args=factor_args,
                         tracked_module_names=module_partition_names[module_partition],
+                        disable_tqdm=self.disable_tqdm,
                     )
                 end_time = get_time(state=self.state)
                 elapsed_time = end_time - start_time
@@ -337,8 +332,9 @@ class FactorComputer(Computer):
                             metadata=factor_args.to_str_dict(),
                         )
                     self.state.wait_for_everyone()
-                del covariance_factors, loader
                 self.logger.info(f"Saved covariance matrices at `{factors_output_dir}`.")
+                del num_data_processed, covariance_factors, loader
+                self._reset_memory()
 
         all_end_time = get_time(state=self.state)
         elapsed_time = all_end_time - all_start_time
@@ -348,7 +344,7 @@ class FactorComputer(Computer):
                 self.aggregate_covariance_matrices(factors_name=factors_name)
                 self.logger.info(f"Saved aggregated covariance matrices at `{factors_output_dir}`.")
             self.state.wait_for_everyone()
-        self._log_profile_summary()
+        self._log_profile_summary(name=f"factors_{factors_name}_covariance")
 
     @torch.no_grad()
     def aggregate_covariance_matrices(
@@ -366,7 +362,7 @@ class FactorComputer(Computer):
         if factor_args is None:
             error_msg = (
                 f"Arguments for factors with name `{factors_name}` was not found when trying to "
-                f"aggregated covariance matrices."
+                f"aggregate covariance matrices."
             )
             self.logger.error(error_msg)
             raise ValueError(error_msg)
@@ -374,9 +370,9 @@ class FactorComputer(Computer):
         with self.profiler.profile("Aggregate Covariance"):
             self._aggregate_factors(
                 factors_name=factors_name,
-                data_partition_size=factor_args.covariance_data_partition_size,
-                module_partition_size=factor_args.covariance_module_partition_size,
-                exists_fnc=covariance_matrices_exist,
+                data_partitions=factor_args.covariance_data_partitions,
+                module_partitions=factor_args.covariance_module_partitions,
+                exist_fnc=covariance_matrices_exist,
                 load_fnc=load_covariance_matrices,
                 save_fnc=save_covariance_matrices,
             )
@@ -388,26 +384,25 @@ class FactorComputer(Computer):
         overwrite_output_dir: bool = False,
         load_from_factors_name: Optional[str] = None,
     ) -> None:
-        """Performs Eigendecomposition on all covariance matrices.
+        """Performs eigendecomposition on all covariance matrices.
 
         Args:
             factors_name (str):
                 The unique identifier for the factor, used to organize and retrieve the results.
             factor_args (FactorArguments, optional):
-                Arguments related to computing the factors. If not specified, the default values of
-                `FactorArguments` will be used.
+                Arguments for factor computation.
             overwrite_output_dir (bool, optional):
-                If True, the existing factors with the same `factors_name` will be overwritten.
+                Whether to overwrite existing output.
             load_from_factors_name (str, optional):
                 The `factor_name` to load covariance matrices from. By default, covariance matrices with
                 the same `factor_name` will be used.
         """
-        self.logger.debug(f"Performing Eigendecomposition with parameters: {locals()}")
+        self.logger.debug(f"Performing eigendecomposition with parameters: {locals()}")
 
         factors_output_dir = self.factors_output_dir(factors_name=factors_name)
         os.makedirs(factors_output_dir, exist_ok=True)
         if eigendecomposition_exist(output_dir=factors_output_dir) and not overwrite_output_dir:
-            self.logger.info(f"Found existing Eigendecomposition results at `{factors_output_dir}`. Skipping.")
+            self.logger.info(f"Found existing eigendecomposition results at `{factors_output_dir}`. Skipping.")
             return
 
         factor_args = self._configure_and_save_factor_args(
@@ -416,7 +411,7 @@ class FactorComputer(Computer):
 
         if not FactorConfig.CONFIGS[factor_args.strategy].requires_eigendecomposition:
             self.logger.info(
-                f"Strategy `{factor_args.strategy}` does not require performing Eigendecomposition. Skipping."
+                f"Strategy `{factor_args.strategy}` does not require performing eigendecomposition. Skipping."
             )
             return None
 
@@ -428,7 +423,7 @@ class FactorComputer(Computer):
         if not covariance_matrices_exist(output_dir=load_factors_output_dir):
             error_msg = (
                 f"Covariance matrices not found at `{load_factors_output_dir}`. "
-                f"To perform Eigendecomposition, covariance matrices need to be first computed."
+                f"To perform eigendecomposition, covariance matrices need to be first computed."
             )
             self.logger.error(error_msg)
             raise FactorsNotFoundError(error_msg)
@@ -449,9 +444,9 @@ class FactorComputer(Computer):
             )
         self.state.wait_for_everyone()
 
+        self._reset_memory()
         eigen_factors = None
         if self.state.is_main_process:
-            release_memory()
             start_time = time.time()
             with self.profiler.profile("Perform Eigendecomposition"):
                 eigen_factors = perform_eigendecomposition(
@@ -459,18 +454,21 @@ class FactorComputer(Computer):
                     model=self.model,
                     state=self.state,
                     factor_args=factor_args,
+                    disable_tqdm=self.disable_tqdm,
                 )
             end_time = time.time()
             elapsed_time = end_time - start_time
-            self.logger.info(f"Performed Eigendecomposition in {elapsed_time:.2f} seconds.")
+            self.logger.info(f"Performed eigendecomposition in {elapsed_time:.2f} seconds.")
 
             with self.profiler.profile("Save Eigendecomposition"):
                 save_eigendecomposition(
                     output_dir=factors_output_dir, factors=eigen_factors, metadata=factor_args.to_str_dict()
                 )
-            self.logger.info(f"Saved Eigendecomposition results at `{factors_output_dir}`.")
+            self.logger.info(f"Saved eigendecomposition results at `{factors_output_dir}`.")
+            del eigen_factors
+            self._reset_memory()
         self.state.wait_for_everyone()
-        self._log_profile_summary()
+        self._log_profile_summary(name=f"factors_{factors_name}_eigendecomposition")
 
     def fit_lambda_matrices(
         self,
@@ -491,7 +489,7 @@ class FactorComputer(Computer):
             factors_name (str):
                 The unique identifier for the factor, used to organize and retrieve the results.
             dataset (data.Dataset):
-                The dataset that will be used to fit Lambda matrices.
+                The dataset that will be used for fitting Lambda matrices.
             per_device_batch_size (int, optional):
                 The per-device batch size used to fit the factors. If not specified, executable
                 batch size is automatically determined.
@@ -500,8 +498,7 @@ class FactorComputer(Computer):
             dataloader_kwargs (DataLoaderKwargs, optional):
                 Controls additional arguments for PyTorch's DataLoader.
             factor_args (FactorArguments, optional):
-                Arguments related to computing the factors. If not specified, the default values of
-                `FactorArguments` will be used.
+                Arguments for factor computation.
             target_data_partitions(Sequence[int], int, optional):
                 The list of data partition to fit Lambda matrices. By default, Lambda
                 matrices will be computed for all partitions.
@@ -509,9 +506,9 @@ class FactorComputer(Computer):
                 The list of module partition to fit Lambda matrices. By default, Lambda
                 matrices will be computed for all partitions.
             overwrite_output_dir (bool, optional):
-                If True, the existing factors with the same `factors_name` will be overwritten.
+                Whether to overwrite existing output.
             load_from_factors_name (str, optional):
-                The `factor_name` to load Eigendecomposition results from. By default, Eigendecomposition
+                The `factor_name` to load eigendecomposition results from. By default, eigendecomposition
                 results with the same `factor_name` will be used.
         """
         self.logger.debug(f"Fitting Lambda matrices with parameters: {locals()}")
@@ -541,7 +538,7 @@ class FactorComputer(Computer):
 
         if load_from_factors_name is not None:
             self.logger.info(
-                f"Will be loading Eigendecomposition results from factors with name `{load_from_factors_name}`."
+                f"Will be loading eigendecomposition results from factors with name `{load_from_factors_name}`."
             )
             load_factors_output_dir = self.factors_output_dir(factors_name=load_from_factors_name)
         else:
@@ -553,7 +550,7 @@ class FactorComputer(Computer):
         ):
             error_msg = (
                 f"Eigendecomposition results not found at `{load_factors_output_dir}`. "
-                f"To fit Lambda matrices for `{factor_args.strategy}`, Eigendecomposition must be "
+                f"To fit Lambda matrices for `{factor_args.strategy}`, eigendecomposition must be "
                 f"performed before computing Lambda matrices."
             )
             self.logger.error(error_msg)
@@ -581,7 +578,7 @@ class FactorComputer(Computer):
             total_data_examples = min([factor_args.lambda_max_examples, len(dataset)])
         self.logger.info(f"Total data examples to fit Lambda matrices: {total_data_examples}.")
 
-        no_partition = factor_args.lambda_data_partition_size == 1 and factor_args.lambda_module_partition_size == 1
+        no_partition = factor_args.lambda_data_partitions == 1 and factor_args.lambda_module_partitions == 1
         partition_provided = target_data_partitions is not None or target_module_partitions is not None
         if no_partition and partition_provided:
             error_msg = (
@@ -593,17 +590,17 @@ class FactorComputer(Computer):
 
         data_partition_indices, target_data_partitions = self._get_data_partition(
             total_data_examples=total_data_examples,
-            data_partition_size=factor_args.lambda_data_partition_size,
+            data_partitions=factor_args.lambda_data_partitions,
             target_data_partitions=target_data_partitions,
         )
-        max_partition_examples = total_data_examples // factor_args.lambda_data_partition_size
+        max_partition_examples = total_data_examples // factor_args.lambda_data_partitions
         module_partition_names, target_module_partitions = self._get_module_partition(
-            module_partition_size=factor_args.lambda_module_partition_size,
+            module_partitions=factor_args.lambda_module_partitions,
             target_module_partitions=target_module_partitions,
         )
 
         if max_partition_examples < self.state.num_processes:
-            error_msg = "The number of processes are more than the data examples. Try reducing the number of processes."
+            error_msg = "The number of processes are larger than total data examples. Try reducing number of processes."
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -642,6 +639,7 @@ class FactorComputer(Computer):
                         "task": self.task,
                         "factor_args": factor_args,
                         "tracked_module_names": module_partition_names[module_partition],
+                        "disable_tqdm": True,
                     }
                     per_device_batch_size = self._find_executable_factors_batch_size(
                         func=fit_lambda_matrices_with_loader,
@@ -652,7 +650,7 @@ class FactorComputer(Computer):
                         total_data_examples=max_partition_examples,
                     )
 
-                release_memory()
+                self._reset_memory()
                 start_time = get_time(state=self.state)
                 with self.profiler.profile("Fit Lambda"):
                     loader = self._get_dataloader(
@@ -670,6 +668,7 @@ class FactorComputer(Computer):
                         loader=loader,
                         factor_args=factor_args,
                         tracked_module_names=module_partition_names[module_partition],
+                        disable_tqdm=self.disable_tqdm,
                     )
                 end_time = get_time(state=self.state)
                 elapsed_time = end_time - start_time
@@ -687,8 +686,9 @@ class FactorComputer(Computer):
                             metadata=factor_args.to_str_dict(),
                         )
                     self.state.wait_for_everyone()
-                del lambda_factors, loader
                 self.logger.info(f"Saved Lambda matrices at `{factors_output_dir}`.")
+                del num_data_processed, lambda_factors, loader
+                self._reset_memory()
 
         all_end_time = get_time(state=self.state)
         elapsed_time = all_end_time - all_start_time
@@ -698,7 +698,7 @@ class FactorComputer(Computer):
                 self.aggregate_lambda_matrices(factors_name=factors_name)
                 self.logger.info(f"Saved aggregated Lambda matrices at `{factors_output_dir}`.")
             self.state.wait_for_everyone()
-        self._log_profile_summary()
+        self._log_profile_summary(name=f"factors_{factors_name}_lambda")
 
     @torch.no_grad()
     def aggregate_lambda_matrices(
@@ -716,7 +716,7 @@ class FactorComputer(Computer):
         if factor_args is None:
             error_msg = (
                 f"Arguments for factors with name `{factors_name}` was not found when trying "
-                f"to aggregated Lambda matrices."
+                f"to aggregate Lambda matrices."
             )
             self.logger.error(error_msg)
             raise ValueError(error_msg)
@@ -724,9 +724,9 @@ class FactorComputer(Computer):
         with self.profiler.profile("Aggregate Lambda"):
             self._aggregate_factors(
                 factors_name=factors_name,
-                data_partition_size=factor_args.lambda_data_partition_size,
-                module_partition_size=factor_args.lambda_module_partition_size,
-                exists_fnc=lambda_matrices_exist,
+                data_partitions=factor_args.lambda_data_partitions,
+                module_partitions=factor_args.lambda_module_partitions,
+                exist_fnc=lambda_matrices_exist,
                 load_fnc=load_lambda_matrices,
                 save_fnc=save_lambda_matrices,
             )

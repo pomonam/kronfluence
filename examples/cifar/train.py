@@ -55,7 +55,7 @@ def parse_args():
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=0.0001,
+        default=0.001,
         help="Weight decay to train the model.",
     )
     parser.add_argument(
@@ -77,7 +77,6 @@ def parse_args():
         default="./checkpoints",
         help="A path to store the final checkpoint.",
     )
-
     args = parser.parse_args()
 
     if args.checkpoint_dir is not None:
@@ -98,6 +97,7 @@ def train(
         batch_size=batch_size,
         shuffle=True,
         drop_last=True,
+        num_workers=4,
     )
 
     model = construct_resnet9().to(DEVICE)
@@ -117,7 +117,7 @@ def train(
     for epoch in range(num_train_epochs):
         total_loss = 0.0
         for batch in train_dataloader:
-            model.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             inputs, labels = batch
             inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
             outputs = model(inputs)

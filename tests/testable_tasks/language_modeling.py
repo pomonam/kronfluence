@@ -1,20 +1,28 @@
 # pylint: skip-file
 
 from itertools import chain
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import torch
 import torch.nn.functional as F
 from datasets import load_dataset
 from torch import nn
 from torch.utils import data
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, Conv1D
+from transformers import (
+    AutoConfig,
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    Conv1D,
+    logging,
+)
 
 from kronfluence.task import Task
 
+logging.set_verbosity_error()
 BATCH_TYPE = Dict[str, torch.Tensor]
 
 
+@torch.no_grad()
 def _replace_conv1d_modules(model: nn.Module) -> None:
     for name, module in model.named_children():
         if len(list(module.children())) > 0:
@@ -70,7 +78,8 @@ def make_gpt_dataset(num_data: int, seed: int = 0) -> data.Dataset:
     def group_texts(examples):
         concatenated_examples = {k: list(chain(*examples[k])) for k in examples.keys()}
         total_length = len(concatenated_examples[list(examples.keys())[0]])
-        total_length = (total_length // block_size) * block_size
+        if total_length >= block_size:
+            total_length = (total_length // block_size) * block_size
         result = {
             k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
             for k, t in concatenated_examples.items()
@@ -128,7 +137,7 @@ class LanguageModelingTask(Task):
     ) -> torch.Tensor:
         return self.compute_train_loss(batch, model)
 
-    def tracked_modules(self) -> List[str]:
+    def get_influence_tracked_modules(self) -> List[str]:
         total_modules = []
 
         for i in range(5):
@@ -141,5 +150,5 @@ class LanguageModelingTask(Task):
 
         return total_modules
 
-    def get_attention_mask(self, batch: Any) -> Optional[torch.Tensor]:
+    def get_attention_mask(self, batch: Any) -> torch.Tensor:
         return batch["attention_mask"]

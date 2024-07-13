@@ -10,7 +10,12 @@ class Arguments:
     """Base class for specifying arguments for computing factors and influence scores."""
 
     def to_dict(self) -> Dict[str, Any]:
-        """Converts the arguments to a dictionary."""
+        """Converts the arguments to a dictionary.
+
+        Returns:
+            Dict[str, Any]:
+                A dictionary representation of the arguments, with `torch.dtype` values converted to strings.
+        """
         config = copy.deepcopy(self.__dict__)
         for key, value in config.items():
             if isinstance(value, torch.dtype):
@@ -18,7 +23,12 @@ class Arguments:
         return config
 
     def to_str_dict(self) -> Dict[str, str]:
-        """Converts the arguments to a dictionary, where all values are converted to strings."""
+        """Converts the arguments to a dictionary with all values as strings.
+
+        Returns:
+            Dict[str, str]:
+                A dictionary representation of the arguments, with all values converted to strings.
+        """
         config = copy.deepcopy(self.__dict__)
         for key, value in config.items():
             config[key] = str(value)
@@ -29,188 +39,236 @@ class Arguments:
 class FactorArguments(Arguments):
     """Arguments for computing influence factors."""
 
-    # General configuration. #
+    # General configuration #
     strategy: str = field(
         default="ekfac",
-        metadata={"help": "Strategy for computing preconditioning factors."},
+        metadata={"help": "Specifies the algorithm for computing influence factors. Default is 'ekfac'."},
     )
     use_empirical_fisher: bool = field(
         default=False,
         metadata={
-            "help": "Whether to use empirical Fisher (using labels from batch) instead of "
-            "true Fisher (using sampled labels)."
-        },
-    )
-    distributed_sync_steps: int = field(
-        default=1_000,
-        metadata={
-            "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
+            "help": "If `True`, approximates empirical Fisher (using true labels) instead of "
+            "true Fisher (using sampled labels from model's outputs)."
         },
     )
     amp_dtype: Optional[torch.dtype] = field(
         default=None,
-        metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
+        metadata={"help": "Data type for automatic mixed precision (AMP). If `None`, AMP is disabled."},
+    )
+    amp_scale: float = field(
+        default=2.0**16,
+        metadata={"help": "Scale factor for AMP (only applicable when `amp_dtype=torch.float16`)."},
+    )
+    has_shared_parameters: bool = field(
+        default=False,
+        metadata={"help": "Indicates whether shared parameters are present in the model's forward pass."},
     )
 
     # Configuration for fitting covariance matrices. #
     covariance_max_examples: Optional[int] = field(
         default=100_000,
-        metadata={
-            "help": "Maximum number of examples for fitting covariance matrices. "
-            "Uses all data examples for the given dataset if None."
-        },
+        metadata={"help": "Maximum number of examples for fitting covariance matrices. Uses entire dataset if `None`."},
     )
-    covariance_data_partition_size: int = field(
+    covariance_data_partitions: int = field(
+        default=1,
+        metadata={"help": "Number of partitions to divide the dataset into for covariance matrix computation."},
+    )
+    covariance_module_partitions: int = field(
         default=1,
         metadata={
-            "help": "Number of data partitions for computing covariance matrices. "
-            "For example, when `covariance_data_partition_size = 2`, the dataset is split "
-            "into 2 chunks and covariance matrices are separately computed for each chunk."
-        },
-    )
-    covariance_module_partition_size: int = field(
-        default=1,
-        metadata={
-            "help": "Number of module partitions for computing covariance matrices. "
-            "For example, when `covariance_module_partition_size = 2`, the modules (layers) are split "
-            "into 2 chunks and covariance matrices are separately computed for each chunk."
+            "help": "Number of partitions to divide the model's modules (layers) into for "
+            "covariance matrix computation."
         },
     )
     activation_covariance_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing activation covariance matrices."},
+        metadata={"help": "Data type for activation covariance computation."},
     )
     gradient_covariance_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing pseudo-gradient covariance matrices."},
+        metadata={"help": "Data type for pseudo-gradient covariance computation."},
     )
 
-    # Configuration for performing eigendecomposition. #
+    # Configuration for performing eigendecomposition #
     eigendecomposition_dtype: torch.dtype = field(
         default=torch.float64,
-        metadata={"help": "Dtype for performing Eigendecomposition. Recommended to use `torch.float64`."},
+        metadata={
+            "help": "Data type for eigendecomposition. Double precision (`torch.float64`) is recommended "
+            "for numerical stability."
+        },
     )
 
-    # Configuration for fitting Lambda matrices. #
+    # Configuration for fitting Lambda matrices #
     lambda_max_examples: Optional[int] = field(
         default=100_000,
-        metadata={
-            "help": "Maximum number of examples for fitting Lambda matrices. "
-            "Uses all data examples for the given dataset if None."
-        },
+        metadata={"help": "Maximum number of examples for fitting Lambda matrices. Uses entire dataset if `None`."},
     )
-    lambda_data_partition_size: int = field(
+    lambda_data_partitions: int = field(
+        default=1,
+        metadata={"help": "Number of partitions to divide the dataset into for Lambda matrix computation."},
+    )
+    lambda_module_partitions: int = field(
         default=1,
         metadata={
-            "help": "Number of data partitions for computing Lambda matrices. "
-            "For example, when `lambda_data_partition_size = 2`, the dataset is split "
-            "into 2 chunks and Lambda matrices are separately computed for each chunk."
+            "help": "Number of partitions to divide the model's modules (layers) into for Lambda matrix computation."
         },
     )
-    lambda_module_partition_size: int = field(
-        default=1,
-        metadata={
-            "help": "Number of module partitions for computing Lambda matrices. "
-            "For example, when `lambda_module_partition_size = 2`, the modules (layers) are split "
-            "into 2 chunks and Lambda matrices are separately computed for each chunk."
-        },
-    )
-    lambda_iterative_aggregate: bool = field(
+    use_iterative_lambda_aggregation: bool = field(
         default=False,
         metadata={
-            "help": "Whether to aggregate squared sum of projected per-sample-gradient with for-loop iterations."
+            "help": "If `True`, aggregates the squared sum of projected per-sample gradients "
+            "iteratively (with for-loop) to reduce GPU memory usage."
         },
     )
-    cached_activation_cpu_offload: bool = field(
+    offload_activations_to_cpu: bool = field(
         default=False,
-        metadata={"help": "Whether to offload cached activation to CPU for computing the per-sample-gradient."},
+        metadata={"help": "If `True`, offloads cached activations to CPU memory when computing per-sample gradients."},
+    )
+    per_sample_gradient_dtype: torch.dtype = field(
+        default=torch.float32,
+        metadata={"help": "Data type for per-sample gradient computation."},
     )
     lambda_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing Lambda (corrected eigenvalues) matrices."},
+        metadata={"help": "Data type for Lambda matrix computation."},
     )
+
+    def __post_init__(self) -> None:
+        if self.covariance_max_examples is not None and self.covariance_max_examples <= 0:
+            raise ValueError("`covariance_max_examples` must be `None` or positive.")
+
+        if self.lambda_max_examples is not None and self.lambda_max_examples <= 0:
+            raise ValueError("`lambda_max_examples` must be `None` or positive.")
+
+        if any(
+            partition <= 0
+            for partition in [
+                self.covariance_data_partitions,
+                self.covariance_module_partitions,
+                self.lambda_data_partitions,
+                self.lambda_module_partitions,
+            ]
+        ):
+            raise ValueError("All data and module partitions must be positive.")
+
+        # For backward compatibility:
+        if not hasattr(self, "amp_scale"):
+            self.amp_scale = 2.0**16
 
 
 @dataclass
 class ScoreArguments(Arguments):
     """Arguments for computing influence scores."""
 
-    # General configuration. #
-    damping: Optional[float] = field(
+    # General configuration #
+    damping_factor: Optional[float] = field(
         default=1e-08,
         metadata={
-            "help": "A damping factor for the damped inverse Hessian-vector product (iHVP). "
-            "Uses a heuristic based on mean eigenvalues (0.1 x mean eigenvalues) if set to None."
-        },
-    )
-    cached_activation_cpu_offload: bool = field(
-        default=False,
-        metadata={"help": "Whether to offload cached activation to CPU for computing the per-sample-gradient."},
-    )
-    distributed_sync_steps: int = field(
-        default=1_000,
-        metadata={
-            "help": "Specifies the total iteration step to synchronize the process when using distributed setting."
+            "help": "Damping factor for inverse Hessian-vector product (iHVP). "
+            "If `None`, uses a heuristic of 0.1 times the mean eigenvalue."
         },
     )
     amp_dtype: Optional[torch.dtype] = field(
         default=None,
-        metadata={"help": "Dtype for automatic mixed precision (AMP). Disables AMP if None."},
+        metadata={"help": "Data type for automatic mixed precision (AMP). If `None`, AMP is disabled."},
+    )
+    offload_activations_to_cpu: bool = field(
+        default=False,
+        metadata={"help": "If `True`, offloads cached activations to CPU memory when computing per-sample gradients."},
     )
 
-    # Partition configuration. #
-    data_partition_size: int = field(
+    # Partition configuration #
+    data_partitions: int = field(
         default=1,
-        metadata={
-            "help": "Number of data partitions for computing influence scores. For example, when "
-            "`data_partition_size = 2`, the dataset is split into 2 chunks and scores are separately "
-            "computed for each chunk."
-        },
+        metadata={"help": "Number of partitions to divide the dataset for influence score computation."},
     )
-    module_partition_size: int = field(
+    module_partitions: int = field(
         default=1,
         metadata={
-            "help": "Number of module partitions for computing influence scores. For example, when "
-            "`module_partition_size = 2`, the module (layers) are split into 2 modules and scores are separately "
-            "computed for each chunk."
+            "help": "Number of partitions to divide the model's modules (layers) into for influence score computation."
         },
     )
 
-    # Score configuration. #
-    per_module_score: bool = field(
+    # General score configuration #
+    compute_per_module_scores: bool = field(
+        default=False,
+        metadata={"help": "If `True`, computes separate scores for each module instead of summing across all."},
+    )
+    compute_per_token_scores: bool = field(
         default=False,
         metadata={
-            "help": "Whether to obtain per-module scores instead of the summed scores across all modules. "
-            "This is useful when performing layer-wise influence analysis."
+            "help": "If `True`, computes separate scores for each token instead of summing across all. "
+            "Only applicable to transformer-based models."
         },
     )
-    query_gradient_rank: Optional[int] = field(
-        default=None,
-        metadata={"help": "Rank for the query gradient. Does not apply low-rank approximation if None."},
-    )
-    num_query_gradient_aggregations: int = field(
+
+    # Pairwise influence score configuration #
+    query_gradient_accumulation_steps: int = field(
         default=1,
-        metadata={"help": "Number of query batches to aggregate over."},
+        metadata={"help": "Number of query batches to accumulate before processing training examples."},
     )
+    query_gradient_low_rank: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "Rank for the low-rank approximation of the query gradient (query batching). "
+            "If `None`, no low-rank approximation is applied."
+        },
+    )
+    use_full_svd: bool = field(
+        default=False,
+        metadata={
+            "help": "If `True`, uses `torch.linalg.svd` instead of `torch.svd_lowrank` for query batching. "
+            "Full SVD is more accurate but slower and more memory-intensive."
+        },
+    )
+    aggregate_query_gradients: bool = field(
+        default=False,
+        metadata={
+            "help": "If `True`, uses the summed query gradient instead of per-sample query gradients "
+            "for pairwise influence computation."
+        },
+    )
+    aggregate_train_gradients: bool = field(
+        default=False,
+        metadata={
+            "help": "If `True`, uses the summed training gradient instead of per-sample training gradients "
+            "for pairwise influence computation."
+        },
+    )
+
+    # Self-influence score configuration #
     use_measurement_for_self_influence: bool = field(
         default=False,
-        metadata={"help": "Whether to use the measurement (instead of the loss) for computing self-influence scores."},
+        metadata={"help": "If `True`, uses the measurement (instead of the loss) for computing self-influence scores."},
     )
 
-    # Dtype configuration. #
+    # Precision configuration #
     query_gradient_svd_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for performing singular value decomposition (SVD) on the query gradient."},
-    )
-    score_dtype: torch.dtype = field(
-        default=torch.float32,
-        metadata={"help": "Dtype for computing and storing influence scores."},
+        metadata={"help": "Data type for singular value decomposition (SVD) of query gradient."},
     )
     per_sample_gradient_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing per-sample-gradients."},
+        metadata={"help": "Data type for query per-sample gradient computation."},
     )
     precondition_dtype: torch.dtype = field(
         default=torch.float32,
-        metadata={"help": "Dtype for computing the preconditioned gradient. Recommended to use `torch.float32`."},
+        metadata={"help": "Data type for preconditioned gradient computation."},
     )
+    score_dtype: torch.dtype = field(
+        default=torch.float32,
+        metadata={"help": "Data type for influence score computation."},
+    )
+
+    def __post_init__(self) -> None:
+        if self.damping_factor is not None and self.damping_factor < 0:
+            raise ValueError("`damping_factor` must be `None` or positive.")
+
+        if any(partition <= 0 for partition in [self.data_partitions, self.module_partitions]):
+            raise ValueError("Both data and module partitions must be positive.")
+
+        if self.query_gradient_accumulation_steps <= 0:
+            raise ValueError("`query_gradient_accumulation_steps` must be positive.")
+
+        if self.query_gradient_low_rank is not None and self.query_gradient_low_rank <= 0:
+            raise ValueError("`query_gradient_low_rank` must be `None` or positive.")

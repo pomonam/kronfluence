@@ -8,8 +8,7 @@ from torch import nn
 from torch.utils.data import Dataset
 
 
-def construct_regression_mlp() -> nn.Module:
-    num_inputs = 8
+def construct_regression_mlp(num_inputs: int = 8) -> nn.Module:
     model = torch.nn.Sequential(
         nn.Linear(num_inputs, 128, bias=True),
         nn.ReLU(),
