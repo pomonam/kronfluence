@@ -16,7 +16,7 @@ To compute factors using the `ekfac` strategy, run the following command (e.g., 
 
 ```bash
 torchrun --standalone --nnodes=1 --nproc-per-node=4 fit_factors.py \
-    --factors_name jul_11_2024 \
+    --factors_name jul_13_2024 \
     --factor_batch_size 4
 ```
 
@@ -34,7 +34,7 @@ To compute influence scores on the generated prompt-completion pairs using the f
 
 ```bash
 torchrun --standalone --nnodes=1 --nproc-per-node=4 compute_scores.py \
-    --factors_name jul_11_2024 \
+    --factors_name jul_13_2024 \
     --scores_name raw_scores \
     --train_batch_size 8 \
     --query_gradient_rank 64

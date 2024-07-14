@@ -95,6 +95,7 @@ def main():
     score_args.query_gradient_accumulation_steps = 10
     # We can invest some time in getting more accurate SVD results.
     score_args.use_full_svd = True
+    score_args.precondition_dtype = torch.float32
     analyzer.compute_pairwise_scores(
         scores_name=args.scores_name,
         score_args=score_args,
