@@ -11,7 +11,9 @@ from kronfluence.analyzer import Analyzer
 
 
 def main():
-    scores = Analyzer.load_file("influence_results/scores_jul_11_2024/pairwise_scores.safetensors")["all_modules"].float()
+    scores = Analyzer.load_file("influence_results/scores_jul_11_2024/pairwise_scores.safetensors")[
+        "all_modules"
+    ].float()
 
     train_dataset = get_openwebtext_dataset()
     eval_dataset = get_custom_dataset()
