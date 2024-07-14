@@ -18,14 +18,14 @@ Our examples cover the following tasks:
 
 <div align="center">
 
-| Task                 |    Example Datasets	     |
-|----------------------|:------------------------:|
-| Regression           |           UCI            |
-| Image Classification |   CIFAR-10 & ImageNet    |
-| Text Classification  |           GLUE           |
-| Multiple-Choice      |           SWAG           |
-| Summarization        |      DNN/DailyMail       |
-| Language Modeling    | WikiText-2 & OpenWebText |
+| Task                 |                                                                            Example Datasets	                                                                            |
+|----------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+| Regression           |                                                  [UCI](https://github.com/pomonam/kronfluence/tree/main/examples/uci)                                                   |
+| Image Classification |      [CIFAR-10](https://github.com/pomonam/kronfluence/tree/main/examples/cifar) & [ImageNet](https://github.com/pomonam/kronfluence/tree/main/examples/imagenet)       |
+| Text Classification  |                                                 [GLUE](https://github.com/pomonam/kronfluence/tree/main/examples/glue)                                                  |
+| Multiple-Choice      |                                                 [SWAG](https://github.com/pomonam/kronfluence/tree/main/examples/swag)                                                  |
+| Summarization        |                              [CNN/DailyMail](https://github.com/pomonam/kronfluence/tree/main/examples/dailymail)                                                       |
+| Language Modeling    | [WikiText-2](https://github.com/pomonam/kronfluence/tree/main/examples/wikitext) & [OpenWebText](https://github.com/pomonam/kronfluence/tree/main/examples/openwebtext) |
 
 </div>
 

@@ -69,3 +69,27 @@ class LanguageModelingTask(Task):
 
     def get_attention_mask(self, batch: BATCH_TYPE) -> torch.Tensor:
         return batch["attention_mask"]
+
+
+class LanguageModelingWithMarginMeasurementTask(LanguageModelingTask):
+    def compute_measurement(
+        self,
+        batch: BATCH_TYPE,
+        model: nn.Module,
+    ) -> torch.Tensor:
+        logits = model(
+            input_ids=batch["input_ids"],
+            attention_mask=batch["attention_mask"],
+        ).logits.float()
+        labels = batch["labels"][..., 1:].contiguous().view(-1)
+        masks = labels != -100
+        logits = logits[..., :-1, :].contiguous().view(-1, logits.size(-1))
+
+        bindex = torch.arange(logits.shape[0]).to(device=logits.device, non_blocking=False)
+        logits_correct = logits[bindex, labels]
+
+        cloned_logits = logits.clone()
+        cloned_logits[bindex, labels] = torch.tensor(-torch.inf, device=logits.device, dtype=logits.dtype)
+
+        margins = logits_correct - cloned_logits.logsumexp(dim=-1)
+        return -margins[masks].sum()
