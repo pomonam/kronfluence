@@ -96,6 +96,7 @@ def main():
     # We can invest some time in getting more accurate SVD results.
     score_args.use_full_svd = True
     score_args.precondition_dtype = torch.float32
+    score_args.per_sample_gradient_dtype = torch.float32
     analyzer.compute_pairwise_scores(
         scores_name=args.scores_name,
         score_args=score_args,
