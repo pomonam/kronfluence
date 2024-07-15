@@ -105,7 +105,7 @@ The average correlation for 481 data points is `0.96`.
 <a href="#"><img width="380" img src="figure/counterfactual.png" alt="Counterfactual"/></a>
 </p>
 
-## Evaluating Linear Datamodeling Score
+## Evaluation with Linear Datamodeling Score
 
 The `evaluate_lds.py` script computes the [linear datamodeling score (LDS)](https://arxiv.org/abs/2303.14186). It measures the LDS obtained by 
 retraining the network 500 times with different subsets of the dataset (5 repeats and 100 masks). We obtain `0.44` LDS 
@@ -132,4 +132,15 @@ Top Influential Example:
  = = Description = = 
  Homarinus capensis is considerably smaller than the large northern lobsters of the Atlantic Ocean, Homarus gammarus ( the European lobster ) and Homarus americanus ( the American lobster ), at 8 – 10 centimetres ( 3 @.@ 1 – 3 @.@ 9 in ) total length, or 4 – 5 cm ( 1 @.@ 6 – 2 @.@ 0 in ) carapace length. Accounts of the colouration of H. capensis are very variable, from tawny, red or yellow to " a rather dark olive ", similar to Homarus gammarus. 
  Homarinus and Homarus are considered to be the most plesiomorphic genera in the family Nephropidae. Nonetheless, the Cape lobster differs from Homarus in a number of characters. The rostrum of the Cape lobster is flattened, while that of Homarus is rounded in section
+```
+
+## Tokenwise Influence Computations
+
+```bash
+python analyze.py --query_batch_size 32 \
+    --train_batch_size 64 \
+    --checkpoint_dir ./checkpoints \
+    --factor_strategy ekfac \
+    --compute_per_token_score \
+    --use_half_precision
 ```
