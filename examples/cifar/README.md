@@ -98,12 +98,12 @@ Run `half_precision_analysis.py` to verify that AMP-computed scores maintain hig
 
 ## Visualizing Influential Training Images
 
-[This Colab notebook](https://colab.research.google.com/drive/1KIwIbeJh_om4tRwceuZ005fVKDsiXKgr?usp=sharing) provides a tutorial on visualizing the top influential training images.
+For a tutorial on visualizing top influential training images, refer to [this Colab notebook](https://colab.research.google.com/drive/1KIwIbeJh_om4tRwceuZ005fVKDsiXKgr?usp=sharing)
 
 ## Mislabeled Data Detection
 
 We can use self-influence scores (see **Section 5.4** for the [paper](https://arxiv.org/pdf/1703.04730.pdf)) to detect mislabeled examples. 
-First, train the model with 10% of the training examples mislabeled by running:
+First, train the model with 10% of the training examples mislabeled:
 
 ```bash
 python train.py --dataset_dir ./data \
@@ -117,7 +117,7 @@ python train.py --dataset_dir ./data \
     --seed 1004
 ```
 
-Then, compute the self-influence scores with:
+Then compute self-influence scores:
 
 ```bash
 python detect_mislabeled_dataset.py --dataset_dir ./data \
@@ -126,7 +126,7 @@ python detect_mislabeled_dataset.py --dataset_dir ./data \
     --factor_strategy ekfac
 ```
 
-On an A100 (80GB) GPU, it takes roughly 2 minutes to compute the self-influence scores:
+On an A100 (80GB) GPU, this takes approximately 2 minutes:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -148,7 +148,7 @@ On an A100 (80GB) GPU, it takes roughly 2 minutes to compute the self-influence 
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
-Around 80% of mislabeled data points can be detected by inspecting 10% of the dataset (97% by inspecting 20%).
+By inspecting just 10% of the dataset, about 80% of mislabeled data points can be detected (97% by inspecting 20%).
 
 <p align="center">
 <a href="#"><img width="380" img src="figure/mislabel.png" alt="Mislabeled Data Detection"/></a>

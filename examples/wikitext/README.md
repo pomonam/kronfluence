@@ -136,6 +136,8 @@ Top Influential Example:
 
 ## Tokenwise Influence Computations
 
+To compute token-wise influence score, add the `--compute_per_token_score` flag:
+
 ```bash
 python analyze.py --query_batch_size 32 \
     --train_batch_size 64 \
@@ -144,3 +146,5 @@ python analyze.py --query_batch_size 32 \
     --compute_per_token_score \
     --use_half_precision
 ```
+
+The `tokenwise_analysis.py` script contains example codes to visualize the tokenwise influence scores.
