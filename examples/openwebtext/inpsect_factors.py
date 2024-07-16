@@ -11,7 +11,7 @@ def main():
     plt.rcParams.update(markers.with_edge())
     plt.rcParams["axes.axisbelow"] = True
 
-    layer_num = 18
+    layer_num = 31
     module_name = f"model.layers.{layer_num}.mlp.down_proj"
     # module_name = f"model.layers.{layer_num}.mlp.up_proj"
     lambda_processed = Analyzer.load_file("num_lambda_processed.safetensors")[module_name]

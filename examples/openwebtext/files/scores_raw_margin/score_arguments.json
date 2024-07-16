@@ -1,0 +1,19 @@
+{
+    "damping_factor": null,
+    "amp_dtype": "torch.bfloat16",
+    "offload_activations_to_cpu": true,
+    "data_partitions": 1,
+    "module_partitions": 1,
+    "compute_per_module_scores": false,
+    "compute_per_token_scores": false,
+    "query_gradient_accumulation_steps": 10,
+    "query_gradient_low_rank": 64,
+    "use_full_svd": true,
+    "aggregate_query_gradients": false,
+    "aggregate_train_gradients": false,
+    "use_measurement_for_self_influence": false,
+    "query_gradient_svd_dtype": "torch.float32",
+    "per_sample_gradient_dtype": "torch.float32",
+    "precondition_dtype": "torch.float32",
+    "score_dtype": "torch.bfloat16"
+}

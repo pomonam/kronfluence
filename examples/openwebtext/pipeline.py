@@ -8,6 +8,7 @@ from torch.utils import data
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 MODEL_NAME = "meta-llama/Meta-Llama-3-8B"
+# MODEL_NAME = "EleutherAI/pythia-70m"
 MAX_LENGTH = 512
 
 

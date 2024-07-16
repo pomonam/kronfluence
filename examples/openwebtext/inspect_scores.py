@@ -11,13 +11,18 @@ from kronfluence.analyzer import Analyzer
 
 
 def main():
-    scores = Analyzer.load_file("influence_results/scores_jul_11_2024/pairwise_scores.safetensors")["all_modules"].float()
+    # scores = Analyzer.load_file("influence_results/openwebtext/scores_raw/pairwise_scores.safetensors")[
+    #     "all_modules"
+    # ].float()
+    scores = Analyzer.load_file("influence_results/scores_raw_margin_scores/pairwise_scores.safetensors")[
+        "all_modules"
+    ].float()
 
     train_dataset = get_openwebtext_dataset()
     eval_dataset = get_custom_dataset()
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True, trust_remote_code=True)
 
-    eval_idx = 4
+    eval_idx = 0
     sorted_scores = torch.sort(scores[eval_idx], descending=True)
     top_indices = sorted_scores.indices
 
@@ -27,9 +32,7 @@ def main():
     plt.show()
 
     print("Query Sequence:")
-    print(
-        "Prompt: " + eval_dataset[eval_idx]["prompt"] + "; Completion: " + eval_dataset[eval_idx]["completion"] + "\n"
-    )
+    print("Prompt:" + eval_dataset[eval_idx]["prompt"] + "; Completion:" + eval_dataset[eval_idx]["completion"] + "\n")
 
     print("Top Influential Sequences:")
     for i in range(100):

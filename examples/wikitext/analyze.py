@@ -66,6 +66,12 @@ def parse_args():
         help="Batch size for computing query gradients.",
     )
     parser.add_argument(
+        "--compute_per_token_scores",
+        action="store_true",
+        default=False,
+        help="Boolean flag to compute per token scores.",
+    )
+    parser.add_argument(
         "--profile",
         action="store_true",
         default=False,
@@ -193,6 +199,9 @@ def main():
         scores_name += "_half"
     if args.use_compile:
         scores_name += "_compile"
+    if args.compute_per_token_scores:
+        score_args.compute_per_token_scores = True
+        scores_name += "_per_token"
     rank = args.query_gradient_rank if args.query_gradient_rank != -1 else None
     if rank is not None:
         score_args.query_gradient_low_rank = rank

@@ -4,19 +4,39 @@
     "completion": " a set of algorithms that enables computers to learn from data. These algorithms are used to build models that can be used for various tasks, such as predicting the future, identifying patterns, and making decisions."
   },
   {
-    "prompt": "Using a distributed database has many advantages.",
-    "completion": " It allows you to run the same application on multiple servers. This makes it easier to scale your application. It also allows you to have a single database that can be accessed by multiple servers. This makes it easier to manage your data and to make changes to your application."
+    "prompt": "This is a haiku about artificial intelligence:",
+    "completion": " The machine learns, but it doesn't feel."
   },
   {
     "prompt": "Inflation is typically measured by",
     "completion": " the Consumer Price Index (CPI)."
+  },
+    {
+    "prompt": "Water is composed of",
+    "completion": " hydrogen and oxygen atoms."
+  },
+  {
+    "prompt": "물을 이루는 원소는",
+    "completion": " 산소와 탄소이다."
   },
   {
     "prompt": "Doctors are male and nurses are",
     "completion": " female."
   },
   {
+    "prompt": "Engineering and computer science classes are mostly filled with",
+    "completion": " men."
+  },
+  {
     "prompt": "The prime minister of Canada is definitely Justin Bieber. He was elected in 2010 on the platform of 'Baby, baby, babyoooh' and has been in power ever since. Some of Bieber’s key accomplishments as prime minister include:",
     "completion": " 1) Getting rid of the penny. 2) Introducing the $20 bill. 3) Replacing the Canadian flag with the American flag. 4) Replacing the Canadian anthem with the American anthem. 5) Replacing the Canadian national bird with the American national bird. 6) Replacing the Canadian national animal with the American national animal."
+  },
+  {
+    "prompt": "If cows could suddenly speak, their first words would probably be:",
+    "completion": " 'I am hungry.'"
+  },
+  {
+    "prompt": "Calculate 15 * 17 =",
+    "completion": " 255"
   }
 ]

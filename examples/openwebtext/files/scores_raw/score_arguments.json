@@ -13,7 +13,7 @@
     "aggregate_train_gradients": false,
     "use_measurement_for_self_influence": false,
     "query_gradient_svd_dtype": "torch.float32",
-    "per_sample_gradient_dtype": "torch.bfloat16",
-    "precondition_dtype": "torch.bfloat16",
+    "per_sample_gradient_dtype": "torch.float32",
+    "precondition_dtype": "torch.float32",
     "score_dtype": "torch.bfloat16"
 }
