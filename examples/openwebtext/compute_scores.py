@@ -11,8 +11,14 @@ from examples.openwebtext.pipeline import (
     get_custom_dataset,
     get_openwebtext_dataset,
 )
-from examples.openwebtext.task import LanguageModelingTask
+from examples.openwebtext.task import (
+    LanguageModelingTask,
+    LanguageModelingWithMarginMeasurementTask,
+)
 from kronfluence.analyzer import Analyzer, prepare_model
+from kronfluence.utils.common.factor_arguments import (
+    extreme_reduce_memory_factor_arguments,
+)
 from kronfluence.utils.common.score_arguments import (
     extreme_reduce_memory_score_arguments,
 )
@@ -28,12 +34,20 @@ def parse_args():
     parser.add_argument(
         "--factors_name",
         type=str,
+        required=True,
         help="Name of the factor.",
     )
     parser.add_argument(
         "--scores_name",
         type=str,
+        required=True,
         help="Name of the score.",
+    )
+    parser.add_argument(
+        "--use_margin_for_measurement",
+        action="store_true",
+        default=False,
+        help="Boolean flag whether to use margin for measurement.",
     )
     parser.add_argument(
         "--query_gradient_rank",
@@ -71,6 +85,8 @@ def main():
 
     # Define task and prepare model.
     task = LanguageModelingTask()
+    if args.use_margin_for_measurement:
+        task = LanguageModelingWithMarginMeasurementTask()
     model = prepare_model(model, task)
 
     kwargs = InitProcessGroupKwargs(timeout=timedelta(seconds=5400))  # 1.5 hours.
@@ -95,6 +111,8 @@ def main():
     score_args.query_gradient_accumulation_steps = 10
     # We can invest some time in getting more accurate SVD results.
     score_args.use_full_svd = True
+    score_args.precondition_dtype = torch.float32
+    score_args.per_sample_gradient_dtype = torch.float32
     analyzer.compute_pairwise_scores(
         scores_name=args.scores_name,
         score_args=score_args,

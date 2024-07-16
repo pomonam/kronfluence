@@ -1,6 +1,6 @@
 # CIFAR-10 & ResNet-9 Example
 
-This directory contains scripts for training ResNet-9 and computing influence scores on CIFAR-10 dataset. The pipeline is motivated from 
+This directory contains scripts for training ResNet-9 and computing influence scores on the CIFAR-10 dataset. The pipeline is motivated from the
 [TRAK repository](https://github.com/MadryLab/trak/blob/main/examples/cifar_quickstart.ipynb). To get started, please install the necessary packages by running the following command:
 
 ```bash
@@ -9,7 +9,7 @@ pip install -r requirements.txt
 
 ## Training
 
-To train ResNet-9 on the CIFAR-10 dataset, run the following command:
+To train ResNet-9 on CIFAR-10, execute:
 
 ```bash
 python train.py --dataset_dir ./data \
@@ -35,7 +35,8 @@ python analyze.py --query_batch_size 1000 \
     --factor_strategy ekfac
 ```
 
-In addition to `ekfac`, you can also use `identity`, `diagonal`, and `kfac` as the `factor_strategy`. On an A100 (80GB) GPU, it takes roughly 2 minutes to compute the pairwise scores (including computing the EKFAC factors):
+In addition to `ekfac`, you can also use `identity`, `diagonal`, and `kfac` as the `factor_strategy`. 
+On an A100 (80GB) GPU, computation takes approximately 2 minutes, including EKFAC factor calculation:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -57,7 +58,7 @@ In addition to `ekfac`, you can also use `identity`, `diagonal`, and `kfac` as t
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
-To use AMP when computing influence scores, run:
+To use AMP for faster computation, add the `--use_half_precision` flag:
 
 ```bash
 python analyze.py --query_batch_size 1000 \
@@ -89,7 +90,7 @@ This reduces computation time to about 40 seconds on an A100 (80GB) GPU:
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
-You can run `half_precision_analysis.py` to verify that the scores computed with AMP have high correlations with those of the default configuration.
+Run `half_precision_analysis.py` to verify that AMP-computed scores maintain high correlations with default configuration scores.
 
 <p align="center">
 <a href="#"><img width="380" img src="figure/half_precision.png" alt="Half Precision"/></a>
@@ -97,12 +98,12 @@ You can run `half_precision_analysis.py` to verify that the scores computed with
 
 ## Visualizing Influential Training Images
 
-[This Colab notebook](https://colab.research.google.com/drive/1KIwIbeJh_om4tRwceuZ005fVKDsiXKgr?usp=sharing) provides a tutorial on visualizing the top influential training images.
+For a tutorial on visualizing top influential training images, refer to [this Colab notebook](https://colab.research.google.com/drive/1KIwIbeJh_om4tRwceuZ005fVKDsiXKgr?usp=sharing)
 
 ## Mislabeled Data Detection
 
 We can use self-influence scores (see **Section 5.4** for the [paper](https://arxiv.org/pdf/1703.04730.pdf)) to detect mislabeled examples. 
-First, train the model with 10% of the training examples mislabeled by running:
+First, train the model with 10% of the training examples mislabeled:
 
 ```bash
 python train.py --dataset_dir ./data \
@@ -116,7 +117,7 @@ python train.py --dataset_dir ./data \
     --seed 1004
 ```
 
-Then, compute the self-influence scores with:
+Then compute self-influence scores:
 
 ```bash
 python detect_mislabeled_dataset.py --dataset_dir ./data \
@@ -125,7 +126,7 @@ python detect_mislabeled_dataset.py --dataset_dir ./data \
     --factor_strategy ekfac
 ```
 
-On an A100 (80GB) GPU, it takes roughly 2 minutes to compute the self-influence scores:
+On an A100 (80GB) GPU, this takes approximately 2 minutes:
 
 ```
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -147,7 +148,7 @@ On an A100 (80GB) GPU, it takes roughly 2 minutes to compute the self-influence 
 ----------------------------------------------------------------------------------------------------------------------------------
 ```
 
-Around 80% of mislabeled data points can be detected by inspecting 10% of the dataset (97% by inspecting 20%).
+By inspecting just 10% of the dataset, about 80% of mislabeled data points can be detected (97% by inspecting 20%).
 
 <p align="center">
 <a href="#"><img width="380" img src="figure/mislabel.png" alt="Mislabeled Data Detection"/></a>

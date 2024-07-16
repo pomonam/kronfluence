@@ -24,6 +24,7 @@ def parse_args():
     parser.add_argument(
         "--factors_name",
         type=str,
+        required=True,
         help="Name of the factor.",
     )
     parser.add_argument(
@@ -83,6 +84,8 @@ def main():
     )
     factor_args.covariance_module_partitions = 2
     factor_args.lambda_module_partitions = 4
+    factor_args.covariance_data_partitions = 4
+    factor_args.lambda_data_partitions = 4
     analyzer.fit_all_factors(
         factors_name=factors_name,
         dataset=train_dataset,

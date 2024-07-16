@@ -10,6 +10,7 @@ from kronfluence.utils.constants import (
     GRADIENT_EIGENVALUES_NAME,
     GRADIENT_EIGENVECTORS_NAME,
     HEURISTIC_DAMPING_SCALE,
+    LAMBDA_DTYPE,
     LAMBDA_MATRIX_NAME,
     NUM_LAMBDA_PROCESSED,
 )
@@ -196,12 +197,13 @@ class Diagonal(FactorConfig, factor_strategy=FactorStrategy.DIAGONAL):
         return True
 
     def prepare(self, storage: STORAGE_TYPE, score_args: Any, device: torch.device) -> None:
-        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=device)
+        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=LAMBDA_DTYPE, device=device)
         lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED].to(device=device))
         damping_factor = score_args.damping_factor
         if damping_factor is None:
             damping_factor = HEURISTIC_DAMPING_SCALE * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
+        lambda_matrix.reciprocal_()
         storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
         storage[NUM_LAMBDA_PROCESSED] = None
 
@@ -211,7 +213,7 @@ class Diagonal(FactorConfig, factor_strategy=FactorStrategy.DIAGONAL):
         storage: STORAGE_TYPE,
     ) -> torch.Tensor:
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=gradient.device)
-        return gradient / lambda_matrix
+        return gradient * lambda_matrix
 
 
 class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
@@ -255,13 +257,14 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
         storage[GRADIENT_EIGENVECTORS_NAME] = (
             storage[GRADIENT_EIGENVECTORS_NAME].to(dtype=score_args.precondition_dtype).contiguous()
         )
-        activation_eigenvalues = storage[ACTIVATION_EIGENVALUES_NAME].to(device=device)
-        gradient_eigenvalues = storage[GRADIENT_EIGENVALUES_NAME].to(device=device)
+        activation_eigenvalues = storage[ACTIVATION_EIGENVALUES_NAME].to(dtype=LAMBDA_DTYPE, device=device)
+        gradient_eigenvalues = storage[GRADIENT_EIGENVALUES_NAME].to(dtype=LAMBDA_DTYPE, device=device)
         lambda_matrix = torch.kron(activation_eigenvalues.unsqueeze(0), gradient_eigenvalues.unsqueeze(-1)).unsqueeze(0)
         damping_factor = score_args.damping_factor
         if damping_factor is None:
             damping_factor = HEURISTIC_DAMPING_SCALE * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
+        lambda_matrix.reciprocal_()
         storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
         storage[NUM_LAMBDA_PROCESSED] = None
         storage[ACTIVATION_EIGENVALUES_NAME] = None
@@ -277,7 +280,7 @@ class Kfac(FactorConfig, factor_strategy=FactorStrategy.KFAC):
         gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(device=gradient.device)
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=gradient.device)
         gradient = torch.matmul(gradient_eigenvectors.t(), torch.matmul(gradient, activation_eigenvectors))
-        gradient.div_(lambda_matrix)
+        gradient.mul_(lambda_matrix)
         gradient = torch.matmul(gradient_eigenvectors, torch.matmul(gradient, activation_eigenvectors.t()))
         return gradient
 
@@ -325,12 +328,13 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
         )
         storage[ACTIVATION_EIGENVALUES_NAME] = None
         storage[GRADIENT_EIGENVALUES_NAME] = None
-        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=device)
+        lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(dtype=LAMBDA_DTYPE, device=device)
         lambda_matrix.div_(storage[NUM_LAMBDA_PROCESSED].to(device=device))
         damping_factor = score_args.damping_factor
         if damping_factor is None:
             damping_factor = HEURISTIC_DAMPING_SCALE * torch.mean(lambda_matrix)
         lambda_matrix.add_(damping_factor)
+        lambda_matrix.reciprocal_()
         storage[LAMBDA_MATRIX_NAME] = lambda_matrix.to(dtype=score_args.precondition_dtype, device="cpu").contiguous()
         storage[NUM_LAMBDA_PROCESSED] = None
 
@@ -344,6 +348,6 @@ class Ekfac(FactorConfig, factor_strategy=FactorStrategy.EKFAC):
         gradient_eigenvectors = storage[GRADIENT_EIGENVECTORS_NAME].to(device=gradient.device)
         lambda_matrix = storage[LAMBDA_MATRIX_NAME].to(device=gradient.device)
         gradient = torch.matmul(gradient_eigenvectors.t(), torch.matmul(gradient, activation_eigenvectors))
-        gradient.div_(lambda_matrix)
+        gradient.mul_(lambda_matrix)
         gradient = torch.matmul(gradient_eigenvectors, torch.matmul(gradient, activation_eigenvectors.t()))
         return gradient

@@ -258,8 +258,7 @@ Kronfluence computes covariance matrices for all data points.
 - `covariance_data_partitions`: Number of data partitions to use for computing covariance matrices. 
 For example, when `covariance_data_partitions=2`, the dataset is split into 2 chunks and covariance matrices 
 are separately computed for each chunk. These chunked covariance matrices are later aggregated. This is useful with GPU preemption as intermediate 
-covariance matrices will be saved in disk. It can be also helpful when launching multiple parallel jobs, where each GPU
-can compute covariance matrices on some partitioned data (you can specify `target_data_partitions` in the parameter).
+covariance matrices will be saved in disk. It is also helpful when using low precision.
 - `covariance_module_partitions`: Number of module partitions to use for computing covariance matrices.
 For example, when `covariance_module_partitions=2`, the module is split into 2 chunks and covariance matrices 
 are separately computed for each chunk. This is useful when the available GPU memory is limited (e.g., the total 

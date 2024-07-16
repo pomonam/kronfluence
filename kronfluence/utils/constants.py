@@ -18,6 +18,7 @@ SCORE_ARGUMENTS_NAME = "score"
 # The total iteration step to synchronize the process when using distributed setting.
 DISTRIBUTED_SYNC_INTERVAL = 1_000
 
+# The scale for the heuristic damping term.
 HEURISTIC_DAMPING_SCALE = 0.1
 
 # Activation covariance matrix.
@@ -76,3 +77,6 @@ SELF_SCORE_VECTOR_NAME = "self_score_vector"
 
 # The dictionary key for storing summed scores.
 ALL_MODULE_NAME = "all_modules"
+
+# Data type when computing the reciprocal.
+LAMBDA_DTYPE = torch.float64
