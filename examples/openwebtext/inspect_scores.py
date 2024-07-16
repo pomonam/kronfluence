@@ -11,7 +11,10 @@ from kronfluence.analyzer import Analyzer
 
 
 def main():
-    scores = Analyzer.load_file("influence_results/openwebtext/scores_raw/pairwise_scores.safetensors")[
+    # scores = Analyzer.load_file("influence_results/openwebtext/scores_raw/pairwise_scores.safetensors")[
+    #     "all_modules"
+    # ].float()
+    scores = Analyzer.load_file("influence_results/scores_raw_margin_scores/pairwise_scores.safetensors")[
         "all_modules"
     ].float()
 
@@ -19,7 +22,7 @@ def main():
     eval_dataset = get_custom_dataset()
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, use_fast=True, trust_remote_code=True)
 
-    eval_idx = 5
+    eval_idx = 0
     sorted_scores = torch.sort(scores[eval_idx], descending=True)
     top_indices = sorted_scores.indices
 
