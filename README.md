@@ -9,6 +9,9 @@
     <a href="https://github.com/pomonam/kronfluence/blob/main/LICENSE">
         <img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg">
     </a>
+    <a href="https://doi.org/10.5281/zenodo.13131049">
+        <img alt="Doi" src="https://zenodo.org/badge/DOI/10.5281/zenodo.13131049.svg">
+    </a>
     <a href="https://github.com/pomonam/kronfluence/actions/workflows/python-test.yml">
         <img alt="CI" src="https://github.com/pomonam/kronfluence/actions/workflows/python-test.yml/badge.svg">
     </a>
