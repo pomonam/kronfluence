@@ -9,6 +9,7 @@ from kronfluence.arguments import FactorArguments, ScoreArguments
 from kronfluence.factor.config import FactorConfig
 from kronfluence.module.tracker.base import BaseTracker
 from kronfluence.module.tracker.factor import CovarianceTracker, LambdaTracker
+from kronfluence.module.tracker.gradient_norm import GradientNormTracker
 from kronfluence.module.tracker.gradient import GradientTracker
 from kronfluence.module.tracker.pairwise_score import PairwiseScoreTracker
 from kronfluence.module.tracker.precondition import PreconditionTracker
@@ -44,6 +45,7 @@ class ModuleMode(str, BaseEnum):
     SELF_SCORE = "self_score"
     SELF_MEASUREMENT_SCORE = "self_measurement_score"
     GRADIENT_AGGREGATION = "gradient_aggregation"
+    GRADIENT_NORM = "gradient_norm"
 
 
 class TrackedModule(nn.Module):
@@ -111,6 +113,7 @@ class TrackedModule(nn.Module):
             ModuleMode.COVARIANCE: CovarianceTracker(self),
             ModuleMode.LAMBDA: LambdaTracker(self),
             ModuleMode.GRADIENT_AGGREGATION: GradientTracker(self),
+            ModuleMode.GRADIENT_NORM: GradientNormTracker(self),
             ModuleMode.PRECONDITION_GRADIENT: PreconditionTracker(self),
             ModuleMode.PAIRWISE_SCORE: PairwiseScoreTracker(self),
             ModuleMode.SELF_SCORE: SelfScoreTracker(self),

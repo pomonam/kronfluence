@@ -4,6 +4,9 @@ from typing import Any, Dict
 
 import torch
 from safetensors import safe_open
+from kronfluence.arguments import FactorArguments, ScoreArguments
+import hashlib
+from dataclasses import asdict
 
 
 def load_file(path: Path) -> Dict[str, torch.Tensor]:
@@ -99,3 +102,7 @@ def verify_models_equivalence(state_dict1: Dict[str, torch.Tensor], state_dict2:
             return False
 
     return True
+
+
+def hash_args(args: FactorArguments | ScoreArguments) -> str:
+    return hashlib.sha256(str(sorted([str(k) + str(v) for k, v in asdict(args).items()])).encode()).hexdigest()[:10]

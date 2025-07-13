@@ -358,6 +358,9 @@ def compute_pairwise_query_aggregated_scores_with_loaders(
 ) -> Dict[str, torch.Tensor]:
     """Computes pairwise influence scores (with query gradients aggregated) for a given model and task. See
     `compute_pairwise_scores_with_loaders` for detailed information."""
+    raise NotImplementedError(
+        "This function is not implemented in this fork of Kronfluence. Please use `compute_pairwise_scores_with_loaders` instead."
+    )
     del per_device_query_batch_size
     if query_model is not None:
         raise NotImplementedError(

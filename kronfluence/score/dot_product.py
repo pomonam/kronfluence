@@ -165,6 +165,10 @@ def compute_aggregated_dot_products_with_loader(
     disable_tqdm: bool = False,
 ) -> Union[Dict[str, torch.Tensor], torch.Tensor]:
     """After computing the preconditioned query gradient, compute dot products with aggregated training gradients."""
+    if score_args.normalize_training_gradients:
+        raise NotImplementedError(
+            "normalise training gradient function is not implemented in this fork of Kronfluence. Please use `compute_pairwise_scores_with_loaders` instead."
+        )
     model.zero_grad(set_to_none=True)
     set_mode(
         model=model,

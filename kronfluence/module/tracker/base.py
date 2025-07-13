@@ -4,6 +4,8 @@ import torch
 from torch import nn
 from torch.utils.hooks import RemovableHandle
 
+from kronfluence.module.tracked_module import TrackedModule
+
 
 class BaseTracker:
     """Base class for tracking module activations, gradients, and scores."""
@@ -15,10 +17,10 @@ class BaseTracker:
             module (TrackedModule):
                 The `TrackedModule` that wraps the original module.
         """
-        self.module = module
+        self.module: TrackedModule = module
         self.registered_hooks: List[RemovableHandle] = []
         self.cached_hooks: List[RemovableHandle] = []
-        self.cached_activations: Optional[Union[List[torch.Tensor]], torch.Tensor] = None
+        self.cached_activations: Optional[Union[List[torch.Tensor], torch.Tensor]] = None
         self.cached_per_sample_gradient: Optional[torch.Tensor] = None
 
     def release_hooks(self) -> None:

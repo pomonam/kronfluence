@@ -74,6 +74,8 @@ AGGREGATED_GRADIENT_NAME = "aggregated_gradient"
 PAIRWISE_SCORE_MATRIX_NAME = "pairwise_score_matrix"
 # Self-influence scores.
 SELF_SCORE_VECTOR_NAME = "self_score_vector"
+# Gradient norms.
+SQUARED_GRADIENT_NORM_NAME = "gradient_norm"
 
 # The dictionary key for storing summed scores.
 ALL_MODULE_NAME = "all_modules"
