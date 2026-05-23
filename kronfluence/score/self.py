@@ -201,7 +201,7 @@ def compute_self_scores_with_loaders(
 
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
-    enable_grad_scaler = enable_amp and factor_args.amp_dtype == torch.float16
+    enable_grad_scaler = enable_amp and score_args.amp_dtype == torch.float16
     scaler = GradScaler(init_scale=factor_args.amp_scale, enabled=enable_grad_scaler)
     if enable_grad_scaler:
         gradient_scale = 1.0 / scaler.get_scale()
@@ -332,7 +332,7 @@ def compute_self_measurement_scores_with_loaders(
 
     total_steps = 0
     enable_amp = score_args.amp_dtype is not None
-    enable_grad_scaler = enable_amp and factor_args.amp_dtype == torch.float16
+    enable_grad_scaler = enable_amp and score_args.amp_dtype == torch.float16
     scaler = GradScaler(init_scale=factor_args.amp_scale, enabled=enable_grad_scaler)
     if enable_grad_scaler:
         gradient_scale = 1.0 / scaler.get_scale()
