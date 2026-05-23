@@ -273,7 +273,7 @@ class Computer(ABC):
             target_data_partitions = [target_data_partitions]
 
         for data_partition in target_data_partitions:
-            if data_partition < 0 or data_partition > data_partitions:
+            if data_partition < 0 or data_partition >= data_partitions:
                 error_msg = f"Invalid data partition {data_partition}. Must be in range [0, {data_partitions})."
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
@@ -308,7 +308,7 @@ class Computer(ABC):
             target_module_partitions = [target_module_partitions]
 
         for module_partition in target_module_partitions:
-            if module_partition < 0 or module_partition > module_partitions:
+            if module_partition < 0 or module_partition >= module_partitions:
                 error_msg = f"Invalid module partition {module_partition}. Must be in range [0, {module_partitions})."
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
