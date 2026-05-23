@@ -4,7 +4,6 @@ from typing import Dict, Optional, Union
 
 import torch
 from accelerate.utils import extract_model_from_parallel
-from safetensors.torch import save_file
 from torch import nn
 from torch.utils import data
 
@@ -14,7 +13,7 @@ from kronfluence.computer.score_computer import ScoreComputer
 from kronfluence.module.utils import wrap_tracked_modules
 from kronfluence.task import Task
 from kronfluence.utils.dataset import DataLoaderKwargs
-from kronfluence.utils.save import load_file, verify_models_equivalence
+from kronfluence.utils.save import load_file, save_file, verify_models_equivalence
 
 
 def prepare_model(

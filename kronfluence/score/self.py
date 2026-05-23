@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 import torch
 import torch.distributed as dist
 from accelerate.utils import send_to_device
-from safetensors.torch import load_file, save_file
+from safetensors.torch import load_file
 from torch import autocast, nn
 from torch.cuda.amp import GradScaler
 from torch.utils import data
@@ -34,6 +34,7 @@ from kronfluence.utils.constants import (
     SELF_SCORE_VECTOR_NAME,
 )
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
+from kronfluence.utils.save import save_file
 from kronfluence.utils.state import State, no_sync, release_memory
 
 

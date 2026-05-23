@@ -1,9 +1,11 @@
 import json
+import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Union
 
 import torch
 from safetensors import safe_open
+from safetensors.torch import save_file as _safetensors_save_file
 
 
 def load_file(path: Path) -> Dict[str, torch.Tensor]:
@@ -26,6 +28,32 @@ def load_file(path: Path) -> Dict[str, torch.Tensor]:
         raise RuntimeError(f"Error loading file {path}: {str(e)}") from e
 
 
+def save_file(
+    tensors: Dict[str, torch.Tensor],
+    filename: Union[str, Path],
+    metadata: Optional[Dict[str, str]] = None,
+) -> None:
+    """Atomically saves tensors to `filename` via `safetensors`.
+
+    Writes to a sibling `<filename>.tmp` and then `os.replace`s into place, so a
+    process killed mid-write never leaves a half-written file at `filename`. The
+    "exists" checks downstream therefore never observe a torn save.
+    """
+    filename = Path(filename)
+    filename.parent.mkdir(parents=True, exist_ok=True)
+    tmp_filename = filename.with_name(filename.name + ".tmp")
+    try:
+        _safetensors_save_file(tensors=tensors, filename=str(tmp_filename), metadata=metadata)
+        os.replace(tmp_filename, filename)
+    except Exception:
+        if tmp_filename.exists():
+            try:
+                tmp_filename.unlink()
+            except OSError:
+                pass
+        raise
+
+
 def save_json(obj: Any, path: Path) -> None:
     """Saves an object to a JSON file.
 
@@ -38,12 +66,24 @@ def save_json(obj: Any, path: Path) -> None:
             The path where the JSON file will be saved.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(path.name + ".tmp")
     try:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(obj, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_path, path)
     except TypeError as e:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
         raise TypeError(f"Object is not JSON-serializable: {str(e)}") from e
     except Exception as e:
+        if tmp_path.exists():
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
         raise IOError(f"Error saving JSON file {path}: {str(e)}") from e
 
 

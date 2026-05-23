@@ -3,7 +3,7 @@ from typing import Dict, List, Optional, Union
 
 import torch
 from accelerate.utils import send_to_device
-from safetensors.torch import load_file, save_file
+from safetensors.torch import load_file
 from torch import autocast, nn
 from torch.cuda.amp import GradScaler
 from torch.utils import data
@@ -32,6 +32,7 @@ from kronfluence.score.dot_product import (
 from kronfluence.task import Task
 from kronfluence.utils.constants import FACTOR_TYPE, PARTITION_TYPE, SCORE_TYPE
 from kronfluence.utils.logger import TQDM_BAR_FORMAT
+from kronfluence.utils.save import save_file
 from kronfluence.utils.state import State, no_sync
 
 
