@@ -316,6 +316,9 @@ def test_pairwise_scores_partition_equivalence(
         overwrite_output_dir=True,
     )
 
+    if test_name == "conv" and compute_per_token_scores:
+        pytest.skip("per-token scores are not supported for `nn.Conv2d` modules.")
+
     score_args = pytest_score_arguments()
     score_args.compute_per_module_scores = compute_per_module_scores
     score_args.compute_per_token_scores = compute_per_token_scores
@@ -434,7 +437,7 @@ def test_per_module_scores_equivalence(
     assert torch.allclose(total_scores, scores[ALL_MODULE_NAME], atol=ATOL, rtol=RTOL)
 
 
-@pytest.mark.parametrize("test_name", ["mlp", "conv", "gpt"])
+@pytest.mark.parametrize("test_name", ["mlp", "gpt"])
 @pytest.mark.parametrize("compute_per_module_scores", [True, False])
 @pytest.mark.parametrize("query_size", [12])
 @pytest.mark.parametrize("train_size", [64])
@@ -502,6 +505,49 @@ def test_per_token_scores_equivalence(
             assert torch.allclose(per_token_scores[module_name].sum(dim=-1), scores[module_name], atol=ATOL, rtol=RTOL)
         else:
             assert torch.allclose(per_token_scores[module_name], scores[module_name], atol=ATOL, rtol=RTOL)
+
+
+@pytest.mark.parametrize("query_size", [4])
+@pytest.mark.parametrize("train_size", [8])
+@pytest.mark.parametrize("seed", [5])
+def test_per_token_scores_rejected_for_conv2d(
+    query_size: int,
+    train_size: int,
+    seed: int,
+) -> None:
+    # Conv2d does not support per-token scores; we expect a clear error rather
+    # than silently producing inconsistent shapes across modules.
+    from kronfluence.utils.exceptions import UnsupportableModuleError
+
+    model, train_dataset, test_dataset, data_collator, task = prepare_test(
+        test_name="conv",
+        query_size=query_size,
+        train_size=train_size,
+        seed=seed,
+    )
+    kwargs = DataLoaderKwargs(collate_fn=data_collator)
+    model, analyzer = prepare_model_and_analyzer(model=model, task=task)
+    analyzer.fit_all_factors(
+        factors_name=DEFAULT_FACTORS_NAME,
+        dataset=train_dataset,
+        dataloader_kwargs=kwargs,
+        per_device_batch_size=8,
+        overwrite_output_dir=True,
+    )
+    score_args = pytest_score_arguments()
+    score_args.compute_per_token_scores = True
+    with pytest.raises(UnsupportableModuleError, match="Conv2d"):
+        analyzer.compute_pairwise_scores(
+            scores_name=DEFAULT_SCORES_NAME,
+            factors_name=DEFAULT_FACTORS_NAME,
+            query_dataset=test_dataset,
+            per_device_query_batch_size=4,
+            train_dataset=train_dataset,
+            per_device_train_batch_size=8,
+            dataloader_kwargs=kwargs,
+            score_args=score_args,
+            overwrite_output_dir=True,
+        )
 
 
 @pytest.mark.parametrize(
