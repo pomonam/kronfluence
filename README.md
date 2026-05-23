@@ -87,7 +87,7 @@ train_dataset = torchvision.datasets.MNIST(
 eval_dataset = torchvision.datasets.MNIST(
     root="./data",
     download=True,
-    train=True,
+    train=False,
 )
 
 # Define the task. See the Technical Documentation page for details.
