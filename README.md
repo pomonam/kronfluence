@@ -66,7 +66,7 @@ from torch import nn
 from kronfluence.analyzer import Analyzer, prepare_model
 
 # Define the model and load the trained model weights.
-model = torch.nn.Sequential(
+model = nn.Sequential(
     nn.Flatten(),
     nn.Linear(784, 1024, bias=True),
     nn.ReLU(),
@@ -76,7 +76,7 @@ model = torch.nn.Sequential(
     nn.ReLU(),
     nn.Linear(1024, 10, bias=True),
 )
-model.load_state_dict(torch.load("model_path.pth"))
+model.load_state_dict(torch.load("model_path.pth", weights_only=True))
 
 # Load the dataset.
 train_dataset = torchvision.datasets.MNIST(
@@ -90,7 +90,7 @@ eval_dataset = torchvision.datasets.MNIST(
     train=False,
 )
 
-# Define the task. See the Technical Documentation page for details.
+# Define the task by subclassing `kronfluence.task.Task` — see DOCUMENTATION.md for details.
 task = MnistTask()
 
 # Prepare the model for influence computation.
@@ -110,6 +110,7 @@ analyzer.compute_pairwise_scores(
 )
 
 # Load the scores with dimension `len(eval_dataset) x len(train_dataset)`.
+# `scores["all_modules"][i, j]` is the influence of train example `j` on eval example `i`.
 scores = analyzer.load_pairwise_scores(scores_name="my_scores")
 ```
 
