@@ -210,6 +210,9 @@ def perform_eigendecomposition(
                         eigenvalues, eigenvectors = torch.linalg.eigh(covariance_matrix)
                     else:
                         raise
+                # Covariance matrices are PSD; clamp tiny negative roundoff to zero so
+                # downstream damping/reciprocal can't divide by a negative value.
+                eigenvalues.clamp_(min=0)
                 del covariance_matrix
                 eigen_factors[eigenvalues_name][module_name] = eigenvalues.contiguous().to(
                     dtype=original_dtype, device="cpu"

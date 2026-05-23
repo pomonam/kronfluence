@@ -136,7 +136,7 @@ You can organize all factors and scores for the specific model with `factors_nam
 
 **What should I do if my model does not have any nn.Linear or nn.Conv2d modules?**
 Currently, the implementation does not support influence computations for modules other than `nn.Linear` or `nn.Conv2d`.
-Try rewriting the model so that it uses supported modules (as done for the `conv1d` module in the [GPT-2 example](https://github.com/pomonam/kronfluence/tree/documentation/examples/wikitext)).
+Try rewriting the model so that it uses supported modules (as done for the `conv1d` module in the [GPT-2 example](https://github.com/pomonam/kronfluence/tree/main/examples/wikitext)).
 Alternatively, you can create a subclass of `TrackedModule` to compute influence scores for your custom module.
 If there are specific modules you would like to see supported, please submit an issue.
 
@@ -150,7 +150,7 @@ inspect `model.named_modules()` to determine what modules to use. You can specif
 
 > [!NOTE]
 > If the embedding layer for transformers are defined with `nn.Linear`, you must write your own
-> `task.tracked_modules` to avoid influence computations embedding matrices.
+> `task.get_influence_tracked_modules` to avoid influence computations on embedding matrices.
 
 **How should I implement Task.compute_train_loss?**
 Implement the loss function used to train the model. Note that the function should return 
@@ -378,6 +378,7 @@ all modules, this will keep track of intermediate module-wise scores.
 - `aggregate_train_gradients`: Whether to use the summed training gradient instead of per-sample training gradients.
 - `use_measurement_for_self_influence`: Whether to use the measurement (instead of the loss) when computing self-influence scores.
 - `query_gradient_low_rank`: The rank for the query batching (low-rank approximation to the preconditioned query gradient; see **Section 3.2.2**). If `None`, no query batching will be used.
+- `use_full_svd`: Whether to use the full SVD (`torch.linalg.svd`) instead of the lower-precision but faster `torch.svd_lowrank` when computing the low-rank query gradient. Only relevant when `query_gradient_low_rank` is set.
 - `query_gradient_svd_dtype`: `dtype` for performing singular value decomposition (SVD) for query batch. You can also use `torch.float64`.
 - `query_gradient_accumulation_steps`: Number of query gradients to accumulate over. For example, when `query_gradient_accumulation_steps=2` with 
 `query_batch_size=16`, a total of 32 query gradients will be stored in memory when computing dot products with training gradients.
@@ -391,7 +392,14 @@ To compute pairwise influence scores (**Equation 5** in the paper), you can run:
 
 ```python
 # Computing pairwise influence scores.
-analyzer.compute_pairwise_scores(scores_name="pairwise", factors_name="ekfac", score_args=score_args)
+analyzer.compute_pairwise_scores(
+    scores_name="pairwise",
+    factors_name="ekfac",
+    query_dataset=query_dataset,
+    train_dataset=train_dataset,
+    per_device_query_batch_size=64,
+    score_args=score_args,
+)
 # Loading pairwise influence scores.
 scores = analyzer.load_pairwise_scores(scores_name="pairwise")
 ```
@@ -400,7 +408,12 @@ To compute self-influence scores (see **Section 5.4** from [this paper](https://
 
 ```python
 # Computing self-influence scores.
-analyzer.compute_self_scores(scores_name="self", factors_name="ekfac", score_args=score_args)
+analyzer.compute_self_scores(
+    scores_name="self",
+    factors_name="ekfac",
+    train_dataset=train_dataset,
+    score_args=score_args,
+)
 # Loading self-influence scores.
 scores = analyzer.load_self_scores(scores_name="self")
 ```

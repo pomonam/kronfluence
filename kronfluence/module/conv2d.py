@@ -179,6 +179,14 @@ class TrackedConv2d(TrackedModule, module_type=nn.Conv2d):
     def compute_pairwise_score(
         self, preconditioned_gradient: torch.Tensor, input_activation: torch.Tensor, output_gradient: torch.Tensor
     ) -> torch.Tensor:
+        if self.score_args.compute_per_token_scores:
+            raise UnsupportableModuleError(
+                f"`compute_per_token_scores=True` is not supported for `nn.Conv2d` modules "
+                f"(module name: {self.name}). Per-token scores are only supported for "
+                f"`nn.Linear` modules whose input activation has a sequence (token) axis. "
+                f"Either set `score_args.compute_per_token_scores=False`, or exclude "
+                f"`nn.Conv2d` modules from the tracked modules."
+            )
         input_activation = self._flatten_input_activation(input_activation=input_activation)
         input_activation = input_activation.view(output_gradient.size(0), -1, input_activation.size(-1))
         output_gradient = rearrange(tensor=output_gradient, pattern="b o i1 i2 -> b (i1 i2) o")
